@@ -1,0 +1,63 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../app/theme.dart';
+import '../data/models/models.dart';
+
+/// Horizontal-rail event card used on Home/Search.
+class EventCard extends StatelessWidget {
+  const EventCard({super.key, required this.event, this.onTap, this.width = 240});
+  final EventModel event;
+  final VoidCallback? onTap;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final priceRs = (event.priceFrom / 100).round();
+    final dateStr =
+        event.date == null ? '' : DateFormat('EEE, d MMM • h:mm a').format(event.date!);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        margin: const EdgeInsets.only(right: AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: CachedNetworkImage(
+                  imageUrl: event.imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) =>
+                      Container(color: AppColors.primary.withOpacity(0.08)),
+                  errorWidget: (_, __, ___) => Container(
+                    color: AppColors.primary.withOpacity(0.08),
+                    child: const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(event.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 2),
+            Text(dateStr.isEmpty ? event.venueName : dateStr,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.subtleLight, fontSize: 12.5)),
+            const SizedBox(height: 2),
+            Text('From ₹$priceRs',
+                style: const TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}

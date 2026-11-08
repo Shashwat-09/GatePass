@@ -1,0 +1,33 @@
+# ───── Node / NestJS backend ─────
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+
+# ───── Flutter / Dart client ─────
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.pub-cache/
+.pub/
+coverage/
+
+# generated platform runners (run `flutter create .` locally)
+/android/
+/ios/
+/linux/
+/macos/
+/windows/
+/web/
+
+# ───── tooling / editor / OS ─────
+.idea/
+.vscode/
+graphify-out/
+.DS_Store
+Thumbs.db

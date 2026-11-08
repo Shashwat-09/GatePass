@@ -1,0 +1,43 @@
+name: eventa
+description: "Eventa — live-events ticketing app (working title; rename before release)."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State / routing / DI
+  get: ^4.6.6
+  get_it: ^7.7.0
+
+  # Networking
+  http: ^1.2.2
+  connectivity_plus: ^6.0.5
+
+  # Local storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.2
+
+  # UI
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.10+1
+  smooth_page_indicator: ^1.2.0+3
+  pin_code_fields: ^8.0.1
+  carousel_slider: ^5.0.0
+  intl: ^0.19.0
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
