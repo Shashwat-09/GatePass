@@ -1,0 +1,13 @@
+package p148v0;
+
+import java.util.regex.Pattern;
+
+/* JADX INFO: loaded from: classes.dex */
+public abstract class v {
+
+    /* JADX INFO: renamed from: a, reason: collision with root package name */
+    public static final Pattern f15373a = Pattern.compile("bytes (\\d+)-(\\d+)/(?:\\d+|\\*)");
+
+    /* JADX INFO: renamed from: b, reason: collision with root package name */
+    public static final Pattern f15374b = Pattern.compile("bytes (?:(?:\\d+-\\d+)|\\*)/(\\d+)");
+}

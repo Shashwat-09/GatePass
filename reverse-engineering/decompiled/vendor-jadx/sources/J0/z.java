@@ -1,0 +1,6 @@
+package J0;
+
+/* JADX INFO: loaded from: classes.dex */
+public abstract class z {
+    public abstract boolean a();
+}

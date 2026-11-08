@@ -1,0 +1,10 @@
+package p006b0;
+
+import android.content.res.TypedArray;
+
+/* JADX INFO: loaded from: classes.dex */
+public abstract class d {
+    public static int a(TypedArray typedArray, int i5) {
+        return typedArray.getType(i5);
+    }
+}

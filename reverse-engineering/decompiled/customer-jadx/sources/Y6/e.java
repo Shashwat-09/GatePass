@@ -1,0 +1,25 @@
+package Y6;
+
+import E6.p;
+import javax.net.ssl.SSLSocket;
+
+/* JADX INFO: loaded from: classes.dex */
+public final class e implements l {
+    @Override // Y6.l
+    public final boolean a(SSLSocket sSLSocket) {
+        return p.F(sSLSocket.getClass().getName(), "com.google.android.gms.org.conscrypt.");
+    }
+
+    @Override // Y6.l
+    public final n b(SSLSocket sSLSocket) {
+        Class<?> cls = sSLSocket.getClass();
+        Class<?> superclass = cls;
+        while (!superclass.getSimpleName().equals("OpenSSLSocketImpl")) {
+            superclass = superclass.getSuperclass();
+            if (superclass == null) {
+                throw new AssertionError("No OpenSSLSocketImpl superclass of socket of type " + cls);
+            }
+        }
+        return new f(superclass);
+    }
+}

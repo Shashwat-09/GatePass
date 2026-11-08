@@ -1,0 +1,13 @@
+package T;
+
+import androidx.core.widget.NestedScrollView;
+
+/* JADX INFO: loaded from: classes.dex */
+public abstract class f {
+    public static void a(NestedScrollView nestedScrollView, float f4) {
+        try {
+            nestedScrollView.setFrameContentVelocity(f4);
+        } catch (LinkageError unused) {
+        }
+    }
+}

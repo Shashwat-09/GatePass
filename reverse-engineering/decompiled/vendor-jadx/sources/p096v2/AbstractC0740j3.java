@@ -1,0 +1,6 @@
+package p096v2;
+
+/* JADX INFO: renamed from: v2.j3, reason: case insensitive filesystem */
+/* JADX INFO: loaded from: classes.dex */
+public abstract class AbstractC0740j3 {
+}
