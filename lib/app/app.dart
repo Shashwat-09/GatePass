@@ -5,8 +5,8 @@ import '../core/constants.dart';
 import 'routes.dart';
 import 'theme.dart';
 
-class EventaApp extends StatelessWidget {
-  const EventaApp({super.key});
+class GatePassApp extends StatelessWidget {
+  const GatePassApp({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -22,7 +22,7 @@ class _OtpScreenState extends State<OtpScreen> {
     final ok = await _auth.verify(_code);
     if (!ok) return;
     // New users (no name yet) complete their profile first.
-    Get.offAllNamed(_auth.isNewUser ? Routes.profileSetup : Routes.home);
+    Get.offAllNamed(_auth.needsProfile ? Routes.profileSetup : Routes.home);
   }
 
   @override
@@ -61,7 +61,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   fieldWidth: 46,
                   activeColor: AppColors.primary,
                   selectedColor: AppColors.primary,
-                  inactiveColor: AppColors.subtleLight.withOpacity(0.4),
+                  inactiveColor: AppColors.subtleLight.withValues(alpha: 0.4),
                 ),
               ),
               Obx(() => _auth.error.value == null
@@ -77,11 +77,6 @@ class _OtpScreenState extends State<OtpScreen> {
                       child: const Text('Resend code'),
                     )),
               const Spacer(),
-              const Center(
-                child: Text('Demo: use code 123456',
-                    style: TextStyle(color: AppColors.subtleLight, fontSize: 12)),
-              ),
-              const SizedBox(height: AppSpacing.sm),
               Obx(() => PrimaryButton(
                     label: 'Verify',
                     loading: _auth.loading.value,

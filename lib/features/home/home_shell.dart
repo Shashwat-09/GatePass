@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
-import 'home_screen.dart';
-import '../tickets/my_tickets_screen.dart';
 import '../profile/profile_screen.dart';
+import '../tickets/my_tickets_screen.dart';
+import 'home_screen.dart';
 
-/// Bottom-navigation container for the signed-in experience.
+/// Bottom-navigation container. Route argument `{'tab': 1}` opens Tickets.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
   @override
@@ -12,29 +13,29 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
+  late int _index;
   final _tabs = const [HomeScreen(), MyTicketsScreen(), ProfileScreen()];
+
+  @override
+  void initState() {
+    super.initState();
+    final arg = Get.arguments;
+    _index = arg is Map && arg['tab'] is int ? arg['tab'] as int : 0;
+    if (_index == 1 && Get.isRegistered<MyTicketsController>()) Get.find<MyTicketsController>().refreshAll();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined),
-              activeIcon: Icon(Icons.explore),
-              label: 'Discover'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.confirmation_number_outlined),
-              activeIcon: Icon(Icons.confirmation_number),
-              label: 'Tickets'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile'),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
+          NavigationDestination(
+              icon: Icon(Icons.confirmation_number_outlined), selectedIcon: Icon(Icons.confirmation_number), label: 'Tickets'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );

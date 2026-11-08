@@ -3,37 +3,62 @@ import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../core/constants.dart';
+import 'token_store.dart';
 
-/// Lightweight persistence over Hive.
-///
-/// Security note: unlike the old app, store the auth token in a secure store
-/// (flutter_secure_storage / Android Keystore) before release. This Hive box is
-/// a placeholder for non-sensitive state; a TODO marks the token.
+/// Non-secret app state (profile cache, city, cached tickets for offline QR).
+/// The Hive box is AES-encrypted with a key kept in the platform keystore.
+/// Auth tokens are NOT stored here — see [TokenStore].
 class LocalStorage {
-  late final Box _box;
+  LocalStorage();
 
-  Future<void> init() async {
+  /// In-memory storage for tests.
+  LocalStorage.memory() : _mem = {};
+
+  Box? _box;
+  Map<String, dynamic>? _mem;
+
+  Future<void> init(TokenStore tokens) async {
     await Hive.initFlutter();
-    _box = await Hive.openBox(StorageKeys.box);
+    // Remove the pre-release unencrypted box (it held a plain-text token).
+    if (await Hive.boxExists(StorageKeys.legacyBox)) {
+      await Hive.deleteBoxFromDisk(StorageKeys.legacyBox);
+    }
+    final key = await tokens.hiveKey();
+    try {
+      _box = await Hive.openBox(StorageKeys.box, encryptionCipher: HiveAesCipher(key));
+    } catch (_) {
+      // Key lost (e.g. app data restored without keystore): start clean.
+      await Hive.deleteBoxFromDisk(StorageKeys.box);
+      _box = await Hive.openBox(StorageKeys.box, encryptionCipher: HiveAesCipher(key));
+    }
   }
 
-  // TODO(security): move token to flutter_secure_storage before shipping.
-  String? getString(String key) => _box.get(key) as String?;
-  Future<void> setString(String key, String value) => _box.put(key, value);
+  dynamic _get(String k) => _mem != null ? _mem![k] : _box!.get(k);
+  Future<void> _put(String k, dynamic v) async => _mem != null ? _mem![k] = v : await _box!.put(k, v);
 
-  bool getBool(String key, {bool fallback = false}) =>
-      _box.get(key, defaultValue: fallback) as bool;
-  Future<void> setBool(String key, bool value) => _box.put(key, value);
+  String? getString(String key) => _get(key) as String?;
+  Future<void> setString(String key, String value) => _put(key, value);
+
+  bool getBool(String key, {bool fallback = false}) => (_get(key) as bool?) ?? fallback;
+  Future<void> setBool(String key, bool value) => _put(key, value);
 
   Map<String, dynamic>? getJson(String key) {
-    final raw = _box.get(key) as String?;
+    final raw = _get(key) as String?;
     if (raw == null) return null;
-    return jsonDecode(raw) as Map<String, dynamic>;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
   }
 
-  Future<void> setJson(String key, Map<String, dynamic> value) =>
-      _box.put(key, jsonEncode(value));
+  Future<void> setJson(String key, Map<String, dynamic> value) => _put(key, jsonEncode(value));
 
-  Future<void> remove(String key) => _box.delete(key);
-  Future<void> clear() => _box.clear();
+  Future<void> remove(String key) async => _mem != null ? _mem!.remove(key) : await _box!.delete(key);
+
+  /// Clears per-user data on logout (keeps device prefs like onboarding/city).
+  Future<void> clearSession() async {
+    await remove(StorageKeys.user);
+    await remove(StorageKeys.ticketCache);
+  }
 }

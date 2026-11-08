@@ -1,6 +1,6 @@
-# Eventa — New Platform Design Docs
+# GatePass — New Platform Design Docs
 
-> **Working title: "Eventa"** (rename before release). A live-events discovery + ticketing platform, built fresh — our own code, design, Firebase project, payment merchant account, and backend. These documents are the spec we build against; they are greenfield design decisions, not a description of any prior app.
+> **Working title: "GatePass"** (rename before release). A live-events discovery + ticketing platform, built fresh — our own code, design, Firebase project, payment merchant account, and backend. These documents are the spec we build against; they are greenfield design decisions, not a description of any prior app.
 
 ## Document set
 
@@ -20,7 +20,7 @@
 
 ## Product vision (one paragraph)
 
-Eventa helps people discover live events in their city — concerts, comedy, parties, multi-day festivals — and buy tickets in a few taps, with seat selection where it applies, UPI/card/netbanking payment, and QR tickets they can show at the gate or split with friends. Organizers list and manage events and scan tickets at entry through a companion seller app. The business earns via a convenience fee and commission per booking.
+GatePass helps people discover live events in their city — concerts, comedy, parties, multi-day festivals — and buy tickets in a few taps, with seat selection where it applies, UPI/card/netbanking payment, and QR tickets they can show at the gate or split with friends. Organizers list and manage events and scan tickets at entry through a companion seller app. The business earns via a convenience fee and commission per booking.
 
 ## What's new / our decisions
 
@@ -48,3 +48,9 @@ It currently runs on in-app mock data (`AppConfig.useMockData = true`) so the UI
 2. Use 02–04 to stand up the backend and the client data layer in parallel.
 3. Build screens from 05 in MVP order; keep 06 (UML) updated as the source of truth for flows.
 4. Each doc lists open decisions at the end — resolve them as you go.
+
+## Delivery docs
+- [09 — Decisions & accounts (owner actions)](09-Decisions-and-Accounts.md)
+- [Deployment guide](DEPLOYMENT.md)
+- [Release checklist & data safety](RELEASE.md)
+- Legal drafts: [privacy policy](legal/privacy-policy.md), [terms](legal/terms.md)

@@ -17,9 +17,7 @@ build/
 .pub/
 coverage/
 
-# generated platform runners (run `flutter create .` locally)
-/android/
-/ios/
+# platform runners: android/ and ios/ are committed (customised); others unused
 /linux/
 /macos/
 /windows/
@@ -31,3 +29,9 @@ coverage/
 graphify-out/
 .DS_Store
 Thumbs.db
+
+# release secrets (never commit)
+android/key.properties
+*.jks
+*.keystore
+dump.rdb

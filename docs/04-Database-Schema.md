@@ -1,4 +1,4 @@
-# 4. Database Schema — Eventa (PostgreSQL, our design)
+# 4. Database Schema — GatePass (PostgreSQL, our design)
 
 > A clean relational model for the new backend. MVP tables are marked ✅; the rest are Phase 2+. Money is stored as integer **paise** (`*_paise`) to avoid float errors. All tables carry `id uuid pk default gen_random_uuid()`, `created_at`, `updated_at`; soft-delete via `deleted_at` where noted.
 
@@ -124,3 +124,23 @@ These are computed on the server in `book-ticket`; the client's numbers are neve
 
 ### Seat-hold integrity (Phase 2 — design now)
 Redis: `SET hold:{eventDateId}:{seatId} {userId} NX EX {ttl}`. On booking confirm, within one DB transaction move the seat to `booked`; a sweeper clears expired holds. A Postgres partial unique index enforces one active booked row per seat, so a race cannot double-sell.
+
+## 4.8 As built (v0.2) — implementation notes
+The runnable schema is `backend/schema.sql`, generated from the TypeORM migrations in `backend/src/db/migrations` (the source of truth; `synchronize` is always off). Differences from the design above:
+
+| Table / column | Purpose |
+|---|---|
+| `users.role` (`customer`/`staff`/`admin`) | gate staff access (`npm run user:role -- <phone> staff`) |
+| `users.termsVersion`, `users.deviceToken` | consent record; push token (Phase 2) |
+| `refresh_tokens` (`familyId`, `tokenHash`, `revokedAt`, `replacedById`) | rotating refresh tokens; only a SHA-256 of the secret is stored; reuse of a revoked token revokes every session of the user |
+| `ticket_tiers.reserved` | stock held by pending (unpaid) bookings. **available = quantity − sold − reserved**; rows are locked `FOR UPDATE` during checkout so stock can't oversell |
+| `seat_reservations` (unique `eventId+sectionKey+seatKey`) | one row per taken seat (`held` with `expiresAt`, or `sold`); the unique constraint makes double-selling a seat impossible. Replaces the old `seat_sections.booked` array |
+| `bookings.expiresAt`, `idempotencyKey` (unique per user), `txnId` (unique when set), `failureReason`, `gateway`, `confirmedAt` | payment hold window, safe retries, one payment ↔ one booking |
+| `bookings.status` | `pending → confirmed` · `pending → failed/expired` (stock released) · late payment with stock gone → `refund_pending → refunded` |
+| `tickets.tierName`, `seatLabel`; `tickets.qrToken` HMAC-signed | see API §8.10 |
+| `check_ins` | audit row for every gate scan (admitted or rejected) |
+| `payment_events` (PK = gateway event id) | webhook de-duplication |
+
+Account deletion erases personal data in place (phone → `deleted:<id>` tombstone, name/email/dob/gender/city/device token nulled, sessions revoked); bookings/tickets are kept without contact data for tax records.
+
+Client storage (updates §4.5): tokens in `flutter_secure_storage` (Keystore/Keychain); the Hive box is AES-encrypted with a key held in secure storage and also caches page 1 of upcoming tickets so QR codes open offline.

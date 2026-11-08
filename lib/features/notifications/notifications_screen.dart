@@ -68,7 +68,7 @@ class NotificationsScreen extends StatelessWidget {
         : DateFormat('d MMM, h:mm a').format(n.createdAt!);
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: AppColors.primary.withOpacity(0.12),
+        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
         child: Icon(_iconFor(n.type), color: AppColors.primary, size: 20),
       ),
       title: Text(n.title,

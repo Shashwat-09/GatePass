@@ -1,4 +1,4 @@
-# 8. API Specification — Eventa Backend
+# 8. API Specification — GatePass Backend
 
 > The authoritative contract between client and server. Implement exactly as written so client and backend can be built in parallel. JSON shown is the body; types use TS-ish notation. Build this as OpenAPI 3.1 as well (`/docs`).
 
@@ -187,3 +187,39 @@ Full ticket; 403 if not owner (object-level authz is mandatory).
 - OTP throttling + attempt caps; JWT short-lived + rotating refresh with reuse detection.
 - QR = opaque or HMAC-signed `ticketId|eventDateId|nonce`, single-use per entry; validated server-side at scan (seller app, Phase 3).
 - Rate-limit all mutating endpoints; log auth + payment anomalies.
+
+## 8.10 As built (v0.2) — changes and additions
+Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still applies unless noted.
+
+**Auth**
+- `POST api/otp/send` → codes are random 6 digits, stored as an HMAC in Redis (5 min), 30 s resend cooldown (`429` with `resendAfterSec`), ≤3/phone and ≤10/IP per 10 min. Only `+91` numbers starting 6–9.
+- `POST api/user/login` → 5 attempts per code (attempt counted before comparison), then `429`. `user` now includes `role`.
+- `POST api/auth/refresh` `{refreshToken}` → `{accessToken, refreshToken, expiresInSec}`. Refresh tokens are opaque `<id>.<secret>` (not JWTs), rotated on every use; replaying a used token → `401` and **all** the user's sessions are revoked.
+- `POST api/user/logout` body `{refreshToken?}` → revokes that session (or all sessions if omitted).
+- Access JWTs: HS256, `iss=gatepass-api`, `aud=gatepass-app`, `typ=access`, 15 min; the guard also rejects deleted accounts immediately.
+- `PUT api/user`: `name` 2–80 chars, valid `email`, `dob` real date with age ≥ 13, `gender ∈ female|male|other|prefer_not`, `cityId` must exist.
+
+**Booking + payment**
+- `POST api/payment/book-ticket`: GA events take `{tierId, qty}` items; seated events take `{sectionId,row,col}` items (Phase 2). Stock is reserved for `BOOKING_HOLD_SECONDS` (default 600) and returned automatically when the hold lapses. `promoCode` → `400` (not offered yet). `Idempotency-Key` replays the same pending quote. Per-user limit counts owned tickets **and** live pending bookings. ≤20 checkouts/min per user. Response adds `currency`; `gateway` is `razorpay` or `mock` (dev); `gatewayToken` is the public Razorpay key id. Booking codes look like `GP-7KQ2M9XA`.
+- `POST api/payment/process-order` `gatewayPayload` for Razorpay = the SDK success object `{razorpay_payment_id, razorpay_order_id, razorpay_signature}`. The server checks the signature, then fetches the payment and requires `captured` (captures `authorized` payments), the exact amount, INR and the same order. Failure → `422 PAYMENT_FAILED` and the booking is failed/stock released. If the hold had lapsed and the stock is gone the payment is refunded (`422`, booking `refunded`). Response tickets add `tierName, seatLabel, quantity, eventTitle, venueName, startDate, status`; `invoiceUrl` is a signed link.
+- `POST api/payment/cancel` `{bookingId}` → releases a pending booking (user left checkout).
+- `POST api/payment/webhook` (Razorpay → server): `X-Razorpay-Signature` HMAC over the raw body; `payment.captured` / `order.paid` confirm the booking; deduplicated by `X-Razorpay-Event-Id`. Configure this URL in the Razorpay dashboard.
+
+**Tickets, invoices, QR**
+- `GET api/ticket/my-tickets?scope=upcoming|history&page&limit` is paginated in SQL; an event is "upcoming" until it ends. Items add `bookingId, eventId, tierName, seatLabel, invoiceUrl`.
+- `qrToken` = `GP1.<ticketId>.<nonce>.<hmac>` (HMAC-SHA256/128-bit, `QR_SIGNING_SECRET`).
+- `GET api/invoices/<bookingId>.pdf?exp&sig` → tax invoice PDF. Links are HMAC-signed (`URL_SIGNING_SECRET`) and valid 7 days; they are re-issued with every ticket list.
+
+**Gate check-in (staff/admin role) — interim until the seller app**
+- Web scanner at `/gate` (camera via BarcodeDetector on Chrome/Android, or manual entry).
+- `GET api/gate/events` · `GET api/gate/events/{id}/stats` → `{entriesTotal, entriesUsed}`.
+- `POST api/gate/scan` `{qrToken, eventId, entries?}` → `{result: admitted|already_used|wrong_event|invalid|not_active, message, ticket}`. Entry counting is a single atomic `UPDATE … WHERE entriesUsed + n <= entriesTotal`, so concurrent scans can't double-admit. Every scan is written to `check_ins`.
+
+**Discovery & lists**
+- `cityId` accepts a city uuid **or** an exact name (case-insensitive); unknown city → empty list.
+- Paginated (`page`, `limit` ≤ 50, `{items,page,limit,total}`): cities, events, search (title/venue/genre), tickets, vouchers, notifications. Phase-2 vouchers/notifications return empty pages until built.
+
+**Ops & security**
+- `GET /health` (no `api/` prefix) → `{status, db, cache, version}`; `503` when a dependency is down.
+- Helmet headers; CORS only for `CORS_ORIGINS`; JSON body ≤ 100 kB; unknown body fields are stripped (never trusted); global per-IP limits (60 writes / 300 reads per minute) shared via Redis.
+- The server refuses to start in production with missing/weak secrets, `SMS_PROVIDER=console`, `PAYMENT_GATEWAY=mock`, `DEV_OTP`, missing Redis, or Razorpay test keys (unless `ALLOW_TEST_PAYMENTS=true` for staging).

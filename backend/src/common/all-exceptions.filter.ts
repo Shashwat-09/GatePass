@@ -28,11 +28,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      const body = exception.getResponse() as any;
+      const body = exception.getResponse() as { message?: string | string[] } | string;
       // class-validator errors arrive as { message: string[] }
-      const message = Array.isArray(body?.message)
-        ? body.message.join(', ')
-        : body?.message ?? exception.message;
+      const raw = typeof body === 'string' ? body : body?.message;
+      const message = Array.isArray(raw) ? raw.join(', ') : raw ?? exception.message;
       const code =
         status === 401
           ? 'UNAUTHENTICATED'

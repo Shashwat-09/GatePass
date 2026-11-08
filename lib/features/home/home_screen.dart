@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../data/models/models.dart';
 import '../../widgets/common.dart';
 import '../../widgets/event_card.dart';
@@ -28,7 +29,14 @@ class HomeScreen extends StatelessWidget {
             return StateView.error(c.error.value!, onRetry: c.load);
           }
           if (c.events.isEmpty) {
-            return StateView.empty('No events in ${c.city.value} yet');
+            return RefreshIndicator(
+              onRefresh: c.load,
+              child: ListView(children: [
+                _topBar(c),
+                const SizedBox(height: 120),
+                StateView.empty('No events in ${c.cityName} yet.\nTry another city.'),
+              ]),
+            );
           }
           final vis = c.visible;
           return RefreshIndicator(
@@ -68,7 +76,7 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.location_on, color: AppColors.primary, size: 20),
                   const SizedBox(width: 4),
-                  Obx(() => Text(c.city.value,
+                  Obx(() => Text(c.cityName,
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 16))),
                   const Icon(Icons.keyboard_arrow_down, size: 20),
@@ -76,7 +84,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            IconButton(
+            if (AppConfig.phase2) IconButton(
               icon: Icon(c.hasFilters ? Icons.tune : Icons.tune_outlined,
                   color: c.hasFilters ? AppColors.primary : null),
               onPressed: () async {
@@ -91,7 +99,7 @@ class HomeScreen extends StatelessWidget {
               icon: const Icon(Icons.search),
               onPressed: () => Get.to(() => const SearchScreen()),
             ),
-            IconButton(
+            if (AppConfig.phase2) IconButton(
               icon: const Icon(Icons.notifications_none),
               onPressed: () => Get.to(() => const NotificationsScreen()),
             ),
@@ -117,7 +125,7 @@ class HomeScreen extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(imageUrl: e.imageUrl, fit: BoxFit.cover),
+                        CachedNetworkImage(imageUrl: e.imageUrl, fit: BoxFit.cover, memCacheWidth: 1080),
                         Container(
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Eventa design system — intentionally distinct from the previous app:
+/// GatePass design system — intentionally distinct from the previous app:
 /// violet/indigo primary with a coral accent, rounded 16px surfaces, airy spacing.
 class AppColors {
   static const primary = Color(0xFF6C4DF6); // indigo-violet
@@ -92,11 +92,11 @@ class AppTheme {
         hintStyle: TextStyle(color: subtle),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: subtle.withOpacity(0.25)),
+          borderSide: BorderSide(color: subtle.withValues(alpha: 0.25)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(color: subtle.withOpacity(0.25)),
+          borderSide: BorderSide(color: subtle.withValues(alpha: 0.25)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),

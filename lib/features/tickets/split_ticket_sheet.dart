@@ -42,7 +42,7 @@ class _SplitSheetState extends State<_SplitSheet> {
     await Future.delayed(const Duration(milliseconds: 500)); // mock api/ticket/split
     _loading.value = false;
     setState(() => _link =
-        'https://eventa.app/t/${widget.ticket.id}?u=$_count&to=${_phone.text.trim()}');
+        'https://gatepass.app/t/${widget.ticket.id}?u=$_count&to=${_phone.text.trim()}');
   }
 
   @override
@@ -97,7 +97,7 @@ class _SplitSheetState extends State<_SplitSheet> {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Row(

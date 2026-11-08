@@ -1,186 +1,262 @@
--- Eventa — MVP PostgreSQL schema (copy-paste ready).
--- Money is stored as integer paise. Run on a fresh database.
--- Phase-2 tables (seats, promos, vouchers, notifications, transfers) are added later; see docs/04.
+-- GatePass PostgreSQL schema (generated from backend/src/db/migrations; do not edit by hand).
+-- Regenerate: run migrations on an empty DB, then pg_dump --schema-only --no-owner --no-privileges.
 
-create extension if not exists "pgcrypto";
 
-create type user_gender as enum ('male','female','other','prefer_not');
-create type event_status as enum ('draft','live','coming_soon','sold_out','completed');
-create type booking_status as enum ('pending','confirmed','failed','cancelled');
-create type ticket_status as enum ('active','transferred','claimed_back','scanned','expired');
-create type payment_status as enum ('created','authorized','captured','failed','refunded');
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
-create table cities (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  state       text,
-  lat         double precision,
-  lng         double precision,
-  icon_url    text,
-  is_active   boolean not null default true,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  unique (name, state)
+COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
+CREATE TABLE public.bookings (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    code character varying NOT NULL,
+    "userId" uuid NOT NULL,
+    "eventId" uuid NOT NULL,
+    status character varying DEFAULT 'pending'::character varying NOT NULL,
+    "basePaise" integer DEFAULT 0 NOT NULL,
+    "discountPaise" integer DEFAULT 0 NOT NULL,
+    "feePaise" integer DEFAULT 0 NOT NULL,
+    "taxPaise" integer DEFAULT 0 NOT NULL,
+    "totalPaise" integer DEFAULT 0 NOT NULL,
+    gateway character varying DEFAULT 'mock'::character varying NOT NULL,
+    "orderRef" character varying DEFAULT ''::character varying NOT NULL,
+    "txnId" character varying,
+    "idempotencyKey" character varying,
+    "failureReason" character varying,
+    items jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL,
+    "confirmedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-create table users (
-  id             uuid primary key default gen_random_uuid(),
-  phone          text not null unique,
-  country_code   text not null default '+91',
-  name           text,
-  email          text,
-  dob            date,
-  gender         user_gender,
-  city_id        uuid references cities(id) on delete set null,
-  accepted_terms boolean not null default false,
-  terms_version  text,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  deleted_at     timestamptz
-);
-create index on users (deleted_at);
-
-create table devices (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete cascade,
-  fcm_token    text,
-  platform     text not null,
-  app_version  text,
-  last_seen_at timestamptz not null default now(),
-  unique (user_id, fcm_token)
+CREATE TABLE public.check_ins (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "ticketId" uuid,
+    "eventId" uuid NOT NULL,
+    "staffUserId" uuid NOT NULL,
+    result character varying NOT NULL,
+    entries integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
--- Refresh tokens (access JWT is stateless). Store only a hash.
-create table auth_tokens (
-  id                 uuid primary key default gen_random_uuid(),
-  user_id            uuid not null references users(id) on delete cascade,
-  refresh_token_hash text not null,
-  expires_at         timestamptz not null,
-  revoked_at         timestamptz,
-  created_at         timestamptz not null default now()
-);
-create index on auth_tokens (user_id);
-
-create table organizers (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,
-  contact    text,
-  kyc_status text not null default 'pending',
-  created_at timestamptz not null default now()
+CREATE TABLE public.cities (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    name character varying NOT NULL,
+    state character varying,
+    "iconUrl" character varying DEFAULT ''::character varying NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL
 );
 
-create table venues (
-  id             uuid primary key default gen_random_uuid(),
-  city_id        uuid not null references cities(id) on delete restrict,
-  name           text not null,
-  address        text,
-  lat            double precision,
-  lng            double precision,
-  directions_url text,
-  image_url      text,
-  has_seat_map   boolean not null default false,
-  created_at     timestamptz not null default now()
+CREATE TABLE public.events (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    slug character varying NOT NULL,
+    title character varying NOT NULL,
+    description text DEFAULT ''::text NOT NULL,
+    status character varying DEFAULT 'live'::character varying NOT NULL,
+    "cardImageUrl" character varying DEFAULT ''::character varying NOT NULL,
+    "bannerUrl" character varying DEFAULT ''::character varying NOT NULL,
+    gallery jsonb DEFAULT '[]'::jsonb NOT NULL,
+    genre character varying DEFAULT ''::character varying NOT NULL,
+    language character varying DEFAULT 'English'::character varying NOT NULL,
+    "cityId" uuid NOT NULL,
+    "venueName" character varying DEFAULT ''::character varying NOT NULL,
+    "venueAddress" character varying DEFAULT ''::character varying NOT NULL,
+    "startDate" timestamp with time zone,
+    "endDate" timestamp with time zone,
+    "priceFromPaise" integer DEFAULT 0 NOT NULL,
+    "hasSeatMap" boolean DEFAULT false NOT NULL,
+    "maxPerUser" integer DEFAULT 6 NOT NULL,
+    terms text,
+    faqs jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
-create table events (
-  id                    uuid primary key default gen_random_uuid(),
-  organizer_id          uuid references organizers(id) on delete set null,
-  city_id               uuid not null references cities(id) on delete restrict,
-  slug                  text not null unique,
-  title                 text not null,
-  description           text,
-  category              text,
-  genre                 text,
-  language              text,
-  card_image_url        text,
-  banner_url            text,
-  video_url             text,
-  gallery               jsonb not null default '[]',
-  status                event_status not null default 'draft',
-  start_date            timestamptz,
-  end_date              timestamptz,
-  price_from_paise      integer not null default 0,
-  terms                 text,
-  faqs                  jsonb not null default '[]',
-  max_per_user          integer not null default 10,
-  max_seats_per_booking integer not null default 10,
-  created_at            timestamptz not null default now(),
-  updated_at            timestamptz not null default now()
-);
-create index on events (city_id, status);
-
-create table event_dates (
-  id        uuid primary key default gen_random_uuid(),
-  event_id  uuid not null references events(id) on delete cascade,
-  venue_id  uuid not null references venues(id) on delete restrict,
-  starts_at timestamptz not null
-);
-create index on event_dates (event_id);
-
-create table ticket_tiers (
-  id               uuid primary key default gen_random_uuid(),
-  event_id         uuid not null references events(id) on delete cascade,
-  event_date_id    uuid references event_dates(id) on delete cascade,
-  name             text not null,
-  type             text not null default 'ga',
-  price_paise      integer not null,
-  quantity         integer not null,
-  sold             integer not null default 0,
-  min_qty          integer not null default 1,
-  entry_per_ticket integer not null default 1,
-  requires_form    boolean not null default false,
-  created_at       timestamptz not null default now(),
-  check (sold <= quantity)
-);
-create index on ticket_tiers (event_id);
-
-create table bookings (
-  id             uuid primary key default gen_random_uuid(),
-  code           text not null unique,
-  user_id        uuid not null references users(id) on delete restrict,
-  event_id       uuid not null references events(id) on delete restrict,
-  event_date_id  uuid references event_dates(id) on delete restrict,
-  base_paise     integer not null,
-  discount_paise integer not null default 0,
-  fee_paise      integer not null default 0,
-  tax_paise      integer not null default 0,
-  total_paise    integer not null,
-  status         booking_status not null default 'pending',
-  order_ref      text,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now()
-);
-create index on bookings (user_id, created_at desc);
-
-create table booking_items (
-  id               uuid primary key default gen_random_uuid(),
-  booking_id       uuid not null references bookings(id) on delete cascade,
-  ticket_tier_id   uuid not null references ticket_tiers(id) on delete restrict,
-  qty              integer not null check (qty > 0),
-  unit_price_paise integer not null
+CREATE TABLE public.migrations (
+    id integer NOT NULL,
+    "timestamp" bigint NOT NULL,
+    name character varying NOT NULL
 );
 
-create table payments (
-  id           uuid primary key default gen_random_uuid(),
-  booking_id   uuid not null references bookings(id) on delete restrict,
-  gateway      text not null,
-  txn_id       text not null unique,      -- webhook idempotency key
-  amount_paise integer not null,
-  status       payment_status not null default 'created',
-  raw_response jsonb,
-  verified_at  timestamptz,
-  created_at   timestamptz not null default now()
+CREATE SEQUENCE public.migrations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.migrations_id_seq OWNED BY public.migrations.id;
+
+CREATE TABLE public.payment_events (
+    id character varying NOT NULL,
+    type character varying NOT NULL,
+    payload jsonb NOT NULL,
+    "receivedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-create table tickets (
-  id             uuid primary key default gen_random_uuid(),
-  booking_id     uuid not null references bookings(id) on delete restrict,
-  owner_user_id  uuid not null references users(id) on delete restrict,
-  ticket_tier_id uuid not null references ticket_tiers(id) on delete restrict,
-  qr_token       text not null unique,    -- server-generated, single-use per entry
-  status         ticket_status not null default 'active',
-  entries_used   integer not null default 0,
-  entries_total  integer not null default 1,
-  created_at     timestamptz not null default now()
+CREATE TABLE public.refresh_tokens (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid NOT NULL,
+    "familyId" uuid NOT NULL,
+    "tokenHash" character varying NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL,
+    "revokedAt" timestamp with time zone,
+    "replacedById" uuid,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
-create index on tickets (owner_user_id, status);
+
+CREATE TABLE public.seat_reservations (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    "sectionKey" character varying NOT NULL,
+    "seatKey" character varying NOT NULL,
+    "bookingId" uuid,
+    status character varying DEFAULT 'held'::character varying NOT NULL,
+    "expiresAt" timestamp with time zone
+);
+
+CREATE TABLE public.seat_sections (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    key character varying NOT NULL,
+    name character varying NOT NULL,
+    "pricePaise" integer NOT NULL,
+    rows integer NOT NULL,
+    cols integer NOT NULL
+);
+
+CREATE TABLE public.ticket_tiers (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    name character varying NOT NULL,
+    type character varying DEFAULT 'ga'::character varying NOT NULL,
+    "pricePaise" integer NOT NULL,
+    quantity integer NOT NULL,
+    sold integer DEFAULT 0 NOT NULL,
+    reserved integer DEFAULT 0 NOT NULL,
+    "minQty" integer DEFAULT 1 NOT NULL,
+    "entryPerTicket" integer DEFAULT 1 NOT NULL
+);
+
+CREATE TABLE public.tickets (
+    id uuid NOT NULL,
+    "bookingId" uuid NOT NULL,
+    "ownerUserId" uuid NOT NULL,
+    "eventId" uuid NOT NULL,
+    "eventTitle" character varying NOT NULL,
+    "venueName" character varying NOT NULL,
+    "tierName" character varying DEFAULT ''::character varying NOT NULL,
+    "seatLabel" character varying,
+    "startDate" timestamp with time zone,
+    "qrToken" character varying NOT NULL,
+    status character varying DEFAULT 'active'::character varying NOT NULL,
+    quantity integer DEFAULT 1 NOT NULL,
+    "entriesUsed" integer DEFAULT 0 NOT NULL,
+    "entriesTotal" integer DEFAULT 1 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.users (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    phone character varying NOT NULL,
+    "countryCode" character varying DEFAULT '+91'::character varying NOT NULL,
+    name character varying,
+    email character varying,
+    dob character varying,
+    gender character varying,
+    "cityId" uuid,
+    "acceptedTerms" boolean DEFAULT false NOT NULL,
+    "termsVersion" character varying,
+    role character varying DEFAULT 'customer'::character varying NOT NULL,
+    "deviceToken" character varying,
+    "deletedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.migrations ALTER COLUMN id SET DEFAULT nextval('public.migrations_id_seq'::regclass);
+
+ALTER TABLE ONLY public.seat_sections
+    ADD CONSTRAINT "PK_3068932c5ab156abbc2eb387655" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.cities
+    ADD CONSTRAINT "PK_4762ffb6e5d198cfec5606bc11e" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.refresh_tokens
+    ADD CONSTRAINT "PK_7d8bee0204106019488c4c50ffa" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.migrations
+    ADD CONSTRAINT "PK_8c82d7f526340ab734260ea46be" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.ticket_tiers
+    ADD CONSTRAINT "PK_917cfec124fa5e8ce04d1e7b865" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.payment_events
+    ADD CONSTRAINT "PK_9f1d16fc78b33e676940a32e8b5" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.seat_reservations
+    ADD CONSTRAINT "PK_a18ef69cde470ab119c69d6375d" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT "PK_bee6805982cc1e248e94ce94957" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.check_ins
+    ADD CONSTRAINT "PK_fac7f27bc829a454ad477c13f62" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.seat_sections
+    ADD CONSTRAINT "UQ_dbe25bf411b974263900f5f1afd" UNIQUE ("eventId", key);
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT uq_booking_idempotency UNIQUE ("userId", "idempotencyKey");
+
+ALTER TABLE ONLY public.seat_reservations
+    ADD CONSTRAINT uq_seat_reservation UNIQUE ("eventId", "sectionKey", "seatKey");
+
+CREATE UNIQUE INDEX "IDX_05bd884c03d3f424e2204bd14c" ON public.events USING btree (slug);
+
+CREATE UNIQUE INDEX "IDX_1c77cbb3c49baf2feeed3241f1" ON public.tickets USING btree ("qrToken");
+
+CREATE INDEX "IDX_245de798229ec6e66bb9312f28" ON public.tickets USING btree ("bookingId");
+
+CREATE INDEX "IDX_362e1da87c0e1d5ff73b8b454a" ON public.seat_reservations USING btree ("bookingId");
+
+CREATE INDEX "IDX_38a69a58a323647f2e75eb994d" ON public.bookings USING btree ("userId");
+
+CREATE INDEX "IDX_40e9a8b923a1b3fb4429a5c624" ON public.refresh_tokens USING btree ("familyId");
+
+CREATE INDEX "IDX_48b267d894e32a25ebde4b207a" ON public.bookings USING btree (status);
+
+CREATE INDEX "IDX_5f63cbb95a5f457f258f055c58" ON public.bookings USING btree ("expiresAt");
+
+CREATE INDEX "IDX_610102b60fea1455310ccd299d" ON public.refresh_tokens USING btree ("userId");
+
+CREATE UNIQUE INDEX "IDX_6bd01a5dbc832a85d50af2dfa3" ON public.bookings USING btree ("txnId") WHERE ("txnId" IS NOT NULL);
+
+CREATE INDEX "IDX_712790b5c3b1e6d859c0987c4f" ON public.events USING btree ("cityId");
+
+CREATE INDEX "IDX_73c68e89cc8f6d4b7fd30627a4" ON public.check_ins USING btree ("eventId");
+
+CREATE INDEX "IDX_8a101375d173c39a7c1d02c9d7" ON public.tickets USING btree ("eventId");
+
+CREATE UNIQUE INDEX "IDX_9add00bfd42ae2bbe830bab9aa" ON public.bookings USING btree (code);
+
+CREATE INDEX "IDX_9dfb0167fbe7623a59100f132a" ON public.bookings USING btree ("orderRef");
+
+CREATE UNIQUE INDEX "IDX_a000cca60bcf04454e72769949" ON public.users USING btree (phone);
+
+CREATE INDEX "IDX_a58947aa4999755168d6d351ba" ON public.check_ins USING btree ("ticketId");
+
+CREATE INDEX "IDX_a9059a9111a2206081a347d3b6" ON public.ticket_tiers USING btree ("eventId");
+
+CREATE INDEX "IDX_c37e9818eeaad9543032f6a6f1" ON public.tickets USING btree ("ownerUserId");
+
+CREATE INDEX "IDX_ea811029f9d388932b70fa0123" ON public.seat_sections USING btree ("eventId");
+
+CREATE INDEX "IDX_f95d476ef16fad91a50544b60c" ON public.bookings USING btree ("eventId");
+

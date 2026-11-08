@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../app/routes.dart';
+import '../../core/constants.dart';
+import '../../core/di.dart';
+import '../../services/storage/local_storage.dart';
 import '../../app/theme.dart';
 import '../../widgets/common.dart';
 
@@ -22,6 +25,11 @@ class _IntroScreenState extends State<IntroScreen> {
     _Slide(Icons.qr_code_2_rounded, 'Just scan in', 'Your ticket is a QR — show it at the gate.'),
   ];
 
+  void _finish() {
+    sl<LocalStorage>().setBool(StorageKeys.onboardingDone, true);
+    Get.offAllNamed(Routes.login);
+  }
+
   @override
   void dispose() {
     _pc.dispose();
@@ -38,7 +46,7 @@ class _IntroScreenState extends State<IntroScreen> {
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
-                onPressed: () => Get.offAllNamed(Routes.login),
+                onPressed: () => _finish(),
                 child: const Text('Skip'),
               ),
             ),
@@ -62,7 +70,7 @@ class _IntroScreenState extends State<IntroScreen> {
                 label: last ? 'Get started' : 'Next',
                 onPressed: () {
                   if (last) {
-                    Get.offAllNamed(Routes.login);
+                    _finish();
                   } else {
                     _pc.nextPage(
                         duration: const Duration(milliseconds: 300),
@@ -92,7 +100,7 @@ class _Slide extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 64,
-            backgroundColor: AppColors.primary.withOpacity(0.12),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
             child: Icon(icon, size: 64, color: AppColors.primary),
           ),
           const SizedBox(height: AppSpacing.xl),

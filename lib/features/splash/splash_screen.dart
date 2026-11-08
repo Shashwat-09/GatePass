@@ -4,7 +4,9 @@ import 'package:get/get.dart';
 import '../../app/routes.dart';
 import '../../app/theme.dart';
 import '../../core/di.dart';
+import '../../core/constants.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../services/storage/local_storage.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,23 +22,35 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _decide() async {
-    await Future.delayed(const Duration(milliseconds: 900));
-    final loggedIn = sl<AuthRepository>().isLoggedIn;
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    Get.offAllNamed(loggedIn ? Routes.home : Routes.intro);
+    final auth = sl<AuthRepository>();
+    final storage = sl<LocalStorage>();
+    if (!auth.isLoggedIn) {
+      Get.offAllNamed(storage.getBool(StorageKeys.onboardingDone) ? Routes.login : Routes.intro);
+      return;
+    }
+    final u = auth.currentUser;
+    if (u == null || (u.name ?? '').trim().isEmpty || !u.acceptedTerms) {
+      Get.offAllNamed(Routes.profileSetup);
+    } else if (storage.getJson(StorageKeys.city) == null) {
+      Get.offAllNamed(Routes.city);
+    } else {
+      Get.offAllNamed(Routes.home);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
+          children: [
             Icon(Icons.local_activity_rounded, color: Colors.white, size: 72),
             SizedBox(height: 16),
-            Text('Eventa',
+            Text(AppConfig.appName,
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,

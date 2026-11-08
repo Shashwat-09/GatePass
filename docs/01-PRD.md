@@ -1,7 +1,7 @@
-# 1. PRD — Eventa (new platform)
+# 1. PRD — GatePass (new platform)
 
 ## 1.1 Problem & opportunity
-People discover live events through scattered social posts and struggle to buy tickets quickly, pick good seats, and share with friends. Organizers need a low-friction way to sell and to validate entry. Eventa is a mobile-first marketplace that owns the full loop: discover → book → pay → enter → share.
+People discover live events through scattered social posts and struggle to buy tickets quickly, pick good seats, and share with friends. Organizers need a low-friction way to sell and to validate entry. GatePass is a mobile-first marketplace that owns the full loop: discover → book → pay → enter → share.
 
 ## 1.2 Target users
 | Persona | Needs |

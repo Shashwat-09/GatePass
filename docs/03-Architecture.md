@@ -1,4 +1,4 @@
-# 3. Architecture — Eventa
+# 3. Architecture — GatePass
 
 ## 3.1 System context
 
@@ -6,7 +6,7 @@
 flowchart LR
     U([Attendee]) --> C["Customer App (Flutter)"]
     O([Organizer]) --> S["Seller App (Flutter) — Phase 3"]
-    C -->|HTTPS + JWT| API["Eventa API (NestJS)"]
+    C -->|HTTPS + JWT| API["GatePass API (NestJS)"]
     S -->|HTTPS + JWT| API
     API --> DB[(PostgreSQL)]
     API --> R[(Redis — holds, OTP, rate limit)]
@@ -51,7 +51,7 @@ flowchart TB
 newapp/
   pubspec.yaml · analysis_options.yaml
   lib/
-    main.dart                 # init storage/DI, run EventaApp
+    main.dart                 # init storage/DI, run GatePassApp
     app/
       app.dart                # GetMaterialApp: theme + routes
       theme.dart              # design system (colors, radius, spacing, ThemeData)

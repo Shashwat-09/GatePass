@@ -3,13 +3,15 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  PrimaryColumn,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 
 /**
- * TypeORM entities for the MVP (mirrors docs/04 + backend/schema.sql).
- * Status fields are varchar for portability; money is integer paise.
- * OTP + refresh tokens stay in-memory (ephemeral; Redis in production).
+ * TypeORM entities (mirrors docs/04-Database-Schema.md). Schema changes go
+ * through migrations in src/db/migrations — `synchronize` is always off.
+ * Money is integer paise; status fields are varchar.
  */
 
 @Entity('cities')
@@ -20,6 +22,8 @@ export class City {
   @Column({ default: '' }) iconUrl!: string;
   @Column({ default: true }) isActive!: boolean;
 }
+
+export type UserRole = 'customer' | 'staff' | 'admin';
 
 @Entity('users')
 export class User {
@@ -32,7 +36,23 @@ export class User {
   @Column({ type: 'varchar', nullable: true }) gender!: string | null;
   @Column({ type: 'uuid', nullable: true }) cityId!: string | null;
   @Column({ default: false }) acceptedTerms!: boolean;
+  @Column({ type: 'varchar', nullable: true }) termsVersion!: string | null;
+  @Column({ type: 'varchar', default: 'customer' }) role!: UserRole;
+  @Column({ type: 'varchar', nullable: true }) deviceToken!: string | null;
   @Column({ type: 'timestamptz', nullable: true }) deletedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Rotating refresh tokens; only a hash of the secret part is stored. */
+@Entity('refresh_tokens')
+export class RefreshToken {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Index() @Column({ type: 'uuid' }) familyId!: string;
+  @Column() tokenHash!: string;
+  @Column({ type: 'timestamptz' }) expiresAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true }) revokedAt!: Date | null;
+  @Column({ type: 'uuid', nullable: true }) replacedById!: string | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
@@ -56,9 +76,14 @@ export class EventEntity {
   @Column({ default: 0 }) priceFromPaise!: number;
   @Column({ default: false }) hasSeatMap!: boolean;
   @Column({ default: 6 }) maxPerUser!: number;
+  @Column({ type: 'text', nullable: true }) terms!: string | null;
   @Column({ type: 'jsonb', default: () => "'[]'" }) faqs!: { q: string; a: string }[];
 }
 
+/**
+ * `sold` counts confirmed tickets; `reserved` counts stock held by pending
+ * (unpaid, unexpired) bookings. Available = quantity - sold - reserved.
+ */
 @Entity('ticket_tiers')
 export class Tier {
   @PrimaryGeneratedColumn('uuid') id!: string;
@@ -68,11 +93,13 @@ export class Tier {
   @Column() pricePaise!: number;
   @Column() quantity!: number;
   @Column({ default: 0 }) sold!: number;
+  @Column({ default: 0 }) reserved!: number;
   @Column({ default: 1 }) minQty!: number;
   @Column({ default: 1 }) entryPerTicket!: number;
 }
 
 @Entity('seat_sections')
+@Unique(['eventId', 'key'])
 export class SeatSection {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Index() @Column({ type: 'uuid' }) eventId!: string;
@@ -81,39 +108,106 @@ export class SeatSection {
   @Column() pricePaise!: number;
   @Column() rows!: number;
   @Column() cols!: number;
-  @Column({ type: 'text', array: true, default: () => "'{}'" }) booked!: string[];
+}
+
+/**
+ * One row per taken seat. The unique constraint makes double-selling a seat
+ * impossible at the database level. `held` rows expire with their booking;
+ * `sold` rows are permanent.
+ */
+@Entity('seat_reservations')
+@Unique('uq_seat_reservation', ['eventId', 'sectionKey', 'seatKey'])
+export class SeatReservation {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ type: 'uuid' }) eventId!: string;
+  @Column() sectionKey!: string;
+  @Column() seatKey!: string; // 'row-col', 0-based
+  @Index() @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  @Column({ type: 'varchar', default: 'held' }) status!: 'held' | 'sold';
+  @Column({ type: 'timestamptz', nullable: true }) expiresAt!: Date | null;
+}
+
+export type BookingStatus = 'pending' | 'confirmed' | 'failed' | 'expired' | 'refund_pending' | 'refunded';
+
+export interface BookingItem {
+  tierId?: string;
+  tierName?: string;
+  qty?: number;
+  sectionId?: string;
+  sectionName?: string;
+  row?: number;
+  col?: number;
+  unitPricePaise: number;
 }
 
 @Entity('bookings')
+@Unique('uq_booking_idempotency', ['userId', 'idempotencyKey'])
 export class Booking {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Index({ unique: true }) @Column() code!: string;
   @Index() @Column({ type: 'uuid' }) userId!: string;
-  @Column({ type: 'uuid' }) eventId!: string;
-  @Column({ default: 'pending' }) status!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Index() @Column({ type: 'varchar', default: 'pending' }) status!: BookingStatus;
   @Column({ default: 0 }) basePaise!: number;
   @Column({ default: 0 }) discountPaise!: number;
   @Column({ default: 0 }) feePaise!: number;
   @Column({ default: 0 }) taxPaise!: number;
   @Column({ default: 0 }) totalPaise!: number;
-  @Column({ default: '' }) orderRef!: string;
-  @Column({ type: 'varchar', nullable: true }) txnId!: string | null;
-  @Column({ type: 'jsonb', default: () => "'[]'" }) items!: Array<Record<string, any>>;
+  @Column({ default: 'mock' }) gateway!: string;
+  @Index() @Column({ default: '' }) orderRef!: string;
+  /** Gateway payment id. Unique so one payment can never confirm two bookings. */
+  @Index({ unique: true, where: '"txnId" IS NOT NULL' })
+  @Column({ type: 'varchar', nullable: true })
+  txnId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) idempotencyKey!: string | null;
+  @Column({ type: 'varchar', nullable: true }) failureReason!: string | null;
+  @Column({ type: 'jsonb', default: () => "'[]'" }) items!: BookingItem[];
+  @Index() @Column({ type: 'timestamptz' }) expiresAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true }) confirmedAt!: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
 @Entity('tickets')
 export class Ticket {
-  @PrimaryGeneratedColumn('uuid') id!: string;
-  @Column({ type: 'uuid' }) bookingId!: string;
+  @PrimaryColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) bookingId!: string;
   @Index() @Column({ type: 'uuid' }) ownerUserId!: string;
   @Index() @Column({ type: 'uuid' }) eventId!: string;
   @Column() eventTitle!: string;
   @Column() venueName!: string;
+  @Column({ default: '' }) tierName!: string;
+  @Column({ type: 'varchar', nullable: true }) seatLabel!: string | null;
   @Column({ type: 'timestamptz', nullable: true }) startDate!: Date | null;
   @Index({ unique: true }) @Column() qrToken!: string;
   @Column({ default: 'active' }) status!: string;
   @Column({ default: 1 }) quantity!: number;
   @Column({ default: 0 }) entriesUsed!: number;
   @Column({ default: 1 }) entriesTotal!: number;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
+
+/** Audit log of every gate scan (admitted or rejected). */
+@Entity('check_ins')
+export class CheckIn {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid', nullable: true }) ticketId!: string | null;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ type: 'uuid' }) staffUserId!: string;
+  @Column() result!: string;
+  @Column({ default: 0 }) entries!: number;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Processed gateway webhooks, keyed by the gateway's event id (dedupe). */
+@Entity('payment_events')
+export class PaymentEvent {
+  @PrimaryColumn() id!: string;
+  @Column() type!: string;
+  @Column({ type: 'jsonb' }) payload!: Record<string, unknown>;
+  @CreateDateColumn({ type: 'timestamptz' }) receivedAt!: Date;
+}
+
+export const ENTITIES = [
+  City, User, RefreshToken, EventEntity, Tier, SeatSection, SeatReservation,
+  Booking, Ticket, CheckIn, PaymentEvent,
+];

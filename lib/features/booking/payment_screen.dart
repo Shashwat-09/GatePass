@@ -1,64 +1,152 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app/theme.dart';
+import '../../core/format.dart';
 import '../../widgets/common.dart';
 import '../controllers/booking_controller.dart';
 import 'confirmation_screen.dart';
 
-/// Mock payment screen. In production this launches the gateway SDK with the
-/// server-issued token, then calls process-order. Here we simulate the gateway
-/// so the flow is testable without a merchant account.
-class PaymentScreen extends StatelessWidget {
+/// Shows the server-computed total and hold timer, then opens the gateway
+/// checkout. The server verifies every payment before tickets are issued.
+class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  final c = Get.find<BookingController>();
+  Timer? _tick;
+  Duration _left = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _update();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => _update());
+  }
+
+  void _update() {
+    final exp = c.quote.value?.expiresAt;
+    if (!mounted || exp == null) return;
+    setState(() => _left = exp.difference(DateTime.now()));
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  bool get _expired => c.quote.value?.expiresAt != null && _left.isNegative;
+
+  Future<void> _onPaid(bool ok) async {
+    if (ok && mounted) {
+      Get.offUntil(GetPageRoute(page: () => const ConfirmationScreen()), (r) => r.isFirst);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c = Get.find<BookingController>();
-    final total = c.quote.value?.totalPaise ?? c.subtotalPaise;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Payment')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          children: [
-            const SizedBox(height: AppSpacing.lg),
-            const Icon(Icons.lock_outline, size: 40, color: AppColors.primary),
-            const SizedBox(height: AppSpacing.sm),
-            Text('Amount payable: ₹${(total / 100).round()}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: AppSpacing.lg),
-            _method(Icons.account_balance_wallet_outlined, 'UPI (GPay / PhonePe / Paytm)'),
-            _method(Icons.credit_card, 'Credit / Debit card'),
-            _method(Icons.account_balance_outlined, 'Netbanking'),
-            const Spacer(),
-            const Text('Test mode — no real charge.',
-                style: TextStyle(fontSize: 12, color: AppColors.subtleLight)),
-            const SizedBox(height: AppSpacing.sm),
-            Obx(() => PrimaryButton(
-                  label: 'Pay ₹${(total / 100).round()}',
-                  loading: c.loading.value,
-                  onPressed: () async {
-                    final ok = await c.confirmPayment();
-                    if (ok) {
-                      Get.offUntil(
-                        GetPageRoute(page: () => const ConfirmationScreen()),
-                        (r) => r.isFirst,
-                      );
-                    }
-                  },
-                )),
-          ],
+    return PopScope(
+      canPop: c.payState.value != PayState.verifying,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) c.abandon();
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Payment')),
+        body: SafeArea(
+          child: Obx(() {
+            final q = c.quote.value;
+            if (q == null) {
+              return StateView.error(c.error.value ?? 'This checkout has ended. Please start again.',
+                  onRetry: () => Get.back());
+            }
+            final busy = c.payState.value == PayState.paying || c.payState.value == PayState.verifying;
+            final mm = _left.inMinutes.remainder(60).toString().padLeft(2, '0');
+            final ss = _left.inSeconds.remainder(60).toString().padLeft(2, '0');
+            return ListView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              children: [
+                Text(c.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text('Booking ${q.bookingCode}', style: TextStyle(color: Theme.of(context).hintColor)),
+                const SizedBox(height: AppSpacing.md),
+                _line('Tickets', formatPaise(q.basePaise)),
+                if (q.discountPaise > 0) _line('Discount', '- ${formatPaise(q.discountPaise)}'),
+                _line('Convenience fee', formatPaise(q.feePaise)),
+                _line('GST', formatPaise(q.taxPaise)),
+                const Divider(height: AppSpacing.lg),
+                _line('Total', formatPaise(q.totalPaise), bold: true),
+                const SizedBox(height: AppSpacing.md),
+                if (q.expiresAt != null)
+                  Row(children: [
+                    Icon(Icons.timer_outlined, size: 18, color: _expired ? Colors.red : AppColors.warning),
+                    const SizedBox(width: 6),
+                    Text(_expired ? 'Hold expired — tickets may no longer be available' : 'Tickets held for $mm:$ss'),
+                  ]),
+                const SizedBox(height: AppSpacing.lg),
+                if (c.error.value != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Text(c.error.value!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
+                if (c.payState.value == PayState.verifying)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Text('Confirming your payment… please don\'t close the app.'),
+                  ),
+                if (q.gateway == 'mock') ..._testMode(busy) else
+                  PrimaryButton(
+                    label: 'Pay ${formatPaise(q.totalPaise)}',
+                    loading: busy,
+                    onPressed: () async => _onPaid(await c.pay()),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.lock_outline, size: 14, color: Theme.of(context).hintColor),
+                  const SizedBox(width: 4),
+                  Text('Secure payment · UPI, cards, netbanking',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                ]),
+              ],
+            );
+          }),
         ),
       ),
     );
   }
 
-  Widget _method(IconData icon, String label) => Card(
-        child: ListTile(
-          leading: Icon(icon, color: AppColors.primary),
-          title: Text(label),
-          trailing: const Icon(Icons.radio_button_unchecked),
+  /// Development backend only (PAYMENT_GATEWAY=mock): no real gateway exists.
+  List<Widget> _testMode(bool busy) => [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: const Text('TEST MODE — the server has no payment gateway configured. No money moves.'),
         ),
-      );
+        const SizedBox(height: AppSpacing.sm),
+        PrimaryButton(
+          label: 'Simulate successful payment',
+          loading: busy,
+          onPressed: () async => _onPaid(await c.confirmWith({'mockResult': 'success'})),
+        ),
+        TextButton(
+          onPressed: busy ? null : () => c.confirmWith({'mockResult': 'failure'}),
+          child: const Text('Simulate failed payment'),
+        ),
+      ];
+
+  Widget _line(String label, String amount, {bool bold = false}) {
+    final style = TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w500, fontSize: bold ? 18 : 15);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: style), Text(amount, style: style)]),
+    );
+  }
 }

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>GatePass · Check-in</title>
+<link rel="stylesheet" href="/gate/gate.css">
+</head>
+<body>
+<header><strong>GatePass</strong> <span>Check-in</span> <button id="logout" hidden>Log out</button></header>
+<main>
+  <section id="login">
+    <h1>Staff sign in</h1>
+    <p class="muted">Only accounts with gate access can scan tickets.</p>
+    <label>Mobile number <input id="phone" inputmode="numeric" maxlength="10" autocomplete="tel-national"></label>
+    <button id="send">Send code</button>
+    <div id="otpBox" hidden>
+      <label>6-digit code <input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+      <button id="verify">Sign in</button>
+    </div>
+    <p id="loginMsg" class="msg"></p>
+  </section>
+
+  <section id="pick" hidden>
+    <h1>Choose event</h1>
+    <select id="events"></select>
+    <button id="start">Start scanning</button>
+  </section>
+
+  <section id="scan" hidden>
+    <h2 id="evTitle"></h2>
+    <p class="muted"><span id="stats">–</span> checked in</p>
+    <div id="result" class="result idle">Ready</div>
+    <div id="cam"><video id="video" playsinline muted></video><p id="camMsg" class="muted"></p></div>
+    <form id="manual"><input id="code" placeholder="Or type / paste ticket code"><button>Check</button></form>
+    <label class="row">Entries this scan <input id="entries" type="number" min="1" max="50" value="1"></label>
+    <button id="change" class="link">Change event</button>
+  </section>
+</main>
+<script src="/gate/gate.js"></script>
+</body>
+</html>

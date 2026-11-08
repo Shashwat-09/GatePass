@@ -1,5 +1,27 @@
-/// Domain models for the new app. Field names mirror the product's data shape
-/// (re-declared cleanly). Extend as the backend solidifies.
+// Domain models. JSON shapes follow docs/08-API-Specification.md.
+
+/// One page of a paginated list (`{items, page, limit, total}`).
+class Paged<T> {
+  final List<T> items;
+  final int page;
+  final int total;
+  const Paged(this.items, {this.page = 1, this.total = 0});
+
+  static Paged<T> fromJson<T>(dynamic data, T Function(Map<String, dynamic>) parse) {
+    final m = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+    final list = (m['items'] as List? ?? const []).map((e) => parse(e as Map<String, dynamic>)).toList();
+    return Paged(list, page: (m['page'] as num?)?.toInt() ?? 1, total: (m['total'] as num?)?.toInt() ?? list.length);
+  }
+}
+
+class CityModel {
+  final String id;
+  final String name;
+  const CityModel({required this.id, required this.name});
+  factory CityModel.fromJson(Map<String, dynamic> j) =>
+      CityModel(id: (j['id'] ?? '').toString(), name: (j['name'] ?? '').toString());
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
 
 class UserModel {
   final String id;
@@ -8,6 +30,7 @@ class UserModel {
   final String? email;
   final String? gender;
   final String? dob;
+  final bool acceptedTerms;
 
   UserModel({
     required this.id,
@@ -16,6 +39,7 @@ class UserModel {
     this.email,
     this.gender,
     this.dob,
+    this.acceptedTerms = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> j) => UserModel(
@@ -25,6 +49,7 @@ class UserModel {
         email: j['email'],
         gender: j['gender'],
         dob: j['dob'],
+        acceptedTerms: j['acceptedTerms'] == true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +59,7 @@ class UserModel {
         'email': email,
         'gender': gender,
         'dob': dob,
+        'acceptedTerms': acceptedTerms,
       };
 }
 
@@ -61,10 +87,10 @@ class TierModel {
         id: (j['id'] ?? '').toString(),
         name: (j['name'] ?? 'General').toString(),
         type: (j['type'] ?? 'ga').toString(),
-        pricePaise: (j['pricePaise'] ?? 0) as int,
-        remaining: (j['remaining'] ?? 100) as int,
-        minQty: (j['minQty'] ?? 1) as int,
-        entryPerTicket: (j['entryPerTicket'] ?? 1) as int,
+        pricePaise: (j['pricePaise'] as num?)?.toInt() ?? 0,
+        remaining: (j['remaining'] as num?)?.toInt() ?? 0,
+        minQty: (j['minQty'] as num?)?.toInt() ?? 1,
+        entryPerTicket: (j['entryPerTicket'] as num?)?.toInt() ?? 1,
       );
 }
 
@@ -110,11 +136,11 @@ class EventModel {
         venueName: (j['venueName'] ?? (j['venue']?['name']) ?? '').toString(),
         city: (j['city']?['name'] ?? j['cityName'] ?? j['city'] ?? '').toString(),
         priceFrom: (j['priceFromPaise'] ?? j['priceFrom'] ?? j['price'] ?? 0) as num,
-        date: DateTime.tryParse((j['startDate'] ?? j['eventDate'] ?? '').toString()),
-        genre: j['genre'],
+        date: DateTime.tryParse((j['startDate'] ?? j['eventDate'] ?? '').toString())?.toLocal(),
+        genre: (j['genre'] as String?)?.isEmpty ?? true ? null : j['genre'] as String,
         gallery: (j['gallery'] as List?)?.map((e) => e.toString()).toList() ?? const [],
         hasSeatMap: (j['hasSeatMap'] ?? false) == true,
-        maxPerUser: (j['maxPerUser'] ?? 6) as int,
+        maxPerUser: (j['maxPerUser'] as num?)?.toInt() ?? 6,
         tiers: (j['tiers'] as List?)
                 ?.map((e) => TierModel.fromJson(e as Map<String, dynamic>))
                 .toList() ??
@@ -130,6 +156,11 @@ class TicketModel {
   final String qrPayload;
   final String status;
   final int quantity;
+  final String tierName;
+  final String? seatLabel;
+  final String? invoiceUrl;
+  final int entryUsed;
+  final int entryTotal;
 
   TicketModel({
     required this.id,
@@ -139,17 +170,43 @@ class TicketModel {
     required this.status,
     this.date,
     this.quantity = 1,
-  });
+    this.tierName = '',
+    this.seatLabel,
+    this.invoiceUrl,
+    this.entryUsed = 0,
+    int? entryTotal,
+  }) : entryTotal = entryTotal ?? quantity;
 
   factory TicketModel.fromJson(Map<String, dynamic> j) => TicketModel(
         id: (j['ticketId'] ?? j['id'] ?? '').toString(),
         eventTitle: (j['eventTitle'] ?? '').toString(),
         venueName: (j['venueName'] ?? '').toString(),
-        qrPayload: (j['qrPayload'] ?? j['qrToken'] ?? j['qrCode'] ?? '').toString(),
-        status: (j['ticketStatus'] ?? j['status'] ?? 'active').toString(),
-        date: DateTime.tryParse((j['startDate'] ?? j['eventDate'] ?? '').toString()),
-        quantity: (j['quantity'] ?? 1) as int,
+        qrPayload: (j['qrToken'] ?? j['qrPayload'] ?? '').toString(),
+        status: (j['status'] ?? 'active').toString(),
+        date: DateTime.tryParse((j['startDate'] ?? '').toString())?.toLocal(),
+        quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+        tierName: (j['tierName'] ?? '').toString(),
+        seatLabel: j['seatLabel']?.toString(),
+        invoiceUrl: j['invoiceUrl']?.toString(),
+        entryUsed: (j['entryUsed'] as num?)?.toInt() ?? 0,
+        entryTotal: (j['entryTotal'] as num?)?.toInt(),
       );
+
+  /// For the offline cache (QR must render without network, MVP T4.2).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'eventTitle': eventTitle,
+        'venueName': venueName,
+        'qrToken': qrPayload,
+        'status': status,
+        'startDate': date?.toUtc().toIso8601String(),
+        'quantity': quantity,
+        'tierName': tierName,
+        'seatLabel': seatLabel,
+        'invoiceUrl': invoiceUrl,
+        'entryUsed': entryUsed,
+        'entryTotal': entryTotal,
+      };
 }
 
 // ───────────────────────── Phase 2 models ─────────────────────────

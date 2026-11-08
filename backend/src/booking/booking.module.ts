@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { createGateway, PaymentGateway } from '../payments/gateway';
 import { BookingController } from './booking.controller';
+import { BookingService } from './booking.service';
 
 @Module({
-  imports: [AuthModule],
   controllers: [BookingController],
+  providers: [BookingService, { provide: PaymentGateway, useFactory: createGateway }],
+  exports: [BookingService, PaymentGateway],
 })
 export class BookingModule {}

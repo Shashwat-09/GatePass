@@ -52,7 +52,7 @@ class _FilterScreenState extends State<FilterScreen> {
                       onSelected: (v) => setState(() {
                         v ? _genres.add(g) : _genres.remove(g);
                       }),
-                      selectedColor: AppColors.primary.withOpacity(0.15),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
                     ))
                 .toList(),
           ),

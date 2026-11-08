@@ -1,4 +1,4 @@
-# 2. TRD — Eventa (new platform)
+# 2. TRD — GatePass (new platform)
 
 ## 2.1 Stack (our choices)
 

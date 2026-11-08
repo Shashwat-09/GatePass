@@ -1,4 +1,4 @@
-# 5. Screens Inventory — Eventa (customer app)
+# 5. Screens Inventory — GatePass (customer app)
 
 > Complete screen list with purpose, key states, and phase. Route constants live in `lib/app/routes.dart`. "State" covers the loading/empty/error variants each screen must handle.
 

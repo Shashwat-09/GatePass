@@ -105,7 +105,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
                   margin: const EdgeInsets.only(right: AppSpacing.md),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.15),
+                    color: AppColors.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Row(children: [
@@ -171,7 +171,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         margin: const EdgeInsets.only(bottom: AppSpacing.lg),
         padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.08),
+          color: AppColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: const Center(
@@ -207,10 +207,10 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
     return Obx(() {
       final selected = c.isSelected(sec.id, r, col);
       final color = booked
-          ? AppColors.subtleLight.withOpacity(0.3)
+          ? AppColors.subtleLight.withValues(alpha: 0.3)
           : selected
               ? AppColors.primary
-              : AppColors.primary.withOpacity(0.12);
+              : AppColors.primary.withValues(alpha: 0.12);
       return GestureDetector(
         onTap: booked ? null : () => c.toggleSeat(sec, r, col),
         child: Container(
@@ -232,9 +232,9 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Widget _legend() => Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _legendItem(AppColors.primary.withOpacity(0.12), 'Available'),
+          _legendItem(AppColors.primary.withValues(alpha: 0.12), 'Available'),
           _legendItem(AppColors.primary, 'Selected'),
-          _legendItem(AppColors.subtleLight.withOpacity(0.3), 'Booked'),
+          _legendItem(AppColors.subtleLight.withValues(alpha: 0.3), 'Booked'),
         ],
       );
 

@@ -1,0 +1,41 @@
+# Local full stack: Postgres + Redis + API (development settings).
+#   docker compose up --build      → API on http://localhost:4000 (/api, /health, /gate, /docs)
+# Not for production: secrets below are dev-only placeholders and the
+# gateway/SMS run in mock/console mode.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: eventa
+      POSTGRES_DB: eventa
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  api:
+    build: ./backend
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    ports: ["4000:4000"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:eventa@db:5432/eventa
+      REDIS_URL: redis://redis:6379
+      PUBLIC_BASE_URL: http://localhost:4000/
+      SEED_ON_BOOT: "true"
+      SMS_PROVIDER: console
+      DEV_OTP: "123456"
+      PAYMENT_GATEWAY: mock
+      ENABLE_SWAGGER: "true"
+      JWT_SECRET: local-only-jwt-secret-do-not-use-in-prod-0001
+      QR_SIGNING_SECRET: local-only-qr-secret-do-not-use-in-prod-0002
+      URL_SIGNING_SECRET: local-only-url-secret-do-not-use-in-prod-0003
+      OTP_PEPPER: local-only-otp-pepper-do-not-use-in-prod-0004
+volumes:
+  pgdata:

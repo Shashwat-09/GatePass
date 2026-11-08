@@ -1,4 +1,4 @@
-# 7. MVP Scope & Delivery Plan — Eventa
+# 7. MVP Scope & Delivery Plan — GatePass
 
 > Implementation-grade plan. An engineer or AI agent should be able to execute each task without further clarification. "DoD" = Definition of Done. Every task lists acceptance criteria (AC) and the files it touches.
 

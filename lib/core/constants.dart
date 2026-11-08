@@ -1,53 +1,76 @@
-/// App-wide configuration and endpoint catalogue.
+import 'package:flutter/foundation.dart';
+
+/// App-wide configuration, set at build time with --dart-define:
 ///
-/// NOTE: fill these with YOUR OWN backend and credentials. Do not reuse the
-/// previous app's base URL, Firebase project, or payment keys — those belong to
-/// the old app's accounts.
+///   flutter build apk --release \
+///     --dart-define=BASE_URL=https://api.yourdomain.com/ \
+///     --dart-define=PRIVACY_URL=https://yourdomain.com/privacy \
+///     --dart-define=TERMS_URL=https://yourdomain.com/terms \
+///     --dart-define=SUPPORT_EMAIL=support@yourdomain.com
+///
+/// No secrets belong here — payment keys come from the server per order.
 class AppConfig {
-  /// Use in-app mock data instead of the network. Defaults to true so the app
-  /// runs standalone; pass --dart-define=USE_MOCK=false to talk to the backend.
-  static const bool useMockData =
-      bool.fromEnvironment('USE_MOCK', defaultValue: true);
+  static const String appName = 'GatePass';
 
-  /// Backend base URL (trailing slash required; the client appends `api/...`).
-  /// Default targets the local NestJS dev server from an Android emulator
-  /// (10.0.2.2 = host). Use http://localhost:4000/ for desktop/web.
-  static const String baseUrl = String.fromEnvironment(
-    'BASE_URL',
-    defaultValue: 'http://10.0.2.2:4000/',
-  );
+  /// In-app sample data instead of the network (UI demos only). Off by default
+  /// so a release build can never ship pointing at fake data.
+  static const bool useMockData = bool.fromEnvironment('USE_MOCK', defaultValue: false);
 
-  static const String appName = 'Eventa'; // working title — rename before release
+  /// Phase-2 features (seat maps, promo codes, vouchers, notifications inbox,
+  /// filters, split/transfer, location city detect). Hidden for the MVP release.
+  static const bool phase2 = bool.fromEnvironment('PHASE2', defaultValue: false);
+
+  static const String _baseUrl = String.fromEnvironment('BASE_URL');
+
+  /// Backend base URL (trailing slash; the client appends `api/...`).
+  /// Debug builds default to the local API from an Android emulator. Release
+  /// builds have no default: they must be given an https BASE_URL.
+  static String get baseUrl {
+    if (_baseUrl.isNotEmpty) return _baseUrl.endsWith('/') ? _baseUrl : '$_baseUrl/';
+    if (kReleaseMode) {
+      throw StateError('BASE_URL is not set. Build with --dart-define=BASE_URL=https://api.example.com/');
+    }
+    return 'http://10.0.2.2:4000/';
+  }
+
+  /// Release builds refuse plain-HTTP backends.
+  static void assertReleaseConfig() {
+    if (kReleaseMode && !useMockData && !baseUrl.startsWith('https://')) {
+      throw StateError('Release builds require an https BASE_URL (got $baseUrl)');
+    }
+  }
+
+  static const String privacyUrl = String.fromEnvironment('PRIVACY_URL', defaultValue: 'https://gatepass.app/privacy');
+  static const String termsUrl = String.fromEnvironment('TERMS_URL', defaultValue: 'https://gatepass.app/terms');
+  static const String supportEmail = String.fromEnvironment('SUPPORT_EMAIL', defaultValue: 'support@gatepass.app');
+  static const String termsVersion = '1.0';
+
   static const Duration networkTimeout = Duration(seconds: 30);
+  static const int pageSize = 20;
 }
 
-/// Endpoint paths — the feature surface, re-declared cleanly for the new backend.
+/// Endpoint paths (docs/08-API-Specification.md).
 class Endpoints {
   // auth
-  static const onboarding = 'api/onboarding';
   static const sendOtp = 'api/otp/send';
   static const login = 'api/user/login';
+  static const refresh = 'api/auth/refresh';
   static const logout = 'api/user/logout';
   static const user = 'api/user';
 
   // discovery
   static const highlights = 'api/home/highlights';
-  static const explore = 'api/home/explore';
   static const events = 'api/events';
   static const event = 'api/event';
   static const search = 'api/events/search';
   static const cities = 'api/city/cities';
 
   // booking
-  static const venues = 'api/booking/venues';
-  static const datesTimes = 'api/booking/dates-times';
-  static const tickets = 'api/booking/tickets';
   static const seatMap = 'api/booking/seat-map';
-  static const seatReserve = 'api/booking/seat-reserve';
   static const promocodes = 'api/promocodes';
-  static const commissions = 'api/commissions/customer';
   static const bookTicket = 'api/payment/book-ticket';
   static const processOrder = 'api/payment/process-order';
+  static const cancelOrder = 'api/payment/cancel';
 
   // post-purchase
   static const myTickets = 'api/ticket/my-tickets';
@@ -58,9 +81,10 @@ class Endpoints {
 
 /// Local storage keys.
 class StorageKeys {
-  static const box = 'eventa_box';
-  static const token = 'auth_token';
+  static const box = 'gatepass_box';
+  static const legacyBox = 'eventa_box';
   static const user = 'user_data';
-  static const city = 'selected_city';
+  static const city = 'selected_city'; // {"id","name"}
   static const onboardingDone = 'onboarding_done';
+  static const ticketCache = 'ticket_cache';
 }

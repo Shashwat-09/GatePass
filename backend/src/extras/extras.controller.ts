@@ -1,60 +1,27 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { paged, parsePage } from '../common/pagination';
 
 /**
- * Phase-2 endpoints the client screens use (vouchers, notifications).
- * Seeded demo data so those screens work against the live backend.
+ * Phase-2 endpoints (vouchers, notifications inbox). Not part of the MVP:
+ * they return real (empty) paginated results instead of demo data until the
+ * features are built. The client hides these screens unless PHASE2=true.
  */
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class ExtrasController {
   @Get('vouchers/me')
-  vouchers() {
-    const items = [
-      {
-        id: 'VCH-100',
-        title: 'Welcome voucher',
-        redeemCode: 'WELCOME-2K4F',
-        balanceUnits: 2,
-        canRedeem: true,
-        expiry: new Date(Date.now() + 60 * 86400000).toISOString(),
-      },
-      {
-        id: 'VCH-101',
-        title: 'Referral reward',
-        redeemCode: 'REF-9ZQA',
-        balanceUnits: 1,
-        canRedeem: true,
-        expiry: new Date(Date.now() + 20 * 86400000).toISOString(),
-      },
-    ];
-    return { items, page: 1, limit: items.length, total: items.length };
+  vouchers(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return paged([], parsePage(page, limit), 0);
   }
 
   @Get('notifications')
-  notifications() {
-    const items = [
-      {
-        id: 'n1',
-        title: 'Your booking is confirmed',
-        body: 'Your tickets are ready. Tap to view.',
-        type: 'ticket',
-        isRead: false,
-        createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-      },
-      {
-        id: 'n2',
-        title: 'Event starting soon',
-        body: 'An event you booked begins in 3 days.',
-        type: 'event',
-        isRead: true,
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-    ];
-    return { items, page: 1, limit: items.length, total: items.length };
+  notifications(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return paged([], parsePage(page, limit), 0);
   }
 
   @Post('notifications/mark-as-read')
+  @HttpCode(200)
   markRead() {
     return { updated: true };
   }

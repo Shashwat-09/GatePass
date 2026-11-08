@@ -1,4 +1,4 @@
-# 6. UML Diagrams — Eventa
+# 6. UML Diagrams — GatePass
 
 ## 6.1 Use-case (customer, MVP shaded by phase)
 
@@ -151,7 +151,7 @@ flowchart TB
   subgraph Client
     UI[Feature UI] --> Ctrl[Controllers] --> Repos[Repositories] --> Core[ApiService + LocalStorage]
   end
-  Core -->|REST| API[(Eventa API)]
+  Core -->|REST| API[(GatePass API)]
   subgraph Backend
     API --> Auth & Catalogue & Booking & Payments & Ticketing & Notifications
   end

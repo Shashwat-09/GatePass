@@ -28,5 +28,7 @@ class Routes {
     GetPage(name: city, page: () => const CityPickerScreen(firstRun: true)),
     GetPage(name: home, page: () => const HomeShell()),
     GetPage(name: eventDetails, page: () => const EventDetailsScreen()),
+    // Deep link: /event/neon-nights
+    GetPage(name: '$eventDetails/:slug', page: () => const EventDetailsScreen()),
   ];
 }

@@ -33,9 +33,9 @@ class EventCard extends StatelessWidget {
                   imageUrl: event.imageUrl,
                   fit: BoxFit.cover,
                   placeholder: (_, __) =>
-                      Container(color: AppColors.primary.withOpacity(0.08)),
+                      Container(color: AppColors.primary.withValues(alpha: 0.08)),
                   errorWidget: (_, __, ___) => Container(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     child: const Icon(Icons.image_not_supported_outlined),
                   ),
                 ),
