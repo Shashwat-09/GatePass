@@ -1,66 +1,84 @@
-# 10. Feature parity vs the legacy apps
+# 10. Feature parity vs the legacy apps — from the code
 
-Source: `reverse-engineering/old-app-analysis-docs/01-PRD.md` (REA analysis of `com.showmates` 2.0.25 and `in.showmates.vendor` 1.0.2).
-GatePass re-implements **features**, not code: nothing from the decompiled apps is copied (see `AGENTS.md`).
+**Method.** Built from the decompiled code only (not the earlier analysis documents): the Dart AOT snapshots disassembled with Blutter (`reverse-engineering/decompiled/{customer,vendor}-dart/asm/`), JADX Java output and the decoded manifests. `reverse-engineering/code-inventory/extract.py` lists, per Dart file, every class, method name and string constant (endpoint paths, JSON field names, UI text, validation messages). Each row cites that evidence. GatePass re-implements **behaviour**; no legacy code, text or assets are copied.
 
-Legend: ✅ done · 🟡 partial · ⬜ not built · ➖ intentionally different. Effort: S ≤ 2 days, M ≈ 1 week, L ≥ 2 weeks (one developer).
+Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery (B1 first).
 
-## Customer app
+## Customer app (`package:showmates`, 158 files)
 
-| Old app feature | GatePass | Notes / next step | Effort |
+| # | Feature (code evidence) | GatePass | Batch |
 |---|---|---|---|
-| **F1** Intro, phone + OTP login, profile (name/DOB/gender), terms + version, logout | ✅ | Random hashed OTP, rate limits, refresh rotation, secure storage | — |
-| F1 FCM device token | 🟡 | Token stored on login; push sending needs a Firebase project | S |
-| **F2** City list + manual pick, home reloads on change | ✅ | | — |
-| F2 GPS auto-detect, Google Places search | ⬜ | `geolocator` + reverse geocoding; needs a Maps API key | S |
-| **F3** Home highlights (banners, sections, categories), search | ✅ | Search covers title/venue/genre | — |
-| F3 Explore tab, grouped search, filter options API, "coming soon" / price veil | 🟡 | Filter UI exists (Phase 2 flag) on client-side data; add `events/filter-options`, `coming_soon` status | M |
-| **F4** Event details: images, description, venue, date, price-from | ✅ | | — |
-| F4 Gallery, video, artists, FAQ, guide, T&C, venue layout, directions, countdown | 🟡 | API already returns gallery/FAQ/terms; render them + maps link + countdown | S |
-| F4 Share event link, add to calendar | ⬜ | `share_plus` (present) + `add_2_calendar`; event deep link `gatepass://event/<slug>` | S |
-| F4 Bundle / multi-night passes | ⬜ | New tables (bundle, nights), pricing and per-night entry | L |
-| **F5** Artist pages | ⬜ | `artists`, `event_artists` tables + screens | M |
-| **F6.1–2** Multi-venue, date / time-slot selection | ⬜ | `event_dates` table; booking references `eventDateId` (already in the API spec) | M |
-| **F6.4** Ticket tiers, quantity, limits, stock | ✅ | Row-locked stock, per-user limits, holds that expire | — |
-| **F6.5–6** Seat map + seat hold timer | 🟡 | Server: seat rows with DB-unique holds + expiry ✅. App screens exist behind `PHASE2`; wire hold timer to server `expiresAt` | S |
-| **F6.7** Registration / custom forms | ⬜ | Form schema per event + answers per ticket | M |
-| **F6.8** Promo codes (public, private, auto-apply, bulk/"buy X") | ⬜ | Server currently rejects codes. Needs `promo_codes` + usage tables and server pricing | M |
-| F6 Phased pricing (early-bird windows, strike price) | ⬜ | Tier price phases with start/end | S |
-| **F6.9** Fee + GST breakdown | ✅ | Server-computed; configurable %. Per-ticket fixed fee variant ⬜ (S) | — |
-| **F6.10** Payment | ✅ ➖ | Razorpay (old: Easebuzz/PhonePe), verified server-side + signed webhook | — |
-| **F6.11** Success screen | ✅ | | — |
-| F6 Approval-gated tickets ("request tickets", my requests) | ⬜ | `approval_requests` + organiser approve/deny | M |
-| F6 Post-event survey | ⬜ | | S |
-| **F7** My tickets (upcoming/history), QR, invoice | ✅ | Signed Ed25519 QR, PDF invoice, **offline copy of all upcoming tickets** | — |
-| **F7 Split ticket** (N of M to friends), limits | ✅ | By phone (auto-delivered on sign-in) or share link; unlimited sharing and re-sharing by default, optional per-event caps (`allowTransfers`, `maxTransfersPerTicket`, `allowResplit`) | — |
-| **F7 Claim back** | ✅ ➖ | Allowed while unclaimed. Not after the friend accepts (prevents sell-then-revoke fraud) | — |
-| F7 Open shared ticket from a link | ✅ | `/t/<code>` page → `gatepass://claim`; manual code entry | — |
-| F7 Contact picker for split | ⬜ | Use the system picker (no READ_CONTACTS permission) | S |
-| F7 Sponsor branding on ticket | ⬜ | | S |
-| F7 Scan status (fully / partially scanned) | ✅ | "used" / "partly used" badges from entry counts | — |
-| **F8** Vouchers (list, redeem, share) | ⬜ | Screens exist behind `PHASE2`; backend returns empty | M |
-| **F9** Notification inbox + mark read | ✅ | Booking, ticket received, transfer delivered; unread badge | — |
-| F9 Push (FCM) with tap routing | ⬜ | Needs Firebase project; hook point `notifications/notify.ts` | S |
-| **F10** Profile view/edit, policies, support, delete account | ✅ | | — |
-| **F11** Forced update / maintenance mode | ⬜ | `GET api/app-config` + blocking screen | S |
-| **F12** Deep links | 🟡 | `gatepass://claim` ✅; verified https App Links need the domain + `assetlinks.json` | S |
-| **F13** In-app web view for HTML pages | ➖ | Policies open in the browser | — |
-| Language bundles (8 Indian languages) | ⬜ | Old app shipped only English strings in code | M |
-| Excel export of my purchases / shared / received | ✅ (new) | Not in the old app | — |
+| **Auth & profile** ||||
+| 1 | Onboarding slides — `IntroController.onboarding`, `api/onboarding` | ✅ (static slides) | — |
+| 2 | Phone OTP login — `LoginRepository.sendOtpApi/loginApi`, UI "Enter the 4-digit OTP" | ✅ (6-digit, stronger) | — |
+| 3 | First-run details: DOB, gender — `LoginController.onDOBEntered/onGenderSelected` | ✅ | — |
+| 4 | Profile edit: first/last name, email, DOB (DD-MM-YYYY), gender, **address** (house, street, locality, city, state, **PIN code**) — `ProfileController.isValidPinCode…`, `EditProfileBottomSheet` | 🟡 name/email/DOB/gender | B3 |
+| 5 | **Member ID** shown on profile ("Mates ID : #") — `user_data_response.matesId` | ⬜ | B3 |
+| 6 | Delete account **with a reason** ("Enter your reason") — `ProfileController.deleteAccount/isValidFeedback` | 🟡 no reason | B3 |
+| 7 | Device headers: `device-id`, `fcm-token`, `selected-city` — `common_values` | 🟡 | B5 |
+| **Location** ||||
+| 8 | GPS city detect with reverse geocode, "city not supported" fallback — `LocationController.getCityFromLocation/_resolveSupportedCityName` | ⬜ | B3 |
+| 9 | Top cities + city search — `getTopCitiesApi`, `searchCitiesListApi` | 🟡 search only | B3 |
+| **Discovery** ||||
+| 10 | Home highlights: banners (image **and video**), today's events, trending shows, upcoming, **dynamic sections**, promoted, unread count — `home_page_highlight_response` | 🟡 banners + rails | B3 |
+| 11 | Explore: top shows, **artists**, categories with gradients — `home_page_explore_response` | ⬜ | B3 |
+| 12 | Popular / list page with pagination and banners — `getListPageData`, `PopularEventsScreen` | ⬜ | B3 |
+| 13 | Search v1 grouped by city/event — `api/events/search/group-wise`, `SearchController.applyGenreFilter` | 🟡 flat search | B3 |
+| 14 | Filters: category, language, price, day — `api/events/filter-options`, `FilterScreen` | 🟡 genre/price (Phase 2) | B3 |
+| **Event page** (`details_page_data_response_v2`) ||||
+| 15 | Lifecycle badges: open, **filling fast**, **opening soon** with "Tickets open in" countdown + **Notify Me**, sold out, sale ended/closed, **cancelled, postponed, rescheduled, finished, live now, draft** — `EventsController.getStatusBadge`, widget text | ✅ | B1 |
+| 16 | Gallery + full-screen viewer, video, highlights, about, **guide**, **FAQs**, **terms**, **prohibited items**, age, duration, language, tags | ✅ | B1 |
+| 17 | **Venue layout image** ("for reference only"), map link "View in Map" | ✅ | B1 |
+| 18 | **Artists lineup** with headliner badge, Spotify/YouTube links | ✅ | B1 |
+| 19 | **Sponsors by tier** (Title, Presented by, Powered by, Co-Powered by, Associate, Hospital partner…) + brand logo | ✅ | B1 |
+| 20 | View count, organiser, "Events you may like" (other events) | ✅ | B1 |
+| 21 | **Share via short URL** — `short_url_response`, `api/deep-link/fetch` | ✅ | B1 |
+| 22 | **Add to calendar** — `READ/WRITE_CALENDAR` permissions | ✅ | B1 |
+| 23 | Web-only events open in an in-app web view — "is web-only - opening it in the WebView" | ⬜ | B5 |
+| **Artists** ||||
+| 24 | Artist page: about, occupation, image, Spotify/YouTube, upcoming + past events — `ArtistDetailsScreen`, `api/event/artists` | ✅ | B1 |
+| **Booking** (`TicketController`, `SeatController`, 3.8 MB of screens) ||||
+| 25 | **Multi-venue** → **date** → **time slot** steps; single-venue/date skips steps — `api/booking/venues`, `api/booking/dates-times`, `singleVenueDateSelection` | ⬜ | B4 |
+| 26 | Ticket list grouped by **category/group**, min quantity, entries per ticket — `get_tickets_response_v2` | 🟡 flat tiers | B2 |
+| 27 | **Price phases** (early bird…): phase name/order/start/end, auto-live by phase, **strike price** — `phaseStartDate…, displayStrikePrice` | ⬜ | B2 |
+| 28 | **Offers**: bulk discount and **buy X get Y free** (bxgy), percentage / fixed total / fixed per ticket, offer window and labels; "Savings Corner", "Offers on selected tickets / total order" — `ticket_offer_calculator.dart` | ⬜ | B2 |
+| 29 | **Purchase limits** per ticket and per event with remaining allowance + banners ("You can book only N more") — `purchaseLimitStatusMessage, remainingAllowance` | 🟡 per-event only | B2 |
+| 30 | **Promo codes**: public list ("View all promo codes"), **private code entry**, event- or ticket-scoped, percentage/fixed, min order amount, min tickets, usage limit total + per user — `available_promocodes_response_v2`, `TicketController._validatePromo` | ⬜ | B2 |
+| 31 | **Fees**: per-event config `feeType` (percentage / fixed per ticket), `feeValue`, `gstPercentage`, **`isGstIncluded`** — `commision_model`, `api/commissions/customer` | 🟡 global % | B2 |
+| 32 | **GST split**: CGST + SGST when billing state = organiser state, else IGST — `isIntraState`, "Central GST (CGST) @", `billingDetails.state` | ⬜ | B2 |
+| 33 | **MatesCoin wallet**: balance on profile, "MatesCoin Balance: ₹", use coins at checkout (`toggleUseCoin`, `matescoinUsed`) | ⬜ | B2 |
+| 34 | **Season pass**: valid days, season start/end, one entry per date — `seasonPass, validityType, validDaysCount` | ⬜ | B4 |
+| 35 | **Seat map**: canvas with sections, rows, aisles, walkways, gates, stage position, accessible seats, colours, **standing areas mixed with seats**, per-section pricing — `get_seat_map_response`, `seat_map_painter.dart` | 🟡 grid sections (Phase 2) | B4 |
+| 36 | **Seat hold** with reservation token, countdown, resume active reservation, release — `api/booking/seat-reserve`, `checkActiveReservation` | 🟡 server holds; no token API | B4 |
+| 37 | **Registration forms**: text, textarea, select, radio, checkbox, date, time, **file upload**, regex, min/max length, **conditional fields**, per attendee, versioned — `registration_form_model`, `api/forms/fetch` | ⬜ | B4 |
+| 38 | **Approval-gated / request tickets** with max requests per user, my requests (pending review / approved / rejected with reason) — `api/approval-requests` | ⬜ | B4 |
+| 39 | **Bundle / multi-night passes**: choose nights, night assignment rules, bundle showcase — `bundle_night_assignment.dart`, `bundle_config_response` | ⬜ | B4 |
+| 40 | Post-event **survey** with redirect — `api/event-survey/form|submit` | ⬜ | B4 |
+| 41 | Payment (Easebuzz) → success animation ("Ticket Booked 🥳", confetti) | ✅ (Razorpay, verified) | — |
+| **My tickets** (`my_tickets_response`) ||||
+| 42 | Tabs **Booked / Received / Shared / History**, counts, pagination | 🟡 Upcoming/Past/Shared | B3 |
+| 43 | Ticket view: booking code, seats, **one QR per entry ("Admit #")**, entries used, fully/partially scanned, notes, **disclaimers**, terms, sponsors, map link, **Buy more** | 🟡 single QR | B3 |
+| 44 | **Screenshot blocking** on ticket screens — `MainActivity` channel `flutter/screenshot`, "secure mode" | ⬜ | B3 |
+| 45 | Split: by phone or **contact picker**, choose **specific seats**, split link, **split depth / remaining splits** limits, shared-with list, claim back, "cannot split with your own number" | ✅ (+ unlimited by owner's choice); contact picker + seat choice ⬜ | B3 |
+| 46 | Invoice / payment receipt PDF download | ✅ | — |
+| 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | ⬜ | B4–B5 |
+| **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
+| 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ⬜ | B5 |
+| **Engagement** ||||
+| 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | 🟡 inbox | B5 |
+| 50 | **Push notifications** (FCM, local notifications, channel) | ⬜ | B5 |
+| 51 | **Force update** — `api/app-update` (min version, force flag, store URL), `AppUpdate` screen | ⬜ | B3 |
+| 52 | Deep links: event, explore city, my-tickets, share-tickets; unresolved → web view | 🟡 claim links | B5 |
+| 53 | Marketing attribution: UTM / fbclid / gclid capture, Meta events, affiliate click tracking — `meta_attribution_service`, `trackAffiliateClickApi` | ⬜ (analytics events ✅) | B5 |
 
-## Seller / gate side
+## Seller app (`package:showmates_organizer`, 7 files)
 
-| Old vendor app | GatePass | Notes | Effort |
+| # | Feature (code evidence) | GatePass | Batch |
 |---|---|---|---|
-| **V3** QR scanner for gate entry | ✅ | `/gate` PWA: camera scan, group entries, **works fully offline** (signed QR + downloaded list + auto-sync), conflict review | — |
-| V1 Connectivity gate / retry | ✅ ➖ | Scanner keeps working offline instead of blocking | — |
-| V2 Seller portal (event creation, sales, payouts) | ⬜ | Biggest gap: organisers need event/tier management. Today events are seeded/SQL. Admin event report (Excel) ✅ | L |
-| V4 Contacts (guest lists / comps) | ⬜ | Complimentary tickets issued by organiser | M |
-| V5 Location, V6 push, V7 boot notifications | ⬜ | Only relevant once the seller app exists | S |
-| Attendee / sales / check-in report | ✅ (new) | Admin Excel: Summary, Attendees, Sales, Transfers, Check-ins | — |
+| 54 | WebView shell for `https://seller.showmates.in` with offline screen — `WebviewScreen`, `NoInternetScreen` | ➖ (our tools are web) | — |
+| 55 | JS bridge: **QR scanner** (`openQRScanner/closeScanner`), location, contacts permission, notification permission + FCM token — `bridge/js_bridge.dart` | ✅ scanner (works offline) | — |
+| 56 | Seller portal features (event setup, sales, payouts…) | Not in the APK — they live on the website, so they **cannot be recovered from the code**. GatePass builds its own organiser tools | B5 |
 
-## Suggested next batches
-1. **Organiser basics (L):** admin API + simple web screens to create events, dates, tiers, prices, publish/unpublish; comp tickets. Unblocks real launches without SQL.
-2. **Revenue (M):** promo codes (public/private, limits, server-side pricing) + phased pricing.
-3. **Engagement (S–M):** event page extras (gallery, FAQ, artists, share, calendar), push notifications, forced-update config.
-4. **Event formats (M–L):** multi-date / time slots, then seated events on by default, registration forms, approval-gated tickets, bundles.
+## Delivery plan
+- **B1** event page parity · **B2** pricing (phases, offers, limits, promo codes, fees/GST split, coins) · **B3** profile/discovery/location/force-update/ticket polish · **B4** event formats (venues, dates, slots, season pass, seat maps, forms, approvals, surveys, bundles) · **B5** vouchers, push, attribution, organiser tools.
+- Intentional differences: 6-digit OTP (vs 4), Razorpay (vs Easebuzz), Ed25519 offline-verifiable QR, offline gate scanning, Excel exports.

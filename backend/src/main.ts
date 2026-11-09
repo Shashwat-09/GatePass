@@ -27,7 +27,7 @@ export async function createApp(): Promise<NestExpressApplication> {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:'],
+          imgSrc: ["'self'", 'data:', 'https:'],
           mediaSrc: ["'self'", 'blob:'],
           // Only upgrade to https in production (dev serves plain http on localhost).
           upgradeInsecureRequests: cfg.isProd ? [] : null,
@@ -42,7 +42,7 @@ export async function createApp(): Promise<NestExpressApplication> {
   });
   app.useBodyParser('json', { limit: '100kb' });
 
-  app.setGlobalPrefix('api', { exclude: ['health', { path: 't/:code', method: RequestMethod.GET }] });
+  app.setGlobalPrefix('api', { exclude: ['health', { path: 't/:code', method: RequestMethod.GET }, { path: 'e/:slug', method: RequestMethod.GET }] });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());

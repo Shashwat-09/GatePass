@@ -96,6 +96,89 @@ class TierModel {
       );
 }
 
+/// Lifecycle badge computed by the server (see backend events/event-status.ts).
+class EventBadge {
+  final String key; // open, filling_fast, opening_soon, sold_out, sale_ended, live_now, postponed, cancelled, rescheduled, finished, draft
+  final String label;
+  final bool isBookable;
+  final DateTime? opensAt;
+  final String? note;
+  const EventBadge({this.key = 'open', this.label = 'Book now', this.isBookable = true, this.opensAt, this.note});
+  factory EventBadge.fromJson(Map<String, dynamic>? j) => j == null
+      ? const EventBadge()
+      : EventBadge(
+          key: (j['key'] ?? 'open').toString(),
+          label: (j['label'] ?? '').toString(),
+          isBookable: j['isBookable'] != false,
+          opensAt: DateTime.tryParse((j['opensAt'] ?? '').toString())?.toLocal(),
+          note: j['note']?.toString(),
+        );
+}
+
+class ArtistModel {
+  final String id;
+  final String slug;
+  final String name;
+  final String imageUrl;
+  final String? occupation;
+  final bool isHeadliner;
+  final String? spotifyUrl;
+  final String? youtubeUrl;
+  final String about;
+  final List<EventModel> upcoming;
+  final List<EventModel> past;
+  ArtistModel({
+    required this.id,
+    required this.slug,
+    required this.name,
+    this.imageUrl = '',
+    this.occupation,
+    this.isHeadliner = false,
+    this.spotifyUrl,
+    this.youtubeUrl,
+    this.about = '',
+    this.upcoming = const [],
+    this.past = const [],
+  });
+  factory ArtistModel.fromJson(Map<String, dynamic> j) => ArtistModel(
+        id: (j['id'] ?? '').toString(),
+        slug: (j['slug'] ?? '').toString(),
+        name: (j['name'] ?? '').toString(),
+        imageUrl: (j['imageUrl'] ?? '').toString(),
+        occupation: j['occupation']?.toString(),
+        isHeadliner: j['isHeadliner'] == true,
+        spotifyUrl: j['spotifyUrl']?.toString(),
+        youtubeUrl: j['youtubeUrl']?.toString(),
+        about: (j['about'] ?? '').toString(),
+        upcoming: _events(j['upcomingEvents']),
+        past: _events(j['pastEvents']),
+      );
+}
+
+class SponsorModel {
+  final String tierLabel;
+  final String name;
+  final String logoUrl;
+  final String? link;
+  SponsorModel({required this.tierLabel, required this.name, this.logoUrl = '', this.link});
+  factory SponsorModel.fromJson(Map<String, dynamic> j) => SponsorModel(
+        tierLabel: (j['tierLabel'] ?? 'Sponsor').toString(),
+        name: (j['name'] ?? '').toString(),
+        logoUrl: (j['logoUrl'] ?? '').toString(),
+        link: j['link']?.toString(),
+      );
+}
+
+class LabelValue {
+  final String label;
+  final String value;
+  const LabelValue(this.label, this.value);
+}
+
+List<EventModel> _events(dynamic list) =>
+    (list as List?)?.map((e) => EventModel.fromJson(e as Map<String, dynamic>)).toList() ?? const [];
+List<String> _strings(dynamic list) => (list as List?)?.map((e) => e.toString()).toList() ?? const [];
+
 class EventModel {
   final String id;
   final String slug;
@@ -105,12 +188,34 @@ class EventModel {
   final String venueName;
   final String city;
   final DateTime? date;
+  final DateTime? endDate;
   final num priceFrom; // in paise
   final String? genre;
   final List<String> gallery;
   final bool hasSeatMap;
   final int maxPerUser;
   final List<TierModel> tiers;
+  // event page content
+  final EventBadge badge;
+  final String? bannerUrl;
+  final String? videoUrl;
+  final String? language;
+  final List<String> tags;
+  final List<String> highlights;
+  final List<LabelValue> guide;
+  final List<String> prohibited;
+  final List<LabelValue> faqs;
+  final String? terms;
+  final String? venueAddress;
+  final String? mapLink;
+  final String? layoutImageUrl;
+  final String? organizer;
+  final int viewCount;
+  final List<ArtistModel> artists;
+  final List<SponsorModel> sponsors;
+  final List<EventModel> otherEvents;
+  final String? shareUrl;
+  final bool notifyMe;
 
   EventModel({
     required this.id,
@@ -122,32 +227,83 @@ class EventModel {
     required this.city,
     required this.priceFrom,
     this.date,
+    this.endDate,
     this.genre,
     this.gallery = const [],
     this.hasSeatMap = false,
     this.maxPerUser = 6,
     this.tiers = const [],
+    this.badge = const EventBadge(),
+    this.bannerUrl,
+    this.videoUrl,
+    this.language,
+    this.tags = const [],
+    this.highlights = const [],
+    this.guide = const [],
+    this.prohibited = const [],
+    this.faqs = const [],
+    this.terms,
+    this.venueAddress,
+    this.mapLink,
+    this.layoutImageUrl,
+    this.organizer,
+    this.viewCount = 0,
+    this.artists = const [],
+    this.sponsors = const [],
+    this.otherEvents = const [],
+    this.shareUrl,
+    this.notifyMe = false,
   });
 
-  factory EventModel.fromJson(Map<String, dynamic> j) => EventModel(
-        id: (j['eventId'] ?? j['id'] ?? '').toString(),
-        slug: (j['eventSlug'] ?? j['slug'] ?? '').toString(),
-        title: (j['eventTitle'] ?? j['title'] ?? '').toString(),
-        description: (j['description'] ?? '').toString(),
-        imageUrl: (j['eventCardImage'] ?? j['cardImageUrl'] ?? j['imageUrl'] ?? '').toString(),
-        venueName: (j['venueName'] ?? (j['venue']?['name']) ?? '').toString(),
-        city: (j['city']?['name'] ?? j['cityName'] ?? j['city'] ?? '').toString(),
-        priceFrom: (j['priceFromPaise'] ?? j['priceFrom'] ?? j['price'] ?? 0) as num,
-        date: DateTime.tryParse((j['startDate'] ?? j['eventDate'] ?? '').toString())?.toLocal(),
-        genre: (j['genre'] as String?)?.isEmpty ?? true ? null : j['genre'] as String,
-        gallery: (j['gallery'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-        hasSeatMap: (j['hasSeatMap'] ?? false) == true,
-        maxPerUser: (j['maxPerUser'] as num?)?.toInt() ?? 6,
-        tiers: (j['tiers'] as List?)
-                ?.map((e) => TierModel.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+  /// Images for the gallery: banner/card first, then the gallery.
+  List<String> get images => {
+        if ((bannerUrl ?? '').isNotEmpty) bannerUrl!,
+        if (imageUrl.isNotEmpty) imageUrl,
+        ...gallery,
+      }.toList();
+
+  factory EventModel.fromJson(Map<String, dynamic> j) {
+    final venue = j['venue'] is Map ? j['venue'] as Map<String, dynamic> : const <String, dynamic>{};
+    return EventModel(
+      id: (j['eventId'] ?? j['id'] ?? '').toString(),
+      slug: (j['eventSlug'] ?? j['slug'] ?? '').toString(),
+      title: (j['eventTitle'] ?? j['title'] ?? '').toString(),
+      description: (j['description'] ?? '').toString(),
+      imageUrl: (j['eventCardImage'] ?? j['cardImageUrl'] ?? j['imageUrl'] ?? '').toString(),
+      venueName: (j['venueName'] ?? venue['name'] ?? '').toString(),
+      city: (j['city'] is Map ? j['city']['name'] : (j['cityName'] ?? j['city'] ?? '')).toString(),
+      priceFrom: (j['priceFromPaise'] ?? j['priceFrom'] ?? j['price'] ?? 0) as num,
+      date: DateTime.tryParse((j['startDate'] ?? j['eventDate'] ?? '').toString())?.toLocal(),
+      endDate: DateTime.tryParse((j['endDate'] ?? '').toString())?.toLocal(),
+      genre: (j['genre'] as String?)?.isEmpty ?? true ? null : j['genre'] as String,
+      gallery: _strings(j['gallery']),
+      hasSeatMap: (j['hasSeatMap'] ?? false) == true,
+      maxPerUser: (j['maxPerUser'] as num?)?.toInt() ?? 6,
+      tiers: (j['tiers'] as List?)?.map((e) => TierModel.fromJson(e as Map<String, dynamic>)).toList() ?? const [],
+      badge: EventBadge.fromJson(j['badge'] as Map<String, dynamic>?),
+      bannerUrl: j['bannerUrl']?.toString(),
+      videoUrl: j['videoUrl']?.toString(),
+      language: j['language']?.toString(),
+      tags: _strings(j['tags']),
+      highlights: _strings(j['highlights']),
+      guide: ((j['guide'] as List?) ?? const [])
+          .map((g) => LabelValue((g['label'] ?? '').toString(), (g['value'] ?? '').toString()))
+          .toList(),
+      prohibited: _strings(j['prohibited']),
+      faqs: ((j['faqs'] as List?) ?? const []).map((f) => LabelValue((f['q'] ?? '').toString(), (f['a'] ?? '').toString())).toList(),
+      terms: j['terms']?.toString(),
+      venueAddress: venue['address']?.toString(),
+      mapLink: venue['directionsUrl']?.toString(),
+      layoutImageUrl: venue['layoutImageUrl']?.toString(),
+      organizer: j['organizer']?.toString(),
+      viewCount: (j['viewCount'] as num?)?.toInt() ?? 0,
+      artists: ((j['artists'] as List?) ?? const []).map((a) => ArtistModel.fromJson(a as Map<String, dynamic>)).toList(),
+      sponsors: ((j['sponsors'] as List?) ?? const []).map((a) => SponsorModel.fromJson(a as Map<String, dynamic>)).toList(),
+      otherEvents: _events(j['otherEvents']),
+      shareUrl: j['shareUrl']?.toString(),
+      notifyMe: j['notifyMe'] == true,
+    );
+  }
 }
 
 class TicketModel {

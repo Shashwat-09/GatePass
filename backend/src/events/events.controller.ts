@@ -1,11 +1,32 @@
-import { Controller, Get, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, ILike, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { IsBoolean } from 'class-validator';
+import { Request, Response } from 'express';
+import { join } from 'path';
+import { Brackets, ILike, In, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { ApiError } from '../common/api-error';
+import { AuthedRequest, JwtAuthGuard, optionalUserId } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
-import { City, EventEntity, SeatReservation, SeatSection, Tier } from '../db/entities';
+import { config } from '../config/config';
+import {
+  Artist, City, EventArtist, EventEntity, EventSponsor, EventWatcher, SeatReservation, SeatSection, Tier,
+} from '../db/entities';
+import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
+import { eventBadge, eventEnd, LISTED_STATUSES } from './event-status';
+import { EventsService } from './events.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SPONSOR_LABEL: Record<string, string> = {
+  title: 'Title Sponsor', presented_by: 'Presented by', powered_by: 'Powered by',
+  co_powered_by: 'Co-Powered by', associate: 'Associate Sponsor', partner: 'Partner',
+};
+const SPONSOR_ORDER = ['title', 'presented_by', 'powered_by', 'co_powered_by', 'associate', 'partner'];
+
+class NotifyDto {
+  @IsBoolean() on!: boolean;
+}
+
+export const eventShareUrl = (slug: string) => `${config().publicBaseUrl}e/${slug}`;
 
 @Controller()
 export class EventsController {
@@ -15,28 +36,32 @@ export class EventsController {
     @InjectRepository(SeatSection) private readonly sections: Repository<SeatSection>,
     @InjectRepository(SeatReservation) private readonly seats: Repository<SeatReservation>,
     @InjectRepository(City) private readonly cities: Repository<City>,
+    @InjectRepository(Artist) private readonly artists: Repository<Artist>,
+    @InjectRepository(EventArtist) private readonly eventArtists: Repository<EventArtist>,
+    @InjectRepository(EventSponsor) private readonly sponsors: Repository<EventSponsor>,
+    @InjectRepository(EventWatcher) private readonly watchers: Repository<EventWatcher>,
+    private readonly svc: EventsService,
   ) {}
 
   private iso(d: Date | null): string | null {
     return d ? new Date(d).toISOString() : null;
   }
 
-  private async cards(list: EventEntity[]) {
+  /** Event cards (lists) with live badges. */
+  async cards(list: EventEntity[]) {
     const ids = [...new Set(list.map((e) => e.cityId))];
     const cities = ids.length ? await this.cities.find({ where: { id: In(ids) } }) : [];
     const name = new Map(cities.map((c) => [c.id, c.name]));
+    const stock = await this.svc.stock(list.map((e) => e.id));
     return list.map((e) => ({
       id: e.id, slug: e.slug, title: e.title, cardImageUrl: e.cardImageUrl,
       venueName: e.venueName, cityName: name.get(e.cityId) ?? '', startDate: this.iso(e.startDate),
       priceFromPaise: e.priceFromPaise, genre: e.genre, status: e.status, hasSeatMap: e.hasSeatMap,
+      viewCount: e.viewCount, badge: eventBadge(e, stock.get(e.id)),
     }));
   }
 
-  /**
-   * Resolve a city ref (uuid OR exact name, case-insensitive) to its id.
-   * Returns undefined for "no filter" and null for "no such city". Only
-   * compares the uuid column when the ref is a uuid (Postgres rejects the cast).
-   */
+  /** city ref (uuid OR exact name) → id; undefined = no filter, null = unknown city. */
   private async resolveCityId(ref?: string): Promise<string | null | undefined> {
     const r = ref?.trim();
     if (!r) return undefined;
@@ -45,11 +70,11 @@ export class EventsController {
     return city?.id ?? null;
   }
 
-  /** Live events that haven't ended, optionally in a city. */
+  /** Listed events that haven't ended, optionally in a city. */
   private live(cityId?: string): SelectQueryBuilder<EventEntity> {
     const qb = this.events.createQueryBuilder('e')
-      .where('e.status = :s', { s: 'live' })
-      .andWhere(`(COALESCE(e."endDate", e."startDate") IS NULL OR COALESCE(e."endDate", e."startDate") >= now())`)
+      .where('e.status IN (:...s)', { s: LISTED_STATUSES })
+      .andWhere(`(COALESCE(e."endDate", e."startDate" + interval '6 hours') IS NULL OR COALESCE(e."endDate", e."startDate" + interval '6 hours') >= now())`)
       .orderBy('e.startDate', 'ASC');
     if (cityId) qb.andWhere('e.cityId = :cityId', { cityId });
     return qb;
@@ -61,12 +86,15 @@ export class EventsController {
     const list = cid === null ? [] : await this.live(cid).take(30).getMany();
     const cards = await this.cards(list);
     const genres = [...new Set(list.map((e) => e.genre).filter(Boolean))];
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
     return {
-      banners: list.slice(0, 3).map((e) => ({ id: `b-${e.id}`, imageUrl: e.bannerUrl, eventSlug: e.slug, title: e.title })),
+      banners: list.slice(0, 3).map((e) => ({ id: `b-${e.id}`, imageUrl: e.bannerUrl, eventSlug: e.slug, title: e.title, videoUrl: e.videoUrl })),
       sections: [
-        { key: 'trending', title: 'Trending now', events: cards.slice(0, 10) },
+        { key: 'today', title: 'Happening today', events: cards.filter((c) => c.startDate && new Date(c.startDate) <= todayEnd) },
+        { key: 'trending', title: 'Trending now', events: [...cards].sort((a, b) => b.viewCount - a.viewCount).slice(0, 10) },
         ...genres.map((g) => ({ key: g.toLowerCase(), title: g, events: cards.filter((c) => c.genre === g) })),
-      ],
+      ].filter((s) => s.events.length),
       categories: genres.map((g) => ({ key: g.toLowerCase(), label: g, iconUrl: '' })),
     };
   }
@@ -103,33 +131,117 @@ export class EventsController {
     const qb = this.live(cid).andWhere(new Brackets((w) => {
       w.where('e.title ILIKE :like', { like })
         .orWhere('e.venueName ILIKE :like', { like })
-        .orWhere('e.genre ILIKE :like', { like });
+        .orWhere('e.genre ILIKE :like', { like })
+        .orWhere(`EXISTS (SELECT 1 FROM event_artists ea JOIN artists a ON a.id = ea."artistId" WHERE ea."eventId" = e.id AND a.name ILIKE :like)`, { like });
     }));
     const [rows, total] = await qb.skip(q.skip).take(q.limit).getManyAndCount();
     return paged(await this.cards(rows), q, total);
   }
 
   @Get('event')
-  async detail(@Query('slug') slug?: string) {
+  async detail(@Req() req: Request, @Query('slug') slug?: string) {
     if (!slug || !/^[a-z0-9-]{1,120}$/.test(slug)) throw new ApiError('VALIDATION_ERROR', 'slug is required');
     const e = await this.events.findOne({ where: { slug } });
     if (!e || e.status === 'draft') throw new ApiError('NOT_FOUND', 'Event not found');
+    await this.events.increment({ id: e.id }, 'viewCount', 1);
     const city = await this.cities.findOne({ where: { id: e.cityId } });
     const tiers = await this.tiers.find({ where: { eventId: e.id }, order: { pricePaise: 'ASC' } });
+    const stock = (await this.svc.stock([e.id])).get(e.id);
+    const links = await this.eventArtists.find({ where: { eventId: e.id }, order: { isHeadliner: 'DESC', priority: 'ASC' } });
+    const artists = links.length ? await this.artists.findBy({ id: In(links.map((l) => l.artistId)) }) : [];
+    const sponsors = (await this.sponsors.find({ where: { eventId: e.id }, order: { priority: 'ASC' } }))
+      .sort((a, b) => SPONSOR_ORDER.indexOf(a.tier) - SPONSOR_ORDER.indexOf(b.tier));
+    const others = await this.live(e.cityId).andWhere('e.id <> :id', { id: e.id }).take(8).getMany();
+    const uid = optionalUserId(req);
+    const watching = uid ? await this.watchers.exist({ where: { eventId: e.id, userId: uid } }) : false;
+
     return {
       id: e.id, slug: e.slug, title: e.title, description: e.description, status: e.status,
-      cardImageUrl: e.cardImageUrl, bannerUrl: e.bannerUrl, videoUrl: null, gallery: e.gallery,
-      genre: e.genre, language: e.language,
+      badge: eventBadge(e, stock),
+      cardImageUrl: e.cardImageUrl, bannerUrl: e.bannerUrl, videoUrl: e.videoUrl, gallery: e.gallery,
+      genre: e.genre, language: e.language, tags: e.tags, highlights: e.highlights, guide: this.guide(e),
+      prohibited: e.prohibited, ageLimit: e.ageLimit, durationMinutes: e.durationMinutes,
       city: city ? { id: city.id, name: city.name } : null,
-      venue: { id: `v-${e.id}`, name: e.venueName, address: e.venueAddress, lat: null, lng: null, directionsUrl: null },
-      startDate: this.iso(e.startDate), endDate: this.iso(e.endDate),
-      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap,
-      maxPerUser: e.maxPerUser, maxSeatsPerBooking: e.maxPerUser,
-      terms: e.terms, faqs: e.faqs,
+      venue: {
+        id: `v-${e.id}`, name: e.venueName, address: e.venueAddress, lat: null, lng: null,
+        directionsUrl: e.mapLink, layoutImageUrl: e.venueLayoutUrl,
+      },
+      organizer: e.organizerName,
+      startDate: this.iso(e.startDate), endDate: this.iso(eventEnd(e)),
+      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap, maxPerUser: e.maxPerUser, maxSeatsPerBooking: e.maxPerUser,
+      terms: e.terms, faqs: e.faqs, viewCount: e.viewCount + 1,
+      artists: links.map((l) => {
+        const a = artists.find((x) => x.id === l.artistId)!;
+        return { id: a.id, slug: a.slug, name: a.name, imageUrl: a.imageUrl, occupation: a.occupation, isHeadliner: l.isHeadliner, spotifyUrl: a.spotifyUrl, youtubeUrl: a.youtubeUrl };
+      }),
+      sponsors: sponsors.map((s) => ({ tier: s.tier, tierLabel: s.label ?? SPONSOR_LABEL[s.tier] ?? 'Sponsor', name: s.name, logoUrl: s.logoUrl, link: s.link })),
+      otherEvents: await this.cards(others),
+      shareUrl: eventShareUrl(e.slug),
+      notifyMe: watching,
       tiers: tiers.map((t) => ({
         id: t.id, name: t.name, type: t.type, pricePaise: t.pricePaise,
         remaining: Math.max(0, t.quantity - t.sold - t.reserved), minQty: t.minQty, entryPerTicket: t.entryPerTicket,
       })),
+    };
+  }
+
+  /** Quick facts: stored guide plus derived age / duration / language. */
+  private guide(e: EventEntity) {
+    const out = [...(e.guide ?? [])];
+    const has = (l: string) => out.some((g) => g.label.toLowerCase() === l.toLowerCase());
+    if (e.ageLimit && !has('Age')) out.unshift({ label: 'Age', value: e.ageLimit });
+    if (e.durationMinutes && !has('Duration')) {
+      const h = Math.floor(e.durationMinutes / 60);
+      const m = e.durationMinutes % 60;
+      out.push({ label: 'Duration', value: [h ? `${h} hr${h > 1 ? 's' : ''}` : '', m ? `${m} min` : ''].filter(Boolean).join(' ') });
+    }
+    if (e.language && !has('Language')) out.push({ label: 'Language', value: e.language });
+    return out;
+  }
+
+  /** "Notify me" when tickets go on sale. */
+  @UseGuards(JwtAuthGuard)
+  @Post('event/:id/notify-me')
+  @HttpCode(200)
+  async notifyMe(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: NotifyDto) {
+    const e = await this.events.findOneBy({ id, status: Not('draft') });
+    if (!e) throw new ApiError('NOT_FOUND', 'Event not found');
+    if (dto.on) {
+      await this.watchers.createQueryBuilder().insert().values({ eventId: id, userId: req.userId!, notifiedAt: null }).orIgnore().execute();
+    } else {
+      await this.watchers.delete({ eventId: id, userId: req.userId! });
+    }
+    return { notifyMe: dto.on };
+  }
+
+  // ── artists ──
+
+  @Get('artists')
+  async artistList(@Query('q') q = '', @Query('page') page?: string, @Query('limit') limit?: string) {
+    const pq = parsePage(page, limit);
+    const term = q.trim().slice(0, 60).replace(/[%_\\]/g, '\\$&');
+    const [rows, total] = await this.artists.findAndCount({
+      where: term ? { name: ILike(`%${term}%`) } : {}, order: { name: 'ASC' }, skip: pq.skip, take: pq.limit,
+    });
+    return paged(rows.map((a) => ({ id: a.id, slug: a.slug, name: a.name, imageUrl: a.imageUrl, occupation: a.occupation })), pq, total);
+  }
+
+  @Get('artists/:ref')
+  async artist(@Param('ref') ref: string) {
+    const a = await this.artists.findOne({ where: UUID.test(ref) ? { id: ref } : { slug: ref } });
+    if (!a) throw new ApiError('NOT_FOUND', 'Artist not found');
+    const links = await this.eventArtists.find({ where: { artistId: a.id } });
+    const evs = links.length
+      ? await this.events.find({ where: { id: In(links.map((l) => l.eventId)), status: In([...LISTED_STATUSES, 'cancelled']) }, order: { startDate: 'ASC' } })
+      : [];
+    const now = Date.now();
+    const upcoming = evs.filter((e) => (eventEnd(e)?.getTime() ?? now) >= now);
+    const past = evs.filter((e) => (eventEnd(e)?.getTime() ?? now) < now).reverse();
+    return {
+      id: a.id, slug: a.slug, name: a.name, occupation: a.occupation, about: a.about, imageUrl: a.imageUrl,
+      spotifyUrl: a.spotifyUrl, youtubeUrl: a.youtubeUrl, instagramUrl: a.instagramUrl,
+      upcomingEvents: await this.cards(upcoming),
+      pastEvents: await this.cards(past.slice(0, 20)),
     };
   }
 
@@ -146,5 +258,17 @@ export class EventsController {
         booked: taken.filter((r) => r.sectionKey === s.key).map((r) => r.seatKey),
       })),
     };
+  }
+}
+
+/** GET /e/<slug> — share landing page that opens the event in the app. */
+@Controller('e')
+export class EventSharePageController {
+  @Get(':slug')
+  @SkipGlobalRateLimit()
+  @RateLimit({ bucket: 'event-page', limit: 120, windowSec: 60 })
+  page(@Param('slug') _slug: string, @Res() res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(join(__dirname, '..', '..', 'public', 'share', 'event.html'));
   }
 }

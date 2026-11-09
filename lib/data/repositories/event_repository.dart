@@ -54,4 +54,17 @@ class EventRepository {
     if (!r.isOk) return r.cast();
     return ApiResult.ok(Paged.fromJson(r.data, CityModel.fromJson).items);
   }
+
+  Future<ApiResult<ArtistModel>> artist(String slug) async {
+    final r = await _api.request('${Endpoints.artists}/$slug');
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(ArtistModel.fromJson(r.data as Map<String, dynamic>));
+  }
+
+  /// Turn "notify me when tickets open" on or off.
+  Future<ApiResult<bool>> setNotifyMe(String eventId, bool on) async {
+    final r = await _api.request('${Endpoints.event}/$eventId/notify-me', method: Method.post, body: {'on': on});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok((r.data as Map<String, dynamic>)['notifyMe'] == true);
+  }
 }

@@ -101,8 +101,8 @@ describe('gate check-in, invoices, discovery (e2e)', () => {
     expect(byId.items.map((e: { slug: string }) => e.slug)).toEqual(['citadel-arena-tour']);
     const none = (await ctx.http.get('/api/events?cityId=Atlantis').expect(200)).body.data;
     expect(none).toMatchObject({ items: [], total: 0 });
-    const page = (await ctx.http.get('/api/events?limit=2&page=2').expect(200)).body.data;
-    expect(page).toMatchObject({ page: 2, limit: 2, total: 3 });
+    const page = (await ctx.http.get('/api/events?limit=3&page=2').expect(200)).body.data;
+    expect(page).toMatchObject({ page: 2, limit: 3, total: 4 });
     expect(page.items).toHaveLength(1);
     const search = (await ctx.http.get('/api/events/search?q=comedy').expect(200)).body.data;
     expect(search.items.map((e: { slug: string }) => e.slug)).toEqual(['standup-central']);

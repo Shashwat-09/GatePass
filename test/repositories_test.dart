@@ -210,5 +210,8 @@ void main() {
     expect(claimCodeFrom(Uri.parse('https://api.example.org/t/XYZ789')), 'XYZ789');
     expect(claimCodeFrom(Uri.parse('https://api.example.org/other/XYZ789')), isNull);
     expect(claimCodeFrom(Uri.parse('gatepass://event?slug=x')), isNull);
+    expect(eventSlugFrom(Uri.parse('gatepass://event/neon-nights')), 'neon-nights');
+    expect(eventSlugFrom(Uri.parse('https://api.example.org/e/neon-nights')), 'neon-nights');
+    expect(eventSlugFrom(Uri.parse('https://api.example.org/t/ABC')), isNull);
   });
 }

@@ -10,6 +10,14 @@ import '../data/repositories/auth_repository.dart';
 import '../features/tickets/claim_screen.dart';
 import 'storage/local_storage.dart';
 
+/// Event slug from `gatepass://event/<slug>` or `https://<api>/e/<slug>`.
+String? eventSlugFrom(Uri uri) {
+  if (uri.scheme == 'gatepass' && uri.host == 'event' && uri.pathSegments.isNotEmpty) return uri.pathSegments.first;
+  final seg = uri.pathSegments;
+  if ((uri.scheme == 'https' || uri.scheme == 'http') && seg.length == 2 && seg[0] == 'e') return seg[1];
+  return null;
+}
+
 /// Extracts a share-claim code from `gatepass://claim?code=X` or `https://<api>/t/X`.
 String? claimCodeFrom(Uri uri) {
   if (uri.scheme == 'gatepass' && uri.host == 'claim') return uri.queryParameters['code'];
@@ -33,6 +41,12 @@ class DeepLinks {
   }
 
   static Future<void> _handle(Uri uri) async {
+    final slug = eventSlugFrom(uri);
+    if (slug != null && slug.isNotEmpty) {
+      await sl<LocalStorage>().setString(StorageKeys.pendingEvent, slug);
+      consumePending();
+      return;
+    }
     final code = claimCodeFrom(uri);
     if (code == null || code.isEmpty) return;
     await sl<LocalStorage>().setString(StorageKeys.pendingClaim, code);
@@ -42,6 +56,11 @@ class DeepLinks {
   /// Opens a pending claim once the user is signed in and on the home screen.
   static void consumePending() {
     final storage = sl<LocalStorage>();
+    final slug = storage.getString(StorageKeys.pendingEvent);
+    if (slug != null && Get.currentRoute == Routes.home) {
+      storage.remove(StorageKeys.pendingEvent);
+      Get.toNamed(Routes.eventDetails, arguments: slug);
+    }
     final code = storage.getString(StorageKeys.pendingClaim);
     if (code == null || !sl<AuthRepository>().isLoggedIn || Get.currentRoute != Routes.home) return;
     storage.remove(StorageKeys.pendingClaim);

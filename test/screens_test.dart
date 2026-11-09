@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass/app/routes.dart';
 import 'package:gatepass/core/constants.dart';
 import 'package:gatepass/data/models/models.dart';
+import 'package:gatepass/features/artist/artist_screen.dart';
 import 'package:gatepass/features/auth/otp_screen.dart';
 import 'package:gatepass/features/booking/payment_screen.dart';
 import 'package:gatepass/features/controllers/auth_controller.dart';
@@ -177,6 +178,88 @@ void main() {
     expect(find.text('Neon Nights'), findsOneWidget);
     expect(find.text(AppConfig.phase2 ? 'Book now' : 'Seat booking coming soon'), findsOneWidget);
     expect(d.backend.callsTo('api/event').single.path, 'api/event');
+  });
+
+  Future<void> openEvent(WidgetTester t) async {
+    t.view.physicalSize = const Size(1080, 4000);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(GetMaterialApp(
+      initialRoute: '/start',
+      getPages: [GetPage(name: '/start', page: () => const SizedBox()), ...Routes.pages],
+    ));
+    Get.toNamed(Routes.eventDetails, arguments: 'neon-nights');
+    await t.pumpAndSettle();
+  }
+
+  testWidgets('Event page shows guide, lineup, highlights, FAQs, venue, sponsors and related events', (t) async {
+    d.backend.json('GET', 'api/event', {
+      ...eventJson(),
+      'badge': {'key': 'filling_fast', 'label': 'Filling fast', 'isBookable': true},
+      'organizer': 'Neon Live', 'viewCount': 1500, 'tags': ['EDM'],
+      'guide': [{'label': 'Age', 'value': '18+'}, {'label': 'Duration', 'value': '10 hrs'}],
+      'highlights': ['Three stages'], 'prohibited': ['Sharp objects'],
+      'faqs': [{'q': 'Is there parking?', 'a': 'Yes, paid parking.'}],
+      'terms': '1. No refunds.',
+      'venue': {'name': 'Riverside', 'address': 'Pune', 'directionsUrl': 'https://maps.example/x', 'layoutImageUrl': 'https://img.example/l.png'},
+      'artists': [{'id': 'a1', 'slug': 'dj-aurora', 'name': 'DJ Aurora', 'imageUrl': '', 'isHeadliner': true}],
+      'sponsors': [{'tierLabel': 'Title Sponsor', 'name': 'Volt', 'logoUrl': ''}],
+      'otherEvents': [{'id': 'e2', 'slug': 'other', 'title': 'Other Show', 'cardImageUrl': '', 'priceFromPaise': 49900, 'badge': {'key': 'sold_out', 'label': 'Sold out', 'isBookable': false}}],
+      'shareUrl': 'https://api.example/e/neon-nights',
+    });
+    await openEvent(t);
+    for (final text in ['Filling fast', 'By Neon Live', 'Event guide', '18+', 'Artist lineup', 'DJ Aurora', 'HEADLINER',
+        'Three stages', 'Sharp objects', 'Is there parking?', 'View in map', 'Venue layout', 'Title Sponsor', 'Volt',
+        'Events you may like', 'Other Show', 'Sold out', 'Terms & conditions', 'Book now']) {
+      expect(find.text(text), findsWidgets, reason: text);
+    }
+    expect(find.byTooltip('Share'), findsOneWidget);
+    expect(find.byTooltip('Add to calendar'), findsOneWidget);
+    await t.tap(find.text('Is there parking?'));
+    await t.pumpAndSettle();
+    expect(find.text('Yes, paid parking.'), findsOneWidget);
+  });
+
+  testWidgets('Opening soon: countdown + Notify me', (t) async {
+    final opens = DateTime.now().add(const Duration(days: 2)).toUtc().toIso8601String();
+    var watching = false;
+    d.backend.on('GET', 'api/event', (_) async => FakeBackend.ok({
+          ...eventJson(),
+          'badge': {'key': 'opening_soon', 'label': 'Tickets open soon', 'isBookable': false, 'opensAt': opens},
+          'notifyMe': watching,
+        }));
+    d.backend.on('POST', 'api/event/ev-1/notify-me', (req) async {
+      watching = true;
+      return FakeBackend.ok({'notifyMe': true});
+    });
+    await openEvent(t);
+    expect(find.textContaining('Tickets open in'), findsOneWidget);
+    await t.tap(find.text('Notify me'));
+    await t.pumpAndSettle(const Duration(seconds: 5));
+    expect(d.backend.callsTo('api/event/ev-1/notify-me').single.body, {'on': true});
+    expect(find.text('You’ll be notified'), findsOneWidget);
+  });
+
+  testWidgets('Postponed events show the note and cannot be booked', (t) async {
+    d.backend.json('GET', 'api/event', {...eventJson(), 'badge': {'key': 'postponed', 'label': 'Event postponed', 'isBookable': false, 'note': 'New date soon'}});
+    await openEvent(t);
+    expect(find.text('New date soon'), findsOneWidget);
+    final btn = t.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Event postponed'));
+    expect(btn.onPressed, isNull);
+  });
+
+  testWidgets('Artist page lists upcoming events and links', (t) async {
+    d.backend.json('GET', 'api/artists/dj-aurora', {
+      'id': 'a1', 'slug': 'dj-aurora', 'name': 'DJ Aurora', 'occupation': 'DJ & Producer', 'about': 'Melodic techno.',
+      'imageUrl': '', 'spotifyUrl': 'https://open.spotify.com/x', 'youtubeUrl': null,
+      'upcomingEvents': [{'id': 'e1', 'slug': 'neon-nights', 'title': 'Neon Nights', 'cardImageUrl': '', 'priceFromPaise': 79900}],
+      'pastEvents': [],
+    });
+    await t.pumpWidget(app(const ArtistScreen(slug: 'dj-aurora')));
+    await t.pumpAndSettle();
+    for (final text in ['DJ Aurora', 'DJ & Producer', 'Listen on Spotify', 'Melodic techno.', 'Upcoming events', 'Neon Nights']) {
+      expect(find.text(text), findsWidgets, reason: text);
+    }
   });
 
   testWidgets('Delete account calls the API and returns to login', (t) async {

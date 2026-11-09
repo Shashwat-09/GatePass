@@ -77,6 +77,24 @@ export class EventEntity {
   @Column({ default: false }) hasSeatMap!: boolean;
   @Column({ default: 6 }) maxPerUser!: number;
   @Column({ type: 'text', nullable: true }) terms!: string | null;
+  // ── event page content ──
+  @Column({ type: 'jsonb', default: () => "'[]'" }) highlights!: string[];
+  /** Quick facts, e.g. [{label:'Age', value:'18+'}, {label:'Duration', value:'4 hours'}]. */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) guide!: { label: string; value: string }[];
+  @Column({ type: 'jsonb', default: () => "'[]'" }) prohibited!: string[];
+  @Column({ type: 'jsonb', default: () => "'[]'" }) tags!: string[];
+  @Column({ type: 'varchar', nullable: true }) ageLimit!: string | null;
+  @Column({ type: 'int', nullable: true }) durationMinutes!: number | null;
+  @Column({ type: 'varchar', nullable: true }) videoUrl!: string | null;
+  @Column({ type: 'varchar', nullable: true }) venueLayoutUrl!: string | null;
+  @Column({ type: 'varchar', nullable: true }) mapLink!: string | null;
+  @Column({ type: 'varchar', nullable: true }) organizerName!: string | null;
+  @Column({ default: 0 }) viewCount!: number;
+  /** Sales window: before opensAt the event shows "Tickets open in…"; after closesAt "Sale ended". */
+  @Column({ type: 'timestamptz', nullable: true }) opensAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) closesAt!: Date | null;
+  /** Shown for postponed/rescheduled/cancelled events. */
+  @Column({ type: 'varchar', nullable: true }) statusNote!: string | null;
   /** Ticket splitting/sharing rules (old app: splitLimitEnabled, maxSplitTransfers). */
   @Column({ default: true }) allowTransfers!: boolean;
   /** Optional cap on how many times one ticket can be shared; null = unlimited (default). */
@@ -84,6 +102,55 @@ export class EventEntity {
   /** Whether received tickets may be passed on again (default yes; organisers can switch off). */
   @Column({ default: true }) allowResplit!: boolean;
   @Column({ type: 'jsonb', default: () => "'[]'" }) faqs!: { q: string; a: string }[];
+}
+
+@Entity('artists')
+export class Artist {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index({ unique: true }) @Column() slug!: string;
+  @Column() name!: string;
+  @Column({ type: 'varchar', nullable: true }) occupation!: string | null;
+  @Column({ type: 'text', default: '' }) about!: string;
+  @Column({ default: '' }) imageUrl!: string;
+  @Column({ type: 'varchar', nullable: true }) spotifyUrl!: string | null;
+  @Column({ type: 'varchar', nullable: true }) youtubeUrl!: string | null;
+  @Column({ type: 'varchar', nullable: true }) instagramUrl!: string | null;
+}
+
+@Entity('event_artists')
+@Unique(['eventId', 'artistId'])
+export class EventArtist {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Index() @Column({ type: 'uuid' }) artistId!: string;
+  @Column({ default: false }) isHeadliner!: boolean;
+  @Column({ default: 0 }) priority!: number;
+}
+
+export type SponsorTier = 'title' | 'presented_by' | 'powered_by' | 'co_powered_by' | 'associate' | 'partner';
+
+@Entity('event_sponsors')
+export class EventSponsor {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ type: 'varchar' }) tier!: SponsorTier;
+  /** Free label for partners, e.g. "Hospital Partner". */
+  @Column({ type: 'varchar', nullable: true }) label!: string | null;
+  @Column() name!: string;
+  @Column({ default: '' }) logoUrl!: string;
+  @Column({ type: 'varchar', nullable: true }) link!: string | null;
+  @Column({ default: 0 }) priority!: number;
+}
+
+/** "Notify me" subscriptions for events whose sale hasn't opened. */
+@Entity('event_watchers')
+@Unique(['eventId', 'userId'])
+export class EventWatcher {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Column({ type: 'timestamptz', nullable: true }) notifiedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
 /**
@@ -265,6 +332,6 @@ export class PaymentEvent {
 }
 
 export const ENTITIES = [
-  City, User, RefreshToken, EventEntity, Tier, SeatSection, SeatReservation,
+  City, User, RefreshToken, EventEntity, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent,
 ];

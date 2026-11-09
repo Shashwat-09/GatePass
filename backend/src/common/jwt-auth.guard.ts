@@ -68,3 +68,18 @@ export class RolesGuard implements CanActivate {
     return true;
   }
 }
+
+const optionalJwt = new JwtService({});
+/** User id from a valid Bearer token, or null — for public endpoints that personalise. */
+export function optionalUserId(req: Request): string | null {
+  const h = req.headers.authorization ?? '';
+  if (!h.startsWith('Bearer ')) return null;
+  try {
+    const p = optionalJwt.verify<{ sub: string; typ?: string }>(h.slice(7), {
+      secret: config().jwtSecret, issuer: JWT_ISSUER, audience: JWT_AUDIENCE, algorithms: ['HS256'],
+    });
+    return p.typ === 'access' ? p.sub : null;
+  } catch {
+    return null;
+  }
+}

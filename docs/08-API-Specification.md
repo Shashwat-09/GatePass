@@ -246,3 +246,10 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 **Excel exports**
 - `POST api/ticket/export-link` → `{url}` signed for 10 min → `GET api/exports/me/<userId>.xlsx` with sheets *Purchases, My tickets, Shared, Received*.
 - `GET api/admin/events/{id}/export.xlsx` (admin role) → *Summary, Attendees (holder, phone, entries), Sales, Transfers, Check-ins (incl. offline/device)*.
+
+## 8.12 As built (v0.4) — event page parity (legacy B1)
+- Every event card and detail has `badge: {key, label, isBookable, opensAt, closesAt, note}` — keys `open, filling_fast (≤10% stock), opening_soon (before opensAt), sold_out, sale_ended (after closesAt), live_now, rescheduled, postponed, cancelled, finished, draft`. `book-ticket` refuses non-bookable events with a specific message. Lists include `live`, `postponed` and `rescheduled` events.
+- `GET api/event?slug=` adds `highlights, guide[{label,value}] (incl. age/duration/language), prohibited, tags, ageLimit, durationMinutes, videoUrl, venue.layoutImageUrl, venue.directionsUrl, organizer, viewCount (incremented per view), artists[{slug,name,imageUrl,isHeadliner,…}], sponsors[{tier,tierLabel,name,logoUrl,link}] (Title → Presented by → Powered by → Co-Powered by → Associate → Partner), otherEvents (same city), shareUrl (…/e/<slug>), notifyMe` (when a Bearer token is sent).
+- `POST api/event/{id}/notify-me {on}` (auth) — a job notifies watchers (`event_on_sale`) once sales open.
+- `GET api/artists?q=&page=`, `GET api/artists/{slug|id}` → profile + `upcomingEvents`, `pastEvents`. Search also matches artist names.
+- `GET /e/<slug>` → web landing page that opens `gatepass://event/<slug>`.

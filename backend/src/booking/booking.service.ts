@@ -8,6 +8,7 @@ import {
   Booking, BookingItem, EventEntity, SeatReservation, SeatSection, Ticket, Tier, User,
 } from '../db/entities';
 import { KvStore } from '../infra/kv.service';
+import { eventBadge } from '../events/event-status';
 import { notify } from '../notifications/notify';
 import { PaymentGateway } from '../payments/gateway';
 
@@ -89,9 +90,14 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       booking = await this.ds.transaction(async (m) => {
         const event = await m.findOne(EventEntity, { where: { id: eventId } });
         if (!event) throw new ApiError('NOT_FOUND', 'Event not found');
-        if (event.status !== 'live') throw new ApiError('VALIDATION_ERROR', 'This event is not on sale');
-        const ends = event.endDate ?? event.startDate;
-        if (ends && ends.getTime() < Date.now()) throw new ApiError('VALIDATION_ERROR', 'This event has ended');
+        const badge = eventBadge(event);
+        if (!badge.isBookable) {
+          const why: Record<string, string> = {
+            opening_soon: 'Tickets aren’t on sale yet', sale_ended: 'Ticket sales have closed', finished: 'This event has ended',
+            cancelled: 'This event was cancelled', postponed: 'This event is postponed', draft: 'This event is not on sale',
+          };
+          throw new ApiError('VALIDATION_ERROR', why[badge.key] ?? 'This event is not on sale');
+        }
 
         // Serialize this user's concurrent checkouts so the per-user limit holds.
         await m.createQueryBuilder(User, 'u').setLock('pessimistic_write').where('u.id = :userId', { userId }).getOne();

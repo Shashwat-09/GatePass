@@ -6,6 +6,18 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
+CREATE TABLE public.artists (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    slug character varying NOT NULL,
+    name character varying NOT NULL,
+    occupation character varying,
+    about text DEFAULT ''::text NOT NULL,
+    "imageUrl" character varying DEFAULT ''::character varying NOT NULL,
+    "spotifyUrl" character varying,
+    "youtubeUrl" character varying,
+    "instagramUrl" character varying
+);
+
 CREATE TABLE public.bookings (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     code character varying NOT NULL,
@@ -50,6 +62,33 @@ CREATE TABLE public.cities (
     "isActive" boolean DEFAULT true NOT NULL
 );
 
+CREATE TABLE public.event_artists (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    "artistId" uuid NOT NULL,
+    "isHeadliner" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE public.event_sponsors (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    tier character varying NOT NULL,
+    label character varying,
+    name character varying NOT NULL,
+    "logoUrl" character varying DEFAULT ''::character varying NOT NULL,
+    link character varying,
+    priority integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE public.event_watchers (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    "userId" uuid NOT NULL,
+    "notifiedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.events (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     slug character varying NOT NULL,
@@ -73,7 +112,21 @@ CREATE TABLE public.events (
     faqs jsonb DEFAULT '[]'::jsonb NOT NULL,
     "allowTransfers" boolean DEFAULT true NOT NULL,
     "maxTransfersPerTicket" integer,
-    "allowResplit" boolean DEFAULT true NOT NULL
+    "allowResplit" boolean DEFAULT true NOT NULL,
+    highlights jsonb DEFAULT '[]'::jsonb NOT NULL,
+    guide jsonb DEFAULT '[]'::jsonb NOT NULL,
+    prohibited jsonb DEFAULT '[]'::jsonb NOT NULL,
+    tags jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "ageLimit" character varying,
+    "durationMinutes" integer,
+    "videoUrl" character varying,
+    "venueLayoutUrl" character varying,
+    "mapLink" character varying,
+    "organizerName" character varying,
+    "viewCount" integer DEFAULT 0 NOT NULL,
+    "opensAt" timestamp with time zone,
+    "closesAt" timestamp with time zone,
+    "statusNote" character varying
 );
 
 CREATE TABLE public.migrations (
@@ -212,11 +265,20 @@ CREATE TABLE public.users (
 
 ALTER TABLE ONLY public.migrations ALTER COLUMN id SET DEFAULT nextval('public.migrations_id_seq'::regclass);
 
+ALTER TABLE ONLY public.event_sponsors
+    ADD CONSTRAINT "PK_01cc19189077b93d6e832cd2d14" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.artists
+    ADD CONSTRAINT "PK_09b823d4607d2675dc4ffa82261" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.seat_sections
     ADD CONSTRAINT "PK_3068932c5ab156abbc2eb387655" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.tickets
     ADD CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.event_watchers
+    ADD CONSTRAINT "PK_35ae7557ee7897f6a4d6d2ca64c" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY (id);
@@ -239,6 +301,9 @@ ALTER TABLE ONLY public.migrations
 ALTER TABLE ONLY public.ticket_tiers
     ADD CONSTRAINT "PK_917cfec124fa5e8ce04d1e7b865" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.event_artists
+    ADD CONSTRAINT "PK_97ee81ed249b1b381544103ca5f" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.payment_events
     ADD CONSTRAINT "PK_9f1d16fc78b33e676940a32e8b5" PRIMARY KEY (id);
 
@@ -253,6 +318,12 @@ ALTER TABLE ONLY public.bookings
 
 ALTER TABLE ONLY public.check_ins
     ADD CONSTRAINT "PK_fac7f27bc829a454ad477c13f62" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.event_artists
+    ADD CONSTRAINT "UQ_0bd0004170cba2090dda6ec0320" UNIQUE ("eventId", "artistId");
+
+ALTER TABLE ONLY public.event_watchers
+    ADD CONSTRAINT "UQ_83a5379ff0efa49c90dff601fad" UNIQUE ("eventId", "userId");
 
 ALTER TABLE ONLY public.seat_sections
     ADD CONSTRAINT "UQ_dbe25bf411b974263900f5f1afd" UNIQUE ("eventId", key);
@@ -270,9 +341,15 @@ CREATE INDEX "IDX_00b1ee696c4eb7916543d2a815" ON public.ticket_transfers USING b
 
 CREATE UNIQUE INDEX "IDX_05bd884c03d3f424e2204bd14c" ON public.events USING btree (slug);
 
+CREATE INDEX "IDX_0cc346514503054b3d20c3389f" ON public.event_artists USING btree ("eventId");
+
 CREATE UNIQUE INDEX "IDX_1c77cbb3c49baf2feeed3241f1" ON public.tickets USING btree ("qrToken");
 
+CREATE INDEX "IDX_2332057da6b96737f522d2d595" ON public.event_artists USING btree ("artistId");
+
 CREATE INDEX "IDX_245de798229ec6e66bb9312f28" ON public.tickets USING btree ("bookingId");
+
+CREATE INDEX "IDX_2ab10e73ed36fa5926589152fa" ON public.event_sponsors USING btree ("eventId");
 
 CREATE INDEX "IDX_362e1da87c0e1d5ff73b8b454a" ON public.seat_reservations USING btree ("bookingId");
 
@@ -290,6 +367,8 @@ CREATE INDEX "IDX_5f63cbb95a5f457f258f055c58" ON public.bookings USING btree ("e
 
 CREATE INDEX "IDX_610102b60fea1455310ccd299d" ON public.refresh_tokens USING btree ("userId");
 
+CREATE INDEX "IDX_622c1dc200bdd2dc128526f8f6" ON public.event_watchers USING btree ("userId");
+
 CREATE INDEX "IDX_692a909ee0fa9383e7859f9b40" ON public.notifications USING btree ("userId");
 
 CREATE UNIQUE INDEX "IDX_6bd01a5dbc832a85d50af2dfa3" ON public.bookings USING btree ("txnId") WHERE ("txnId" IS NOT NULL);
@@ -303,6 +382,8 @@ CREATE UNIQUE INDEX "IDX_8048e26d0a40fa42ffdb8e6eee" ON public.ticket_transfers 
 CREATE INDEX "IDX_831a5a06f879fb0bebf8965871" ON public.notifications USING btree ("createdAt");
 
 CREATE INDEX "IDX_83df767443e5071cbb9b2fad56" ON public.ticket_transfers USING btree ("fromTicketId");
+
+CREATE INDEX "IDX_842598ebf1da29c4de2999d447" ON public.event_watchers USING btree ("eventId");
 
 CREATE INDEX "IDX_8a101375d173c39a7c1d02c9d7" ON public.tickets USING btree ("eventId");
 
@@ -319,6 +400,8 @@ CREATE INDEX "IDX_a9059a9111a2206081a347d3b6" ON public.ticket_tiers USING btree
 CREATE INDEX "IDX_b4b6eedd8891e7cf45c500081a" ON public.ticket_transfers USING btree ("toPhone");
 
 CREATE INDEX "IDX_c37e9818eeaad9543032f6a6f1" ON public.tickets USING btree ("ownerUserId");
+
+CREATE UNIQUE INDEX "IDX_d8698856b9f9735db747084136" ON public.artists USING btree (slug);
 
 CREATE INDEX "IDX_de916bd3328a758012a6f72c8e" ON public.ticket_transfers USING btree ("eventId");
 

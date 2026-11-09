@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../app/theme.dart';
+import '../core/format.dart';
 import '../data/models/models.dart';
+import 'event_badge.dart';
 
 /// Horizontal-rail event card used on Home/Search.
 class EventCard extends StatelessWidget {
@@ -14,7 +16,6 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final priceRs = (event.priceFrom / 100).round();
     final dateStr =
         event.date == null ? '' : DateFormat('EEE, d MMM • h:mm a').format(event.date!);
     return GestureDetector(
@@ -25,6 +26,7 @@ class EventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Stack(children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.md),
               child: AspectRatio(
@@ -41,6 +43,15 @@ class EventCard extends StatelessWidget {
                 ),
               ),
             ),
+              Positioned(
+                left: 8,
+                top: 8,
+                child: Container(
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(AppRadius.pill)),
+                  child: EventBadgeChip(event.badge, dense: true),
+                ),
+              ),
+            ]),
             const SizedBox(height: AppSpacing.sm),
             Text(event.title,
                 maxLines: 1,
@@ -50,9 +61,9 @@ class EventCard extends StatelessWidget {
             Text(dateStr.isEmpty ? event.venueName : dateStr,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.subtleLight, fontSize: 12.5)),
+                style: TextStyle(color: Theme.of(context).hintColor, fontSize: 12.5)),
             const SizedBox(height: 2),
-            Text('From ₹$priceRs',
+            Text(event.priceFrom > 0 ? 'From ${formatPaise(event.priceFrom.toInt())}' : 'Free',
                 style: const TextStyle(
                     color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
           ],

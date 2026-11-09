@@ -64,6 +64,7 @@ class Endpoints {
   static const event = 'api/event';
   static const search = 'api/events/search';
   static const cities = 'api/city/cities';
+  static const artists = 'api/artists';
 
   // booking
   static const seatMap = 'api/booking/seat-map';
@@ -94,4 +95,5 @@ class StorageKeys {
   static const onboardingDone = 'onboarding_done';
   static const ticketCache = 'ticket_cache';
   static const pendingClaim = 'pending_claim_code';
+  static const pendingEvent = 'pending_event_slug';
 }
