@@ -44,6 +44,13 @@ jobs:
       BASE_URL: ${{ secrets.IOS_BASE_URL != '' && secrets.IOS_BASE_URL || 'https://api.staging.example.org/' }}
     steps:
       - uses: actions/checkout@v4
+      # Firebase's iOS SDK (Swift Package) needs the Xcode 26 toolchain: use the newest Xcode on the image.
+      - name: Select newest Xcode
+        working-directory: .
+        run: |
+          latest=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.9
