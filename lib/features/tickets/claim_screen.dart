@@ -76,7 +76,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
     final p = _preview;
     final hint = Theme.of(context).hintColor;
     return Scaffold(
-      appBar: AppBar(title: const Text('Claim tickets')),
+      appBar: AppBar(title: const Text('Claim Tickets')),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.lg), children: [
         if (p == null) ...[
           const Text('Enter the code from the share link', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -101,7 +101,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
                 Text('${p.fromName} sent you', style: TextStyle(color: hint)),
                 const SizedBox(height: 4),
                 Text('${p.quantity} ticket${p.quantity == 1 ? '' : 's'} · ${p.eventTitle}',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 6),
                 Text([
                   if (p.startDate != null) DateFormat('EEE, d MMM • h:mm a').format(p.startDate!),
@@ -122,7 +122,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
         ],
         const SizedBox(height: AppSpacing.lg),
         if (p != null && p.status == 'pending')
-          PrimaryButton(label: 'Add to my tickets', loading: _busy, onPressed: _claim)
+          PrimaryButton(label: 'Add to My Tickets', loading: _busy, onPressed: _claim)
         else if (_busy)
           const Center(child: CircularProgressIndicator()),
       ]),

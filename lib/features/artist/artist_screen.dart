@@ -64,7 +64,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Center(child: Text(a.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800))),
+                  Center(child: Text(a.name, style: context.text.headlineSmall!)),
                   if (a.occupation != null) Center(child: Text(a.occupation!, style: TextStyle(color: Theme.of(context).hintColor))),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
@@ -75,7 +75,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   ]),
                   if (a.about.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
-                    const Text('About', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    Text('About', style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(a.about, style: TextStyle(height: 1.5, color: Theme.of(context).hintColor)),
                   ],
@@ -87,7 +87,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _rail(String title, List<EventModel> events, String empty) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const SizedBox(height: AppSpacing.lg),
-        Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        Text(title, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: AppSpacing.sm),
         if (events.isEmpty)
           Text(empty, style: TextStyle(color: Theme.of(context).hintColor))

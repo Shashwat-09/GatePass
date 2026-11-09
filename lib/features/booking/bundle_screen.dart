@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -58,12 +57,12 @@ class _BundleScreenState extends State<BundleScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(b.name)),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
-        Text(widget.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Text(widget.event.title, style: context.text.titleMedium!),
         if (b.description.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(b.description, style: TextStyle(color: hint))),
         const SizedBox(height: AppSpacing.md),
         Text(allNights ? 'Pick a show for each night' : 'Pick ${b.nights} of ${b.dates.length} nights — one show each',
             style: const TextStyle(fontWeight: FontWeight.w800)),
-        Text('${_pick.length}/${b.nights} chosen', style: TextStyle(color: hint, fontSize: 12)),
+        Text('${_pick.length}/${b.nights} chosen', style: context.text.bodySmall!.copyWith(color: hint)),
         const SizedBox(height: AppSpacing.md),
         for (final d in b.dates) ...[
           Text(DateFormat('EEE, d MMM').format(DateTime.parse(d.date)), style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -82,23 +81,18 @@ class _BundleScreenState extends State<BundleScreen> {
         ],
         Row(children: [
           const Expanded(child: Text('Passes', style: TextStyle(fontWeight: FontWeight.w700))),
-          IconButton.filledTonal(onPressed: _qty > b.minQty ? () => setState(() => _qty--) : null, icon: const Icon(CupertinoIcons.minus)),
-          SizedBox(width: 32, child: Text('$_qty', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-          IconButton.filled(onPressed: _qty < _max ? () => setState(() => _qty++) : null, icon: const Icon(CupertinoIcons.plus)),
+          QtyStepper(
+            label: 'Passes',
+            value: _qty,
+            onMinus: _qty > b.minQty ? () => setState(() => _qty--) : null,
+            onPlus: _qty < _max ? () => setState(() => _qty++) : null,
+          ),
         ]),
       ]),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Text('Total', style: TextStyle(fontSize: 12, color: hint)),
-              Text(formatPaise(b.pricePaise * _qty), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            ]),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(child: PrimaryButton(label: 'Continue', onPressed: _complete && b.remaining > 0 ? _continue : null)),
-          ]),
-        ),
+      bottomNavigationBar: CheckoutBar(
+        caption: 'Total',
+        amount: formatPaise(b.pricePaise * _qty),
+        button: PrimaryButton(label: 'Continue', onPressed: _complete && b.remaining > 0 ? _continue : null),
       ),
     );
   }

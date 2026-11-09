@@ -63,7 +63,7 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                child: PrimaryButton(label: 'Share with a friend', onPressed: _share),
+                child: PrimaryButton(label: 'Share with a Friend', onPressed: _share),
               ),
             )
           : null,
@@ -78,16 +78,16 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.lg)),
         child: Column(children: [
-          Text(v.brandName, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+          Text(v.brandName, style: context.text.titleSmall!.copyWith(color: context.colors.secondaryLabel)),
           const SizedBox(height: 4),
-          Text(v.displayLabel, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(v.displayLabel, textAlign: TextAlign.center, style: context.text.headlineSmall!),
           const SizedBox(height: 4),
           Text([
             if (v.quantity > 1) '${v.remainingCount} of ${v.quantity} left',
             if (v.validUntil != null) 'Valid till ${DateFormat('d MMM yyyy').format(v.validUntil!)}',
             if (v.minOrderPaise != null) 'Min order ${formatPaise(v.minOrderPaise!)}',
             if (v.maxDiscountPaise != null) 'Up to ${formatPaise(v.maxDiscountPaise!)}',
-          ].join(' · '), textAlign: TextAlign.center, style: TextStyle(color: hint, fontSize: 12)),
+          ].join(' · '), textAlign: TextAlign.center, style: context.text.bodySmall!.copyWith(color: hint)),
           if (v.receivedFrom != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('From ${v.receivedFrom}', style: TextStyle(color: hint))),
           const SizedBox(height: AppSpacing.md),
           if (v.isActive && v.qrPayload != null) ...[
@@ -97,10 +97,10 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
               child: QrImageView(data: v.qrPayload!, size: 200, backgroundColor: Colors.white),
             ),
             const SizedBox(height: 6),
-            Text('Refreshes each time you open it', style: TextStyle(color: hint, fontSize: 12)),
+            Text('Refreshes each time you open it', style: context.text.bodySmall!.copyWith(color: hint)),
           ] else
             Text(v.status == 'USED' ? (v.sharedUnits == v.quantity ? 'All units shared' : 'Used') : v.status[0] + v.status.substring(1).toLowerCase(),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: AppSpacing.sm),
           SelectableText(v.voucherRef, style: const TextStyle(letterSpacing: 2, fontWeight: FontWeight.w700)),
         ]),
@@ -139,7 +139,7 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
             )),
       ],
       if (v.terms.isNotEmpty)
-        ExpansionTile(tilePadding: EdgeInsets.zero, title: const Text('Terms & conditions'), children: [Text(v.terms)]),
+        ExpansionTile(tilePadding: EdgeInsets.zero, title: const Text('Terms & Conditions'), children: [Text(v.terms)]),
     ]);
   }
 }
@@ -198,7 +198,7 @@ class _ShareSheetState extends State<_ShareSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, MediaQuery.of(context).viewInsets.bottom + AppSpacing.md),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Text('Share voucher', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        Text('Share voucher', style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: AppSpacing.md),
         TextField(
           key: const Key('vshare-phone'),

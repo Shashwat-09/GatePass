@@ -91,7 +91,7 @@ class _FilterScreenState extends State<FilterScreen> {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: PrimaryButton(
-            label: 'APPLY',
+            label: 'Apply',
             onPressed: () => Get.back(result: EventFilter(categories: _cats, languages: _langs, price: _price, day: _day, sort: _sort)),
           ),
         ),
@@ -102,7 +102,7 @@ class _FilterScreenState extends State<FilterScreen> {
   Widget _section(String title, List<Widget> chips) => Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.lg),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          Text(title, style: context.text.titleSmall!),
           const SizedBox(height: AppSpacing.sm),
           Wrap(spacing: 8, runSpacing: 8, children: chips),
         ]),

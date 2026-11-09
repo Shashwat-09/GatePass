@@ -83,18 +83,14 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.colors.tint,
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.ticket_fill, color: Colors.white, size: 72),
-            SizedBox(height: 16),
+            const Icon(CupertinoIcons.ticket_fill, color: Colors.white, size: 72),
+            const SizedBox(height: 16),
             Text(AppConfig.appName,
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5)),
+                style: context.text.headlineMedium!.copyWith(color: Colors.white, letterSpacing: 0.5)),
           ],
         ),
       ),

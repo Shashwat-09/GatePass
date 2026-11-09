@@ -374,20 +374,31 @@ class QtyStepper extends StatelessWidget {
   final Key? plusKey;
   @override
   Widget build(BuildContext context) {
-    Widget btn(IconData icon, VoidCallback? onTap, String tip, Key? key) => IconButton(
-          key: key,
-          tooltip: tip,
-          onPressed: onTap,
-          style: IconButton.styleFrom(
-            backgroundColor: context.colors.fill,
-            disabledBackgroundColor: context.colors.fill.withValues(alpha: 0.4),
-            foregroundColor: context.colors.label,
-            disabledForegroundColor: context.colors.tertiaryLabel,
-            minimumSize: const Size(36, 36),
-            fixedSize: const Size(36, 36),
-            tapTargetSize: MaterialTapTargetSize.padded,
+    // Drawn directly: a 32 pt neutral circle inside a 44 pt hit area, dimmed when unavailable.
+    Widget btn(IconData icon, VoidCallback? onTap, String tip, Key? key) => Tooltip(
+          message: tip,
+          child: Semantics(
+            button: true,
+            enabled: onTap != null,
+            label: tip,
+            child: InkResponse(
+              key: key,
+              onTap: onTap,
+              radius: 22,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(color: context.colors.fill, shape: BoxShape.circle),
+                    child: Icon(icon, size: 16, color: onTap == null ? context.colors.tertiaryLabel : context.colors.label),
+                  ),
+                ),
+              ),
+            ),
           ),
-          icon: Icon(icon, size: 18),
         );
     return Semantics(
       label: '$label $value',

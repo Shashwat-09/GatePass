@@ -69,7 +69,7 @@ class _PromoScreenState extends State<PromoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Apply promo code')),
+      appBar: AppBar(title: const Text('Promo Codes')),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         Row(children: [
           Expanded(
@@ -82,10 +82,10 @@ class _PromoScreenState extends State<PromoScreen> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          FilledButton(onPressed: _busy ? null : () => _apply(_input.text), child: const Text('APPLY')),
+          FilledButton(onPressed: _busy ? null : () => _apply(_input.text), child: const Text('Apply')),
         ]),
         const SizedBox(height: AppSpacing.lg),
-        const Text('Available offers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Text('Available offers', style: context.text.titleMedium!),
         const SizedBox(height: AppSpacing.sm),
         if (_codes == null && _loadError == null)
           const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
@@ -99,7 +99,7 @@ class _PromoScreenState extends State<PromoScreen> {
                   leading: Icon(CupertinoIcons.tag_fill, color: context.colors.tint),
                   title: Text(p.code, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
                   subtitle: Text(p.description.isNotEmpty ? p.description : p.summary),
-                  trailing: TextButton(onPressed: _busy ? null : () => _apply(p.code), child: const Text('APPLY')),
+                  trailing: TextButton(onPressed: _busy ? null : () => _apply(p.code), child: const Text('Apply')),
                 ),
               )),
       ]),

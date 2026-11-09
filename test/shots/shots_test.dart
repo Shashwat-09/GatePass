@@ -15,6 +15,13 @@ import 'package:gatepass/app/theme.dart';
 import 'package:gatepass/core/constants.dart';
 import 'package:gatepass/data/models/models.dart';
 import 'package:gatepass/features/auth/login_screen.dart';
+import 'package:gatepass/features/auth/otp_screen.dart';
+import 'package:gatepass/features/controllers/auth_controller.dart';
+import 'package:gatepass/features/home/city_picker_screen.dart';
+import 'package:gatepass/features/home/event_list_screen.dart';
+import 'package:gatepass/features/notifications/notifications_screen.dart';
+import 'package:gatepass/features/profile/edit_profile_screen.dart';
+import 'package:gatepass/features/vouchers/vouchers_screen.dart';
 import 'package:gatepass/features/booking/select_seat_screen.dart';
 import 'package:gatepass/features/booking/select_ticket_screen.dart';
 import 'package:gatepass/features/tickets/ticket_view_screen.dart';
@@ -90,7 +97,7 @@ void main() {
 
   final key = GlobalKey();
 
-  Future<void> shoot(WidgetTester t, String name, Widget Function() build, {ThemeMode mode = ThemeMode.light, Future<void> Function()? before, String? route, Object? args}) async {
+  Future<void> shoot(WidgetTester t, String name, Widget Function() build, {ThemeMode mode = ThemeMode.light, Future<void> Function()? before, String? route, Object? args, bool settle = true}) async {
     t.view.physicalSize = const Size(390 * 2, 844 * 2);
     t.view.devicePixelRatio = 2;
     addTearDown(t.view.reset);
@@ -109,7 +116,8 @@ void main() {
     if (route != null && args != null) {
       Get.toNamed(route, arguments: args);
     }
-    await t.pumpAndSettle();
+    // Screens with live timers (OTP resend countdown) never settle: pump a fixed time.
+    settle ? await t.pumpAndSettle() : await t.pump(const Duration(seconds: 1));
     if (before != null) {
       await before();
       await t.pumpAndSettle();
@@ -143,5 +151,14 @@ void main() {
       await shoot(t, 'voucher', () => VoucherDetailScreen(id: v['id'] as String), mode: mode);
     });
     testWidgets('login ${mode.name}', (t) => shoot(t, 'login', () => const LoginScreen(), mode: mode));
+    testWidgets('otp ${mode.name}', (t) {
+      Get.put(AuthController()).phone.value = '9123400009';
+      return shoot(t, 'otp', () => const OtpScreen(), mode: mode, settle: false);
+    });
+    testWidgets('vouchers ${mode.name}', (t) => shoot(t, 'vouchers', () => const VouchersScreen(), mode: mode));
+    testWidgets('notifications ${mode.name}', (t) => shoot(t, 'notifications', () => const NotificationsScreen(), mode: mode));
+    testWidgets('city ${mode.name}', (t) => shoot(t, 'city', () => const CityPickerScreen(), mode: mode));
+    testWidgets('events ${mode.name}', (t) => shoot(t, 'event-list', () => const EventListScreen(title: 'Events in Pune'), mode: mode));
+    testWidgets('edit-profile ${mode.name}', (t) => shoot(t, 'edit-profile', () => const EditProfileScreen(), mode: mode));
   }
 }

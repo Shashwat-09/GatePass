@@ -43,8 +43,8 @@ class _LoginScreenState extends State<LoginScreen> {
               Icon(CupertinoIcons.ticket_fill,
                   size: 48, color: context.colors.tint),
               const SizedBox(height: AppSpacing.lg),
-              const Text('Enter your number',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+              Text('Enter your number',
+                  style: context.text.headlineMedium!),
               const SizedBox(height: AppSpacing.sm),
               Text('We will send you a verification code.',
                   style: TextStyle(color: context.colors.secondaryLabel)),
@@ -54,12 +54,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 hint: '10-digit mobile number',
                 keyboardType: TextInputType.number,
                 maxLength: 10,
-                prefix: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+                prefix: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Align(
                     widthFactor: 1,
                     alignment: Alignment.centerLeft,
-                    child: Text('+91  ', style: TextStyle(fontSize: 16)),
+                    child: Text('+91  ', style: context.text.bodyLarge!),
                   ),
                 ),
                 onChanged: (v) => _valid.value = v.trim().length == 10,
@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     )),
               const Spacer(),
               Obx(() => PrimaryButton(
-                    label: 'Send code',
+                    label: 'Send Code',
                     loading: _auth.loading.value,
                     onPressed: _valid.value ? _submit : null,
                   )),
@@ -81,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(
                 'By continuing you agree to our Terms & Privacy Policy.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel),
+                style: context.text.bodySmall!.copyWith(color: context.colors.secondaryLabel),
               ),
             ],
           ),

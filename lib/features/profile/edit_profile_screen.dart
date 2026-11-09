@@ -98,12 +98,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     final phone = _auth.currentUser?.phone ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit account details')),
+      appBar: AppBar(title: const Text('Edit Account Details')),
       body: SafeArea(
         child: Form(
           key: _form,
           child: ListView(padding: const EdgeInsets.all(AppSpacing.lg), children: [
-            const Text('Personal details', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            Text('Personal details', style: context.text.titleMedium!),
             const SizedBox(height: AppSpacing.sm),
             _field(_name, 'Full name', validator: (v) => (v ?? '').trim().length < 2 ? 'Please enter your name' : null),
             _field(_email, 'Email address',
@@ -120,6 +120,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<String>(
+              style: context.text.bodyLarge,
               initialValue: _gender,
               decoration: const InputDecoration(labelText: 'Gender'),
               items: const [
@@ -131,14 +132,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               onChanged: (v) => setState(() => _gender = v ?? 'prefer_not'),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const Text('Address details', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            Text('Used for your GST invoices.', style: TextStyle(color: Theme.of(context).hintColor, fontSize: 12)),
+            Text('Address details', style: context.text.titleMedium!),
+            Text('Used for your GST invoices.', style: context.text.bodySmall),
             const SizedBox(height: AppSpacing.sm),
             _field(_house, 'House / flat'),
             _field(_street, 'Street'),
             _field(_locality, 'Locality'),
             _field(_city, 'City'),
             DropdownButtonFormField<String>(
+              style: context.text.bodyLarge,
               key: const Key('state-field'),
               initialValue: _state,
               isExpanded: true,
@@ -152,7 +154,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 validator: (v) => (v ?? '').isEmpty || RegExp(r'^[1-9]\d{5}$').hasMatch(v!.trim()) ? null : 'Please enter valid pin code'),
             if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             const SizedBox(height: AppSpacing.md),
-            PrimaryButton(label: 'Save changes', loading: _saving, onPressed: _save),
+            PrimaryButton(label: 'Save Changes', loading: _saving, onPressed: _save),
           ]),
         ),
       ),

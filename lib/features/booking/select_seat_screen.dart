@@ -113,7 +113,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select seats'),
+        title: const Text('Select Seats'),
         actions: [
           Obx(() => c.hold.value == null
               ? const SizedBox.shrink()
@@ -191,7 +191,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: context.colors.cell,
-            border: Border.all(color: color, width: 1.5),
+            border: Border.all(color: ensureContrast(color, context.colors.canvas, context.colors.label), width: 1.5),
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           child: Row(children: [
@@ -254,7 +254,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
       final selected = c.isSelected(sec.id, r, col);
       // Shape as well as color: available = outlined, taken = solid grey, selected = tinted with a check.
       final bg = booked ? context.colors.fill : (selected ? context.colors.tintFill : Colors.transparent);
-      final border = booked || selected ? null : Border.all(color: color, width: 1.5);
+      final border = booked || selected ? null : Border.all(color: ensureContrast(color, context.colors.canvas, context.colors.label), width: 1.5);
       return Semantics(
         label: '${sec.name} row ${sec.rowLabel(r)} seat ${sec.seatNumber(r, col)}${booked ? ', taken' : ''}${accessible ? ', accessible' : ''}',
         button: !booked,

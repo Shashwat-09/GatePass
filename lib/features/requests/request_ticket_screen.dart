@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -73,11 +72,11 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
     final t = widget.tier;
     final hint = Theme.of(context).hintColor;
     return Scaffold(
-      appBar: AppBar(title: const Text('Request tickets')),
+      appBar: AppBar(title: const Text('Request Tickets')),
       body: _forms == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())
           : ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
-              Text(widget.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(widget.event.title, style: context.text.titleMedium!),
               const SizedBox(height: 4),
               Text('${t.name} · ${t.pricePaise == 0 ? 'Free' : formatPaise(t.pricePaise)}', style: TextStyle(color: hint)),
               if ((t.description ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(t.description!)),
@@ -92,16 +91,13 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
               const SizedBox(height: AppSpacing.lg),
               Row(children: [
                 const Expanded(child: Text('Tickets', style: TextStyle(fontWeight: FontWeight.w700))),
-                IconButton.filledTonal(
-                  key: const Key('req-dec'),
-                  onPressed: _qty > t.minQty ? () => setState(() => _qty--) : null,
-                  icon: const Icon(CupertinoIcons.minus),
-                ),
-                SizedBox(width: 32, child: Text('$_qty', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                IconButton.filled(
-                  key: const Key('req-inc'),
-                  onPressed: _qty < _max ? () => setState(() => _qty++) : null,
-                  icon: const Icon(CupertinoIcons.plus),
+                QtyStepper(
+                  label: 'Tickets',
+                  value: _qty,
+                  minusKey: const Key('req-dec'),
+                  plusKey: const Key('req-inc'),
+                  onMinus: _qty > t.minQty ? () => setState(() => _qty--) : null,
+                  onPlus: _qty < _max ? () => setState(() => _qty++) : null,
                 ),
               ]),
               const SizedBox(height: AppSpacing.lg),
@@ -117,7 +113,7 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                child: PrimaryButton(label: 'Send request', loading: _sending, onPressed: _sending ? null : _send),
+                child: PrimaryButton(label: 'Send Request', loading: _sending, onPressed: _sending ? null : _send),
               ),
             ),
     );

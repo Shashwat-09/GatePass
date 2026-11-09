@@ -77,7 +77,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.8)
+## 9. Current status (v0.9)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -89,11 +89,12 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Push (v0.8): device tokens, FCM HTTP v1 outbox worker (off until `FCM_SERVICE_ACCOUNT`), tap routing from push and inbox, `device-id`/`selected-city` headers.
 - ✅ Attribution & links (v0.8): UTM/click-id/affiliate capture → clicks + booking source + organiser report; web-only events in an in-app web view; tickets/explore deep links.
 - ✅ Organiser tools (v0.8): `organiser` role scoped to own events; `/organiser` web console + `api/organiser/*` (events, ticket types, shows, status with holder notices, comp/box-office tickets, sales summary, approvals, report).
+- ✅ Design system (v0.9): Apple HIG redesign of the whole app (skill `.claude/skills/apple-design/`, review `docs/11-Design-Review.md`): semantic light/dark tokens (`context.colors`, WCAG AA), Apple type scale, Cupertino tab bar / large titles / segmented controls, inset grouped lists, ticket-stub signature. Screenshot harness: `flutter test test/shots --dart-define=SHOTS=true` → `build/shots/`.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 135 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 135 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + 30 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: payouts/settlements for organisers, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).

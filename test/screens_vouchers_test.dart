@@ -52,7 +52,7 @@ void main() {
     expect(find.text('Refreshes each time you open it'), findsOneWidget);
     expect(find.text('GV-ABCD2345'), findsOneWidget);
     expect(find.text('VOLT20'), findsOneWidget);
-    await t.tap(find.text('Share with a friend'));
+    await t.tap(find.text('Share with a Friend'));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('vshare-phone')), '9876543210');
     await t.enterText(find.byKey(const Key('vshare-name')), 'Meera');
@@ -71,6 +71,6 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(QrImageView), findsNothing);
     expect(find.text('All units shared'), findsOneWidget);
-    expect(find.text('Share with a friend'), findsNothing);
+    expect(find.text('Share with a Friend'), findsNothing);
   });
 }

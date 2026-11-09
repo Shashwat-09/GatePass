@@ -111,7 +111,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       );
     }
     final hint = Theme.of(context).hintColor;
-    final dateStr = e.date == null ? 'Date TBA' : DateFormat('EEE, d MMM yyyy • h:mm a').format(e.date!);
+    final dateStr = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM yyyy · h:mm a').format(e.date!);
     final canBook = !_loading && _error == null && e.badge.isBookable && (e.hasSeatMap || e.tiers.isNotEmpty);
     final images = e.images;
 
@@ -150,7 +150,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 const SizedBox(height: AppSpacing.md),
                 _row(CupertinoIcons.calendar, dateStr),
                 const SizedBox(height: 6),
-                _row(CupertinoIcons.location, [e.venueName, e.city].where((s) => s.isNotEmpty).join(', ')),
+                _row(CupertinoIcons.location_solid, [e.venueName, e.city].where((s) => s.isNotEmpty).join(', ')),
                 if (e.badge.note != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   _notice(CupertinoIcons.info_circle, e.badge.note!),

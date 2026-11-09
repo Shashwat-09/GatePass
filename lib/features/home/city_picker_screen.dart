@@ -104,7 +104,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select city'), automaticallyImplyLeading: !widget.firstRun),
+      appBar: AppBar(title: const Text('Select City'), automaticallyImplyLeading: !widget.firstRun),
       body: Column(children: [
         Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -138,7 +138,6 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                       : ListView.builder(
                           itemCount: _filtered.length,
                           itemBuilder: (_, i) => ListTile(
-                            leading: const Icon(CupertinoIcons.building_2_fill),
                             title: Text(_filtered[i].name),
                             onTap: () => _select(_filtered[i]),
                           ),

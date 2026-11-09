@@ -114,7 +114,7 @@ class RegistrationFormsViewState extends State<RegistrationFormsView> {
     final hint = Theme.of(context).hintColor;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       for (final f in widget.forms) ...[
-        Text(f.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        Text(f.title, style: context.text.titleMedium!),
         if (f.description.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(f.description, style: TextStyle(color: hint))),
         const SizedBox(height: AppSpacing.md),
         for (var i = 0; i < _count(f); i++)
@@ -172,7 +172,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Attendee details')),
+      appBar: AppBar(title: const Text('Attendee Details')),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         RegistrationFormsView(key: _view, forms: widget.forms, attendees: widget.attendees, initial: widget.initial),
       ]),

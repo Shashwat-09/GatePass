@@ -89,7 +89,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My requests')),
+      appBar: AppBar(title: const Text('My Requests')),
       body: _loading
           ? const StateView.loading()
           : _error != null && _items.isEmpty
@@ -125,7 +125,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.pill)),
-              child: Text(r.statusLabel, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+              child: Text(r.statusLabel, style: context.text.labelMedium!.copyWith(color: color, fontWeight: FontWeight.w700)),
             ),
           ]),
           const SizedBox(height: 4),
@@ -134,7 +134,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
             r.free ? 'Free' : formatPaise(r.pricePaise * r.quantity),
             if (r.eventDate != null) DateFormat('d MMM yyyy').format(r.eventDate!),
           ].join(' · '), style: TextStyle(color: hint)),
-          if (r.venueName.isNotEmpty) Text(r.venueName, style: TextStyle(color: hint, fontSize: 12)),
+          if (r.venueName.isNotEmpty) Text(r.venueName, style: context.text.bodySmall!.copyWith(color: hint)),
           if (r.status == 'rejected' && (r.rejectionReason ?? '').isNotEmpty)
             Padding(padding: const EdgeInsets.only(top: 6), child: Text('Reason: ${r.rejectionReason}')),
           if (r.status == 'booked')

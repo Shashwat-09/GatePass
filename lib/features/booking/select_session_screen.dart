@@ -43,14 +43,14 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
   Widget build(BuildContext context) {
     final t = _tree;
     return Scaffold(
-      appBar: AppBar(title: const Text('Select date & time')),
+      appBar: AppBar(title: const Text('Select Date & Time')),
       body: t == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())
           : t.venues.isEmpty && t.seasonPasses.isEmpty && t.bundles.isEmpty
               ? const StateView.empty('No Date & Time Available')
               : ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
                   if (t.seasonPasses.isNotEmpty || t.bundles.isNotEmpty) ...[
-                    const Text('Passes', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text('Passes', style: context.text.titleMedium!),
                     const SizedBox(height: AppSpacing.sm),
                     ...t.bundles.map((b) => Card(
                           child: ListTile(
@@ -79,7 +79,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                   ],
                   if (t.venues.isNotEmpty) ...[
                     if (t.venues.length > 1) ...[
-                      const Text('Venue', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text('Venue', style: context.text.titleMedium!),
                       const SizedBox(height: AppSpacing.sm),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         for (var i = 0; i < t.venues.length; i++)
@@ -89,7 +89,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                         Padding(padding: const EdgeInsets.only(top: 4), child: Text(t.venues[_venue].address, style: TextStyle(color: Theme.of(context).hintColor))),
                       const SizedBox(height: AppSpacing.lg),
                     ],
-                    const Text('Date', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text('Date', style: context.text.titleMedium!),
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       for (var i = 0; i < t.venues[_venue].dates.length; i++)
@@ -100,7 +100,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                         ),
                     ]),
                     const SizedBox(height: AppSpacing.lg),
-                    const Text('Time', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text('Time', style: context.text.titleMedium!),
                     const SizedBox(height: AppSpacing.sm),
                     ...t.venues[_venue].dates[_date].slots.map((s) => Card(
                           child: ListTile(

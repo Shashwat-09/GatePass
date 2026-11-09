@@ -104,25 +104,31 @@ class _ShareSheetState extends State<_ShareSheet> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Share tickets', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text('Share Tickets', style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('Each friend gets their own QR. Yours updates to the tickets you keep.', style: TextStyle(color: hint)),
+          Text('Each friend gets their own QR. Yours updates to the tickets you keep.', style: context.text.bodyMedium!.copyWith(color: hint)),
           const SizedBox(height: AppSpacing.md),
           Row(children: [
-            const Expanded(child: Text('How many?', style: TextStyle(fontWeight: FontWeight.w600))),
-            IconButton.filledTonal(onPressed: _count > 1 ? () => setState(() => _count--) : null, icon: const Icon(CupertinoIcons.minus)),
-            SizedBox(width: 36, child: Text('$_count', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-            IconButton.filled(onPressed: _count < _max ? () => setState(() => _count++) : null, icon: const Icon(CupertinoIcons.plus)),
+            Expanded(child: Text('How many?', style: context.text.titleMedium)),
+            QtyStepper(
+              label: 'Tickets to share',
+              value: _count,
+              onMinus: _count > 1 ? () => setState(() => _count--) : null,
+              onPlus: _count < _max ? () => setState(() => _count++) : null,
+            ),
           ]),
-          Text('You can share up to $_max.', style: TextStyle(fontSize: 12, color: hint)),
+          Text('You can share up to $_max.', style: context.text.bodySmall!.copyWith(color: hint)),
           const SizedBox(height: AppSpacing.md),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, icon: Icon(CupertinoIcons.link), label: Text('Share a link')),
-              ButtonSegment(value: false, icon: Icon(CupertinoIcons.device_phone_portrait), label: Text('Send to number')),
-            ],
-            selected: {_byLink},
-            onSelectionChanged: (s) => setState(() => _byLink = s.first),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoSlidingSegmentedControl<bool>(
+              groupValue: _byLink,
+              children: const {
+                true: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Share a Link')),
+                false: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Send to Number')),
+              },
+              onValueChanged: (v) => setState(() => _byLink = v ?? _byLink),
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           if (_byLink)
@@ -149,7 +155,7 @@ class _ShareSheetState extends State<_ShareSheet> {
           ],
           const SizedBox(height: AppSpacing.md),
           PrimaryButton(
-            label: _byLink ? 'Create link & share' : 'Send $_count ticket${_count == 1 ? '' : 's'}',
+            label: _byLink ? 'Create Link & Share' : 'Send $_count Ticket${_count == 1 ? '' : 's'}',
             loading: _busy,
             onPressed: _byLink || _phoneOk ? _submit : null,
           ),

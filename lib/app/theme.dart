@@ -113,6 +113,22 @@ class AppPalette extends ThemeExtension<AppPalette> {
   }
 }
 
+/// WCAG relative luminance contrast between two opaque colors.
+double contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance(), lb = b.computeLuminance();
+  return (la > lb ? la + 0.05 : lb + 0.05) / (la > lb ? lb + 0.05 : la + 0.05);
+}
+
+/// [color], blended toward [toward] just enough to reach [min] contrast on [bg]
+/// (e.g. organiser-chosen section colours used as seat outlines need 3:1).
+Color ensureContrast(Color color, Color bg, Color toward, {double min = 3}) {
+  var c = color;
+  for (var t = 0.0; t <= 1.0 && contrastRatio(c, bg) < min; t += 0.05) {
+    c = Color.lerp(color, toward, t)!;
+  }
+  return c;
+}
+
 extension AppThemeX on BuildContext {
   AppPalette get colors => Theme.of(this).extension<AppPalette>() ?? AppPalette.light;
   TextTheme get text => Theme.of(this).textTheme;

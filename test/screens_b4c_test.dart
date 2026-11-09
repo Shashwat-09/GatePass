@@ -126,7 +126,7 @@ void main() {
     await t.tap(find.byKey(const Key('req-inc')));
     await fill(t, '$formId.0', name: 'Asha Rao', role: 'founder');
     expect(find.text('Attendee 1'), findsNothing); // booking-scope form: asked once
-    await t.tap(find.text('Send request'));
+    await t.tap(find.text('Send Request'));
     await t.pumpAndSettle();
     final body = d.backend.callsTo('api/approval-requests').single.body as Map;
     expect(body['quantity'], 2);

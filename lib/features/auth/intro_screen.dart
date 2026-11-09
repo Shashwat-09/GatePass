@@ -105,11 +105,11 @@ class _Slide extends StatelessWidget {
             child: Icon(icon, size: 64, color: context.colors.tint),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+          Text(title, style: context.text.headlineMedium!),
           const SizedBox(height: AppSpacing.sm),
           Text(body,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: context.colors.secondaryLabel)),
+              style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel)),
         ],
       ),
     );

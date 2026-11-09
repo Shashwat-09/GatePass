@@ -93,18 +93,19 @@ void main() {
     await t.ensureVisible(find.byKey(const Key('share-tickets')));
     await t.tap(find.byKey(const Key('share-tickets')));
     await t.pumpAndSettle();
-    expect(find.text('Share tickets'), findsOneWidget);
-    await t.tap(find.text('Send to number'));
+    expect(find.text('Share Tickets'), findsNWidgets(2)); // button + sheet title
+    await t.tap(find.text('Send to Number'));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('share-phone')), '9876543210');
     await t.pumpAndSettle();
-    await t.tap(find.text('Send 1 ticket'));
+    await t.tap(find.text('Send 1 Ticket'));
     await t.pumpAndSettle(const Duration(seconds: 5));
     expect(d.backend.callsTo('api/ticket/split').single.body, {'ticketId': 't1', 'quantity': 1, 'phone': '9876543210'});
-    expect(find.text('Share tickets'), findsNothing); // sheet closed
+    expect(find.text('Share Tickets'), findsNothing); // sheet closed
+    expect(find.text('Send to a Friend'), findsOneWidget); // one ticket left
     final qr = t.widget<QrImageView>(find.byType(QrImageView));
     expect(qr, isNotNull);
-    expect(find.text('1'), findsWidgets); // admits 1 now
+    expect(find.text('ADMIT 1'), findsOneWidget); // admits 1 now
   });
 
   testWidgets('Shared tab lists transfers and claims back a pending one', (t) async {
@@ -152,7 +153,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Asha sent you'), findsOneWidget);
     expect(find.text('2 tickets · Neon Nights'), findsOneWidget);
-    await t.tap(find.text('Add to my tickets'));
+    await t.tap(find.text('Add to My Tickets'));
     await t.pumpAndSettle();
     expect(d.backend.callsTo('api/ticket/claim').single.body, {'code': 'ABC123DEF456'});
   });
@@ -185,7 +186,7 @@ void main() {
 
     await t.tap(find.text('Apply Promo Code'));
     await t.pumpAndSettle();
-    await t.tap(find.text('APPLY').last);
+    await t.tap(find.text('Apply').last);
     await t.pumpAndSettle(const Duration(seconds: 5));
     expect(find.text('FIRST50 applied'), findsOneWidget);
     expect(find.text('Coupon savings'), findsOneWidget);
@@ -212,7 +213,7 @@ void main() {
     await t.tap(find.text('Apply Promo Code'));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('promo-input')), 'badcode');
-    await t.tap(find.text('APPLY'));
+    await t.tap(find.text('Apply'));
     await t.pumpAndSettle();
     expect(find.text('Promo code doesn\'t exist'), findsOneWidget);
     expect(c.promoCode.value, isNull);
@@ -415,7 +416,7 @@ void main() {
     await t.pumpWidget(app(const EditProfileScreen()));
     await t.pumpAndSettle();
     await t.enterText(find.widgetWithText(TextFormField, 'Pin code'), '01234');
-    await t.tap(find.text('Save changes'));
+    await t.tap(find.text('Save Changes'));
     await t.pumpAndSettle();
     expect(find.text('Please enter valid pin code'), findsOneWidget);
     await t.enterText(find.widgetWithText(TextFormField, 'Pin code'), '411001');
@@ -424,7 +425,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Maharashtra').last);
     await t.pumpAndSettle();
-    await t.tap(find.text('Save changes'));
+    await t.tap(find.text('Save Changes'));
     await t.pumpAndSettle();
     final body = d.backend.callsTo('api/user').single.body as Map;
     expect(body, containsPair('state', 'Maharashtra'));
@@ -454,7 +455,7 @@ void main() {
     await t.tap(find.text('Comedy'));
     await t.tap(find.text('This weekend'));
     await t.tap(find.text('Under ₹500'));
-    await t.tap(find.text('APPLY'));
+    await t.tap(find.text('Apply'));
     await t.pumpAndSettle();
     final q = d.backend.callsTo('api/events').last;
     expect(q.path, 'api/events');
@@ -489,7 +490,7 @@ void main() {
   testWidgets('Forced update screen cannot be dismissed and links to the store', (t) async {
     await t.pumpWidget(app(const UpdateScreen(title: 'Update required', message: 'A new version is required to continue.', storeUrl: 'https://play.google.com/x')));
     expect(find.text('Update required'), findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
+    expect(find.text('Update Now'), findsOneWidget);
   });
 
   testWidgets('Ticket view shows notes, Buy more and map link', (t) async {

@@ -26,6 +26,7 @@ class VouchersScreen extends StatefulWidget {
 class _VouchersScreenState extends State<VouchersScreen> {
   static const _tabs = ['active', 'used', 'expired'];
   Map<String, int> _counts = const {};
+  int _segment = 0;
   int _version = 0;
 
   @override
@@ -47,17 +48,30 @@ class _VouchersScreenState extends State<VouchersScreen> {
   @override
   Widget build(BuildContext context) {
     String label(String t) => '${t[0].toUpperCase()}${t.substring(1)}${_counts[t] != null ? ' (${_counts[t]})' : ''}';
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My vouchers'),
-          bottom: TabBar(tabs: [for (final t in _tabs) Tab(text: label(t))]),
+    return Scaffold(
+      backgroundColor: context.colors.groupedCanvas,
+      appBar: AppBar(title: const Text('My Vouchers'), backgroundColor: context.colors.groupedCanvas),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
+          child: SizedBox(
+            width: double.infinity,
+            child: CupertinoSlidingSegmentedControl<int>(
+              groupValue: _segment,
+              onValueChanged: (v) => setState(() => _segment = v ?? 0),
+              children: {
+                for (var i = 0; i < _tabs.length; i++)
+                  i: Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(label(_tabs[i]), style: context.text.titleSmall!.copyWith(fontWeight: _segment == i ? FontWeight.w600 : FontWeight.w400))),
+              },
+            ),
+          ),
         ),
-        body: TabBarView(children: [
-          for (final t in _tabs) _VoucherTab(key: ValueKey('$t-$_version'), tab: t, onChanged: _refresh),
-        ]),
-      ),
+        Expanded(
+          child: IndexedStack(index: _segment, children: [
+            for (final t in _tabs) _VoucherTab(key: ValueKey('$t-$_version'), tab: t, onChanged: _refresh),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -152,23 +166,23 @@ class _VoucherTabState extends State<_VoucherTab> with AutomaticKeepAliveClientM
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: Text(v.brandName, style: TextStyle(color: hint, fontSize: 12))),
+                  Expanded(child: Text(v.brandName, style: context.text.bodySmall!.copyWith(color: hint))),
                   if (v.isNew)
                     Container(
                       margin: const EdgeInsets.only(right: AppSpacing.md),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: context.colors.tint, borderRadius: BorderRadius.circular(AppRadius.pill)),
-                      child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                      child: Text('NEW', style: context.text.labelSmall!.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
                     ),
                 ]),
-                Text(v.displayLabel, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(v.displayLabel, style: context.text.titleMedium!),
                 const SizedBox(height: 4),
                 Text([
                   if (v.isMultiUnitLabel != null) v.isMultiUnitLabel!,
                   if (v.status == 'ACTIVE' && v.validUntil != null) 'Valid till ${DateFormat('d MMM').format(v.validUntil!)}',
                   if (v.status != 'ACTIVE') v.status[0] + v.status.substring(1).toLowerCase(),
                   if (v.complimentary) 'With your tickets',
-                ].join(' · '), style: TextStyle(color: hint, fontSize: 12)),
+                ].join(' · '), style: context.text.bodySmall!.copyWith(color: hint)),
               ]),
             ),
           ),

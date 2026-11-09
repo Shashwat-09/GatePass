@@ -77,7 +77,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   Widget build(BuildContext context) {
     final s = _survey;
     return Scaffold(
-      appBar: AppBar(title: const Text('Share feedback')),
+      appBar: AppBar(title: const Text('Share Feedback')),
       body: s == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())
           : _done != null
@@ -85,7 +85,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
               : s.submitted
                   ? _thanks(s.done, already: true)
                   : ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
-                      Text(s.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      Text(s.title, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
                       Text(s.eventTitle, style: TextStyle(color: Theme.of(context).hintColor)),
                       const SizedBox(height: AppSpacing.lg),
                       if (s.mode == 'form')
@@ -120,7 +120,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
           Icon(CupertinoIcons.heart_fill, size: 56, color: context.colors.tint),
           const SizedBox(height: AppSpacing.md),
           Text(already ? 'You\'ve already shared your feedback' : d.title,
-              textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              textAlign: TextAlign.center, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
           if (!already && d.message.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(d.message, textAlign: TextAlign.center),

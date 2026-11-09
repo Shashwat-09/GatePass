@@ -38,8 +38,8 @@ class _OtpScreenState extends State<OtpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Verify',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+              Text('Verify',
+                  style: context.text.headlineMedium!),
               const SizedBox(height: AppSpacing.sm),
               Text('Enter the 6-digit code sent to +91 ••••• ••$masked',
                   style: TextStyle(color: context.colors.secondaryLabel)),
@@ -49,6 +49,9 @@ class _OtpScreenState extends State<OtpScreen> {
                 length: 6,
                 keyboardType: TextInputType.number,
                 animationType: AnimationType.fade,
+                backgroundColor: Colors.transparent,
+                enableActiveFill: true,
+                textStyle: context.text.titleLarge!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 onChanged: (v) => _code = v,
                 onCompleted: (v) {
                   _code = v;
@@ -61,7 +64,11 @@ class _OtpScreenState extends State<OtpScreen> {
                   fieldWidth: 46,
                   activeColor: context.colors.tint,
                   selectedColor: context.colors.tint,
-                  inactiveColor: context.colors.secondaryLabel.withValues(alpha: 0.4),
+                  inactiveColor: Colors.transparent,
+                  activeFillColor: context.colors.cell,
+                  selectedFillColor: context.colors.cell,
+                  inactiveFillColor: context.colors.fill,
+                  borderWidth: 1.5,
                 ),
               ),
               Obx(() => _auth.error.value == null
@@ -74,7 +81,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       style: TextStyle(color: context.colors.secondaryLabel))
                   : TextButton(
                       onPressed: () => _auth.sendOtp(_auth.phone.value),
-                      child: const Text('Resend code'),
+                      child: const Text('Resend Code'),
                     )),
               const Spacer(),
               Obx(() => PrimaryButton(

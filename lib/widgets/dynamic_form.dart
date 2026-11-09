@@ -108,7 +108,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Text(err ?? help!,
-          style: TextStyle(fontSize: 12, color: err != null ? Theme.of(context).colorScheme.error : Theme.of(context).hintColor)),
+          style: context.text.bodySmall!.copyWith(color: err != null ? context.colors.danger : context.colors.secondaryLabel)),
     );
   }
 

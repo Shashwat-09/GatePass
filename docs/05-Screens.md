@@ -67,8 +67,12 @@ flowchart TD
 **MVP screens: 1–9, 11, 15, 19–23, 28–30** (plus 5–6 on first login). ~17 screens for a shippable thin slice.
 
 ## 5.3 Global UI components (`lib/widgets/`)
-- `PrimaryButton`, `AppTextField`, `EventCard`, section header, loader/empty/error placeholders, QR view, bottom-sheet scaffold, price-row.
-- All themed via `theme.dart` tokens; dark mode supported from day one.
+Design system v0.9 follows Apple's Human Interface Guidelines (review and rationale: `docs/11-Design-Review.md`; skill in `.claude/skills/apple-design/`).
+- **Navigation:** `CupertinoTabBar` (Discover / Tickets / Profile), large-title pages via `largeTitleBar()` (`CupertinoSliverNavigationBar`), `CupertinoSlidingSegmentedControl` for in-page switches (Tickets, Vouchers, Share sheet), Cupertino page transitions with swipe-back on Android and iOS. Icons are `CupertinoIcons`.
+- **Lists:** `InsetGroup` (uppercase header, footer) + `GroupRow` (icon, title, value, chevron, destructive) for settings-style screens; `SectionHeader` + `SeeAllButton` for rails.
+- **Actions:** `PrimaryButton` (50 pt, filled tint), `SecondaryButton` (tinted), `CheckoutBar` (caption + amount + button), `QtyStepper` (32 pt circles inside 44 pt hit targets).
+- **Content:** `EventCard` / `EventArt` (rail height measured from text with `textBlockHeight`), `TicketStub` (notched ticket with perforation — the app's signature shape), `TagPill`, `EventBadgeChip`, `PriceBreakdown`, `SearchFieldButton`, `StateView` (Cupertino spinner / empty / "Try Again").
+- **Copy:** title case for buttons and navigation titles; sentence case for body text.
 
 ## 5.4 Empty/error/loading policy
 Every data screen implements four states: **loading** (skeleton/spinner), **loaded**, **empty** (friendly CTA), **error** (retry). Repositories never throw to the UI (`ApiResult`), so screens always have a message to show.
@@ -179,4 +183,16 @@ All data screens implement loading / loaded / empty / error-retry.
 - `/organiser` (OTP sign-in, organiser/admin accounts): events table → event page with status buttons (Publish / Unpublish / Postpone / Cancel with a message to holders), details form, sales cards (tickets, revenue, online, box office, complimentary, checked in, requests waiting), attendee report download, ticket types (inline price / quantity / on-sale edits + add), shows (add / hide), complimentary & box-office issuing, and the requests queue (approve / reject with reason). Light and dark follow the system.
 
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
-Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.
+Semantic colors come from the `AppPalette` theme extension: `context.colors.<token>`. Never use inline hex or `Colors.*` in screens; white is allowed only on the tint, on images, and behind a QR code.
+
+| Token | Light | Dark |
+|---|---|---|
+| canvas / grouped | #FFFFFF / #F2F2F7 | #000000 / #000000 |
+| cell | #FFFFFF | #1C1C1E |
+| label / secondary / tertiary | #000 / #636366 / #8E8E93 | #FFF / #AEAEB2 / #8E8E93 |
+| tint (text) / tintFill (buttons) | #5B3DF5 / #5B3DF5 | #9D8CFF / #6A50FF |
+| success / warning / danger | #1F7A3A / #B43C00 / #D70015 | #30D158 / #FF9F0A / #FF453A |
+
+Label, secondary, tint and status text meet WCAG AA (4.5:1) on their backgrounds; tertiary (about 3.3:1) is only for placeholders and decorative glyphs, never for information people need. Colors chosen by organisers (seat sections) pass through `ensureContrast()` to reach 3:1.
+Type (`context.text`), with the Apple scale on the platform font: large title 34 bold, title 28/22, headline 17 w600, body 17, callout 15, footnote 13, caption 12/11. Dynamic Type is respected, and rails grow with the text.
+Radii 8/12/16; spacing 4/8/16/24/32. Motion: one 250 ms easeOut on booking confirmation, skipped when reduced motion is on; the hero carousel never autoplays.
