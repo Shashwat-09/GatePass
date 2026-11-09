@@ -103,7 +103,7 @@
     $('loginMsg').textContent = '';
     try {
       const d = await api('user/login', { method: 'POST', body: JSON.stringify({ phone: $('phone').value.trim(), otp: $('otp').value.trim() }) });
-      if (!['staff', 'admin'].includes(d.user.role)) { $('loginMsg').textContent = 'This account does not have gate access.'; return; }
+      if (!['staff', 'organiser', 'admin'].includes(d.user.role)) { $('loginMsg').textContent = 'This account does not have gate access.'; return; }
       S.setItem('gp_access', d.accessToken); S.setItem('gp_refresh', d.refreshToken); S.setItem('gp_role', d.user.role);
       await loadEvents();
     } catch (e) { $('loginMsg').textContent = e.message; }
@@ -135,7 +135,7 @@
     state.eventId = id;
     S.setItem('gp_event', id); S.setItem('gp_event_title', title);
     $('evTitle').textContent = title;
-    $('export').hidden = S.getItem('gp_role') !== 'admin';
+    $('export').hidden = !['admin', 'organiser'].includes(S.getItem('gp_role'));
     show('scan');
     state.manifest = (await idb.get('manifest', id)) || null;
     await downloadList();

@@ -210,7 +210,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `qrToken`: superseded by the Ed25519 `GP2` format — see §8.11.
 - `GET api/invoices/<bookingId>.pdf?exp&sig` → tax invoice PDF. Links are HMAC-signed (`URL_SIGNING_SECRET`) and valid 7 days; they are re-issued with every ticket list.
 
-**Gate check-in (staff/admin role) — interim until the seller app**
+**Gate check-in (staff, organiser, admin)** — used by GatePass Organiser (docs/12) and the `/gate` PWA. Staff and admins can work any live event; organisers only their own (`GET api/gate/events` lists only theirs, and the other gate calls return 403 for anyone else's event).
 - Web scanner at `/gate` (camera via BarcodeDetector on Chrome/Android, or manual entry).
 - `GET api/gate/events` · `GET api/gate/events/{id}/stats` → `{entriesTotal, entriesUsed}`.
 - `POST api/gate/scan` `{qrToken, eventId, entries?}` → `{result: admitted|already_used|wrong_event|invalid|not_active, message, ticket}`. Entry counting is a single atomic `UPDATE … WHERE entriesUsed + n <= entriesTotal`, so concurrent scans can't double-admit. Every scan is written to `check_ins`.
@@ -227,7 +227,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 ## 8.11 As built (v0.3) — QR, offline entry, sharing, notifications, exports
 **QR tokens (replaces the HMAC format in §8.10):** `GP2.<ticketId>.<eventId>.<nonce>.<sig>` — ids as 22-char base64url, 96-bit random nonce, `sig` = Ed25519 over the first four parts with `TICKET_SIGNING_KEY`. Unique per issue (unique DB index) and re-issued whenever units leave the ticket. Gates verify offline with the public key only.
 
-**Gate (staff/admin)**
+**Gate (staff, organiser for own events, admin)**
 - `GET api/gate/events/{id}/manifest` → `{eventId, title, generatedAt, publicKey (raw Ed25519, base64url), tickets:[{id, h: sha256(qrToken), used, total, status, label}]}` — hashes only, never raw tokens.
 - `POST api/gate/sync` `{eventId, deviceId, scans:[{localId, qrToken, entries, scannedAt}]}` (≤500) → `{results:[{localId, result, message, conflict?, duplicate?}]}`. Each scan is re-applied atomically; `(deviceId, localId)` is unique so re-sending is a no-op; `conflict: true` = admitted offline but the server can't honour it (used elsewhere).
 - Scan results add messages for passed-on tickets ("These tickets were passed on…") and stale QRs.

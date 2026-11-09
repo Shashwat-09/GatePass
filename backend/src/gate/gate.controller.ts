@@ -5,8 +5,10 @@ import {
 } from 'class-validator';
 import { createHash } from 'crypto';
 import { DataSource, MoreThanOrEqual, Not } from 'typeorm';
+import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { verifyTicketQr } from '../common/signing';
+import { eventFor } from '../common/event-access';
 import { config } from '../config/config';
 import { istDate, istDayRange } from '../common/ist';
 import { CheckIn, EventEntity, EventSession, Ticket } from '../db/entities';
@@ -38,21 +40,23 @@ export type ScanResult = 'admitted' | 'already_used' | 'wrong_event' | 'invalid'
 export const tokenHash = (qr: string) => createHash('sha256').update(qr.trim()).digest('hex');
 
 /**
- * Event check-in for gate staff (role staff/admin), used by the /gate PWA.
+ * Event check-in, used by the /gate PWA and the GatePass Organiser app.
+ * Staff and admins can scan at any live event; organisers only at their own.
  * Online: POST scan. Offline: download the manifest before doors open, scan
  * against it on the device, then POST sync when the network returns.
  */
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('staff', 'admin')
+@Roles('staff', 'organiser', 'admin')
 @Controller('gate')
 export class GateController {
   constructor(private readonly ds: DataSource) {}
 
   @Get('events')
-  async upcoming() {
+  async upcoming(@Req() req: AuthedRequest) {
     const since = new Date(Date.now() - 24 * 3600_000);
+    const own = req.userRole === 'organiser' ? { organiserId: req.userId! } : {};
     const list = await this.ds.getRepository(EventEntity).find({
-      where: { status: 'live', startDate: MoreThanOrEqual(since) },
+      where: { status: 'live', startDate: MoreThanOrEqual(since), ...own },
       order: { startDate: 'ASC' },
       take: 50,
     });
@@ -60,7 +64,8 @@ export class GateController {
   }
 
   @Get('events/:id/stats')
-  async stats(@Param('id', new ParseUUIDPipe()) id: string) {
+  async stats(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    await this.access(req, id);
     const r = await this.ds.getRepository(Ticket).createQueryBuilder('t')
       .select('COALESCE(SUM(t."entriesTotal"),0)', 'total')
       .addSelect('COALESCE(SUM(t."entriesUsed"),0)', 'used')
@@ -75,8 +80,8 @@ export class GateController {
    * (never the token itself, so a lost device can't be used to print tickets).
    */
   @Get('events/:id/manifest')
-  async manifest(@Param('id', new ParseUUIDPipe()) id: string) {
-    const event = await this.ds.getRepository(EventEntity).findOneByOrFail({ id });
+  async manifest(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    const event = await this.access(req, id);
     const tickets = await this.ds.getRepository(Ticket).find({ where: { eventId: id, status: Not('transferred') } });
     const today = istDate(new Date());
     const [ts, te] = istDayRange(today);
@@ -106,6 +111,7 @@ export class GateController {
   @HttpCode(200)
   @RateLimit({ bucket: 'gate-scan', limit: 600, windowSec: 60 })
   async scan(@Req() req: AuthedRequest, @Body() dto: ScanDto) {
+    await this.access(req, dto.eventId);
     return this.apply(req.userId!, dto.eventId, dto.qrToken, dto.entries ?? 1);
   }
 
@@ -119,6 +125,7 @@ export class GateController {
   @HttpCode(200)
   @RateLimit({ bucket: 'gate-sync', limit: 120, windowSec: 60 })
   async sync(@Req() req: AuthedRequest, @Body() dto: SyncDto) {
+    await this.access(req, dto.eventId);
     const results: { localId: string; result: string; message?: string; duplicate?: boolean; conflict?: boolean }[] = [];
     for (const s of dto.scans) {
       const prev = await this.ds.getRepository(CheckIn).findOneBy({ deviceId: dto.deviceId, localId: s.localId });
@@ -132,6 +139,14 @@ export class GateController {
       results.push({ localId: s.localId, result: r.result, message: r.message, conflict: r.result !== 'admitted' });
     }
     return { results, synced: results.length };
+  }
+
+  /** Organisers may only work their own events' gates. */
+  private async access(req: AuthedRequest, eventId: string) {
+    if (req.userRole === 'organiser') return eventFor(this.ds.manager, req, eventId);
+    const ev = await this.ds.getRepository(EventEntity).findOneBy({ id: eventId });
+    if (!ev) throw new ApiError('NOT_FOUND', 'Event not found');
+    return ev;
   }
 
   private async apply(

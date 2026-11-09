@@ -86,4 +86,40 @@ describe('organiser tools (e2e)', () => {
     const customer = await login(ctx);
     await api(customer).get('events').expect(403);
   });
+
+  it('organisers check in guests at their own events only (gate)', async () => {
+    const o = api(org);
+    const start = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const ev = (await o.post('events', { title: 'Gate Night', cityId, venueName: 'Hall 2', startDate: start }).expect(200)).body.data;
+    const tier = (await o.post(`events/${ev.id}/tiers`, { name: 'Entry', pricePaise: 0, quantity: 20 }).expect(200)).body.data;
+    await o.post(`events/${ev.id}/status`, { status: 'live' }).expect(200);
+    const guest = `96${String(Date.now()).slice(-8)}`;
+    const comp = (await o.post(`events/${ev.id}/issue`, { tierId: tier.id, quantity: 2, phone: guest, kind: 'comp' }).expect(200)).body.data;
+    const t = await ctx.ds.getRepository(Ticket).findOneByOrFail({ bookingId: comp.bookingId });
+    const gate = (s: Session) => ({
+      get: (p: string) => ctx.http.get(`/api/gate/${p}`).set(auth(s.token)),
+      post: (p: string, b: object) => ctx.http.post(`/api/gate/${p}`).set(auth(s.token)).send(b),
+    });
+
+    const list = (await gate(org).get('events').expect(200)).body.data.items as { id: string }[];
+    expect(list.map((e) => e.id)).toContain(ev.id);
+    const neon = await eventBySlug(ctx, 'neon-nights');
+    expect(list.map((e) => e.id)).not.toContain(neon.id);
+    expect((await gate(org).get(`events/${ev.id}/manifest`).expect(200)).body.data.tickets).toHaveLength(1);
+
+    // Another organiser can't see the list, scan or sync here.
+    await gate(other).get(`events/${ev.id}/manifest`).expect(403);
+    await gate(other).get(`events/${ev.id}/stats`).expect(403);
+    await gate(other).post('scan', { qrToken: t.qrToken, eventId: ev.id }).expect(403);
+    await gate(other).post('sync', { eventId: ev.id, deviceId: 'dev-1', scans: [] }).expect(403);
+    await gate(org).get(`events/${neon.id}/manifest`).expect(403);
+
+    const r = (await gate(org).post('scan', { qrToken: t.qrToken, eventId: ev.id }).expect(200)).body.data;
+    expect(r).toMatchObject({ result: 'admitted', message: 'Admit 1. 1 more on this ticket.' });
+    expect((await gate(org).get(`events/${ev.id}/stats`).expect(200)).body.data).toEqual({ entriesTotal: 2, entriesUsed: 1 });
+
+    // Customers still have no gate access.
+    const customer = await login(ctx);
+    await gate(customer).get('events').expect(403);
+  });
 });

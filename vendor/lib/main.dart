@@ -1,0 +1,38 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import 'app/app.dart';
+import 'app/session.dart';
+import 'core/api_client.dart';
+import 'core/config.dart';
+import 'core/token_store.dart';
+import 'data/demo_api.dart';
+import 'data/vendor_api.dart';
+import 'features/auth/login_screen.dart';
+import 'gate/gate_store.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  VendorConfig.assertReleaseConfig();
+
+  final VendorApi api;
+  final GateStore store;
+  if (VendorConfig.demo) {
+    api = DemoVendorApi();
+    store = MemoryGateStore();
+  } else {
+    final tokens = SecureTokenStore();
+    await tokens.load();
+    final client = ApiClient(tokens);
+    // A session that can't be renewed ends here: back to sign-in.
+    client.onSessionExpired = () {
+      Session.to.me.value = null;
+      Get.offAll(() => const LoginScreen());
+      Get.snackbar('Signed out', 'Your session ended. Please sign in again.', snackPosition: SnackPosition.BOTTOM);
+    };
+    api = HttpVendorApi(client, tokens);
+    store = FileGateStore();
+  }
+  Get.put(Session(api: api, store: store), permanent: true);
+  runApp(const OrganiserApp());
+}

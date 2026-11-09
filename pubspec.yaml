@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  gatepass_ui:
+    path: packages/gatepass_ui
 
   # State / routing / DI
   get: ^4.6.6

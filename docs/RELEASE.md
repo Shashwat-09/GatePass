@@ -73,3 +73,25 @@ Size: current release APKs are ~19–23 MB per ABI (arm64 21.5 MB) — under the
 - Data encrypted in transit: **Yes** (HTTPS only; cleartext disabled in release).
 - Users can request deletion: **Yes** (in-app, immediate).
 - Advertising ID: **not used** (permission removed from the manifest).
+
+## iOS (both apps) — no Mac needed
+`.github/workflows/ios.yml` builds both apps on GitHub's macOS runners:
+- **Every push / PR:** an unsigned release build of GatePass and GatePass Organiser. This proves they compile and link their pods. The build is uploaded as an artifact but **can't be installed** on its own.
+- **TestFlight:** once the secrets below are set, each run also archives, signs (automatic signing via the API key) and uploads both apps to TestFlight. You then install them on any iPhone with the TestFlight app.
+
+One-time owner steps:
+- [ ] Join the Apple Developer Program (organisation account, ~₹8,700/yr).
+- [ ] In App Store Connect → Apps, create two apps with bundle ids `com.gatepass.app` and `com.gatepass.organiser` (or the final ids from docs/09; change them in both Xcode projects first).
+- [ ] App Store Connect → Users and Access → Integrations → **Team key** with the *App Manager* role. Download the `.p8`.
+- [ ] GitHub repo → Settings → Secrets and variables → Actions: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the file's contents), `IOS_BASE_URL` (https).
+- [ ] Customer app push: in Firebase add an iOS app (`com.gatepass.app`), put `GoogleService-Info.plist` in `ios/Runner/`, and upload an APNs key (Apple Developer → Keys) to Firebase. `Runner.entitlements` already asks for push. Without the plist, the app runs with analytics and push off.
+- [ ] Test on a real iPhone: sign-in, booking with Razorpay test mode, tickets offline, and for Organiser the camera permission prompt and scanning.
+
+Local alternative on a Mac: `flutter build ipa --release --dart-define=BASE_URL=https://api.yourdomain.com/` (in the repo root or `vendor/`), then upload with Transporter.
+
+## GatePass Organiser (Android)
+Same keystore steps as above, with `vendor/android/key.properties`, then:
+```bash
+cd vendor && flutter build appbundle --release --dart-define=BASE_URL=https://api.yourdomain.com/
+```
+Play Console: a second app, `com.gatepass.organiser`. Data safety: phone number (account), camera (scanning, not stored). It can be an unlisted or internal-testing app for staff.

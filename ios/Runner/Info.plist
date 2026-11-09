@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach a photo or document an organiser asks for when you register.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo of a document an organiser asks for when you register.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Pick a friend to send tickets to.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Find events in your city.</string>
 	<key>NSCalendarsUsageDescription</key>

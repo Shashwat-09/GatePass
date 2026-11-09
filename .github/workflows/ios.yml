@@ -1,0 +1,100 @@
+name: iOS
+
+# Builds both iOS apps on a macOS runner (no Mac needed locally).
+#  * Always: an unsigned release build of each app — proves it compiles,
+#    links its CocoaPods and fits the size budget.
+#  * When the App Store Connect secrets below are set: a signed archive of
+#    each app uploaded to TestFlight. See docs/RELEASE.md §iOS.
+#      APPLE_TEAM_ID          10-character Team ID
+#      ASC_KEY_ID             App Store Connect API key ID
+#      ASC_ISSUER_ID          its issuer ID
+#      ASC_KEY_P8             the .p8 key file contents
+#      IOS_BASE_URL           https API base URL baked into TestFlight builds
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, release-readiness]
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GatePass (customer)
+            dir: .
+            artifact: gatepass-ios
+          - name: GatePass Organiser
+            dir: vendor
+            artifact: gatepass-organiser-ios
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    env:
+      HAS_SIGNING: ${{ secrets.ASC_KEY_ID != '' && secrets.APPLE_TEAM_ID != '' }}
+      BASE_URL: ${{ secrets.IOS_BASE_URL != '' && secrets.IOS_BASE_URL || 'https://api.staging.example.org/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Unsigned release build
+        run: flutter build ios --release --no-codesign --dart-define=BASE_URL=$BASE_URL
+      - name: Package unsigned .ipa (for inspection; can't be installed as is)
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr ${{ matrix.artifact }}-unsigned.ipa Payload
+          du -h ${{ matrix.artifact }}-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-unsigned
+          path: ${{ matrix.dir }}/${{ matrix.artifact }}-unsigned.ipa
+          retention-days: 7
+
+      # ── TestFlight (only when the secrets exist) ──
+      - name: App Store Connect key
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.ASC_KEY_P8 }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+      - name: Archive (automatic signing via the API key)
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          flutter build ios --release --config-only --build-number=${{ github.run_number }} --dart-define=BASE_URL=$BASE_URL
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -archivePath build/Runner.xcarchive -destination 'generic/platform=iOS' \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
+            archive
+      - name: Upload to TestFlight
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          cat > ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/Runner.xcarchive -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}

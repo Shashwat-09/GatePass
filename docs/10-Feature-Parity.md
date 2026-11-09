@@ -75,8 +75,8 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 
 | # | Feature (code evidence) | GatePass | Batch |
 |---|---|---|---|
-| 54 | WebView shell for `https://seller.showmates.in` with offline screen — `WebviewScreen`, `NoInternetScreen` | ➖ (our tools are web) | — |
-| 55 | JS bridge: **QR scanner** (`openQRScanner/closeScanner`), location, contacts permission, notification permission + FCM token — `bridge/js_bridge.dart` | ✅ scanner (works offline) | — |
+| 54 | WebView shell for `https://seller.showmates.in` with offline screen — `WebviewScreen`, `NoInternetScreen` | ✅ replaced by a native app, **GatePass Organiser** (`vendor/`, Android + iOS; docs/12) that works offline at the gate | v0.10 |
+| 55 | JS bridge: **QR scanner** (`openQRScanner/closeScanner`), location, contacts permission, notification permission + FCM token — `bridge/js_bridge.dart` | ✅ camera scanner in GatePass Organiser and the `/gate` PWA, both offline-capable (signed QRs + offline list + sync) | v0.10 |
 | 56 | Seller portal features (event setup, sales, payouts…) | Not in the APK — they live on the website, so they **cannot be recovered from the code**. GatePass builds its own organiser tools ✅ GatePass `/organiser` console + `api/organiser/*`: events (draft → live → postponed/cancelled with holder notices), ticket types, shows, comp/box-office tickets, sales summary, attendee report, approvals. Payouts: not built (needs a settlement provider) | B5 |
 
 ## Delivery plan

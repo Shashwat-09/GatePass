@@ -26,7 +26,9 @@ lib/
   services/ network/api_service.dart (ApiResult<T>), storage/local_storage.dart
   data/     models/models.dart, repositories/*.dart, mock_data.dart
   features/ <feature>/*_screen.dart  +  controllers/<feature>_controller.dart
-  widgets/  shared, themed building blocks
+  widgets/  shared, themed building blocks (common.dart / theme.dart re-export packages/gatepass_ui)
+packages/gatepass_ui/  design system shared by both apps
+vendor/                GatePass Organiser app (own pubspec; analyze/test inside it) — docs/12
 ```
 
 ## 4. How to add a feature (end-to-end recipe)
@@ -77,7 +79,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.9)
+## 9. Current status (v0.10)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -90,15 +92,17 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Attribution & links (v0.8): UTM/click-id/affiliate capture → clicks + booking source + organiser report; web-only events in an in-app web view; tickets/explore deep links.
 - ✅ Organiser tools (v0.8): `organiser` role scoped to own events; `/organiser` web console + `api/organiser/*` (events, ticket types, shows, status with holder notices, comp/box-office tickets, sales summary, approvals, report).
 - ✅ Design system (v0.9): Apple HIG redesign of the whole app (skill `.claude/skills/apple-design/`, review `docs/11-Design-Review.md`): semantic light/dark tokens (`context.colors`, WCAG AA), Apple type scale, Cupertino tab bar / large titles / segmented controls, inset grouped lists, ticket-stub signature. Screenshot harness: `flutter test test/shots --dart-define=SHOTS=true` → `build/shots/`.
+- ✅ GatePass Organiser (v0.10): native vendor app in `vendor/` (Android + iOS, `com.gatepass.organiser`; docs/12): organiser/staff sign-in, events + sales, camera check-in online **and offline** (offline list + Ed25519 + queued sync with conflict review), ticket requests, comp/box-office tickets, on-sale switches, event status, Excel report, demo mode (`USE_MOCK`). Gate API now open to organisers for their own events. Design system shared via `packages/gatepass_ui`.
+- ✅ iOS (v0.10): `.github/workflows/ios.yml` builds both apps unsigned on macOS runners; TestFlight upload once App Store Connect secrets are set (docs/RELEASE.md §iOS). Info.plist permission texts + push entitlement added.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 135 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + 30 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 139 (unit + e2e on real Postgres), organiser app 30 + 34 screenshot renders + live flow, client 76 (repositories, controller, widgets light/dark) + 30 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: payouts/settlements for organisers, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).
-- ⬜ iOS: configured but not built/tested (needs macOS + Xcode; Razorpay iOS pod).
+- ⬜ iOS: builds in CI (unsigned); still needs an Apple Developer account for TestFlight and a test on a real iPhone.
 
 ## 10. Naming & placeholders to replace
 - Name `GatePass` / id `com.gatepass.app` are defaults — see `docs/09-Decisions-and-Accounts.md` for every place to change.

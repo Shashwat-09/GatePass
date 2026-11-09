@@ -35,3 +35,4 @@ android/key.properties
 *.jks
 *.keystore
 dump.rdb
+vendor/android/key.properties
