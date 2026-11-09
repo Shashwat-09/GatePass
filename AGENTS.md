@@ -83,7 +83,7 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
 - ✅ Tickets: unique Ed25519-signed QR (`GP2…`, re-issued on share); invoice PDFs via signed links.
 - ✅ Offline entry: app keeps all upcoming tickets on the phone; `/gate` is a PWA that downloads the event list (QR hashes + public key), scans offline, and syncs idempotently with conflict review.
-- ✅ Sharing (v0.3): split/share by phone or link, auto-delivery on sign-in, claim-back while unclaimed, per-event limits; notifications inbox; Excel exports (customer history, admin event report).
+- ✅ Sharing (v0.3): split/share by phone or link, auto-delivery on sign-in, claim-back while unclaimed, unlimited sharing + re-sharing (optional per-event caps); notifications inbox; Excel exports (customer history, admin event report).
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.

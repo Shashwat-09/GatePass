@@ -32,7 +32,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built · ➖ intentionally different
 | F6 Approval-gated tickets ("request tickets", my requests) | ⬜ | `approval_requests` + organiser approve/deny | M |
 | F6 Post-event survey | ⬜ | | S |
 | **F7** My tickets (upcoming/history), QR, invoice | ✅ | Signed Ed25519 QR, PDF invoice, **offline copy of all upcoming tickets** | — |
-| **F7 Split ticket** (N of M to friends), limits | ✅ | By phone (auto-delivered on sign-in) or share link; per-event `allowTransfers`, `maxTransfersPerTicket`, `allowResplit` | — |
+| **F7 Split ticket** (N of M to friends), limits | ✅ | By phone (auto-delivered on sign-in) or share link; unlimited sharing and re-sharing by default, optional per-event caps (`allowTransfers`, `maxTransfersPerTicket`, `allowResplit`) | — |
 | **F7 Claim back** | ✅ ➖ | Allowed while unclaimed. Not after the friend accepts (prevents sell-then-revoke fraud) | — |
 | F7 Open shared ticket from a link | ✅ | `/t/<code>` page → `gatepass://claim`; manual code entry | — |
 | F7 Contact picker for split | ⬜ | Use the system picker (no READ_CONTACTS permission) | S |

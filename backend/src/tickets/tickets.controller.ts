@@ -41,7 +41,7 @@ export class TicketsController {
     return rows.map((t) => {
       const e = events.get(t.eventId);
       const canShare = !!e && e.allowTransfers && t.status === 'active' && (!t.parentTicketId || e.allowResplit)
-        && t.transfersOut < e.maxTransfersPerTicket;
+        && (e.maxTransfersPerTicket == null || t.transfersOut < e.maxTransfersPerTicket);
       return {
         id: t.id, bookingId: t.bookingId, eventId: t.eventId, eventTitle: t.eventTitle, venueName: t.venueName,
         tierName: t.tierName, seatLabel: t.seatLabel,

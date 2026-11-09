@@ -79,9 +79,10 @@ export class EventEntity {
   @Column({ type: 'text', nullable: true }) terms!: string | null;
   /** Ticket splitting/sharing rules (old app: splitLimitEnabled, maxSplitTransfers). */
   @Column({ default: true }) allowTransfers!: boolean;
-  @Column({ default: 10 }) maxTransfersPerTicket!: number;
-  /** Whether a received ticket may be passed on again (off = anti-scalping). */
-  @Column({ default: false }) allowResplit!: boolean;
+  /** Optional cap on how many times one ticket can be shared; null = unlimited (default). */
+  @Column({ type: 'int', nullable: true, default: null }) maxTransfersPerTicket!: number | null;
+  /** Whether received tickets may be passed on again (default yes; organisers can switch off). */
+  @Column({ default: true }) allowResplit!: boolean;
   @Column({ type: 'jsonb', default: () => "'[]'" }) faqs!: { q: string; a: string }[];
 }
 

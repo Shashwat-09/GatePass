@@ -150,7 +150,7 @@ Client storage (updates §4.5): tokens in `flutter_secure_storage` (Keystore/Key
 |---|---|
 | `ticket_transfers` (`fromTicketId`, `fromUserId`, `toUserId`, `toPhone`, `quantity`, `entries`, `status` pending/claimed/cancelled, `codeHash` unique, `createdTicketId`) | ticket sharing by phone or link |
 | `tickets.parentTicketId`, `receivedFromUserId`, `transfersOut`, `entryPerTicket`; status `transferred` | split lineage and limits |
-| `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` | organiser sharing rules |
+| `events.allowTransfers` (default on), `maxTransfersPerTicket` (null = unlimited, default), `allowResplit` (default on) | organiser sharing rules |
 | `notifications` (`userId`, `type`, `title`, `body`, `data`, `readAt`) | in-app inbox |
 | `check_ins.offline`, `deviceId`, `localId` (unique pair), `scannedAt` | offline scans synced from gate devices |
 

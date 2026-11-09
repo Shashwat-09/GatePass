@@ -15,7 +15,7 @@ Code can't make these choices or open these accounts. Each line shows the **defa
 | 9 | **Play Console account** | — | Create developer account (organisation), enrol in Play App Signing; see `docs/RELEASE.md` |
 | 10 | **Privacy policy & terms** | Drafts in `docs/legal/` (need legal review) | Publish at the URLs in row 7 |
 | 11 | **Fee & GST** | 3% convenience fee; 18% GST on (tickets + fee) — carried over from the original code | Backend `FEE_PCT`, `GST_PCT`. **Confirm with your accountant** (ticket GST rates and whether GST applies to the fee alone differ by case) |
-| 13 | **Ticket sharing rules** | Sharing on; ≤10 shares per ticket; received tickets can't be re-shared; claim-back only before the friend accepts | `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` per event |
+| 13 | **Ticket sharing rules** | Sharing on; **unlimited** shares per ticket; received tickets **can** be passed on; claim-back only before the friend accepts | `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` per event |
 | 12 | **Invoice seller details** | Placeholder | Backend `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_GSTIN` |
 
 ## Legacy reverse-engineering archive

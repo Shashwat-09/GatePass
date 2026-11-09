@@ -63,7 +63,7 @@ export class TransfersService {
       if (t.parentTicketId && !event.allowResplit) {
         throw new ApiError('VALIDATION_ERROR', 'Tickets you received can’t be passed on for this event');
       }
-      if (t.transfersOut >= event.maxTransfersPerTicket) {
+      if (event.maxTransfersPerTicket != null && t.transfersOut >= event.maxTransfersPerTicket) {
         throw new ApiError('VALIDATION_ERROR', `You can share this ticket at most ${event.maxTransfersPerTicket} times`);
       }
       const available = transferableUnits(t);

@@ -72,8 +72,8 @@ CREATE TABLE public.events (
     terms text,
     faqs jsonb DEFAULT '[]'::jsonb NOT NULL,
     "allowTransfers" boolean DEFAULT true NOT NULL,
-    "maxTransfersPerTicket" integer DEFAULT 10 NOT NULL,
-    "allowResplit" boolean DEFAULT false NOT NULL
+    "maxTransfersPerTicket" integer,
+    "allowResplit" boolean DEFAULT true NOT NULL
 );
 
 CREATE TABLE public.migrations (

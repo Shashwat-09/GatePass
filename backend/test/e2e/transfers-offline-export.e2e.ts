@@ -50,7 +50,7 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
 
     const got = (await mine(friend)).find((x: { receivedFrom: string | null }) => x.receivedFrom);
     expect(got).toMatchObject({ quantity: 2, entryTotal: 2, invoiceUrl: null });
-    expect(got.transferableUnits).toBe(0); // re-sharing received tickets is off by default
+    expect(got.transferableUnits).toBe(2); // received tickets can be passed on
 
     const inbox = (await ctx.http.get('/api/notifications').set(auth(friend.token)).expect(200)).body.data;
     expect(inbox.unread).toBeGreaterThanOrEqual(1);
@@ -63,6 +63,34 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     // the old QR no longer gets anyone in
     const scan = await ctx.http.post('/api/gate/scan').set(auth(staff.token)).send({ qrToken: t.qrToken, eventId });
     expect(scan.body.data.result).toBe('invalid');
+  });
+
+  it('received tickets can be passed on again, and there is no limit on how many times', async () => {
+    const t = await buy(buyer, 14);
+    // 12 separate shares from one ticket (more than the old cap of 10)
+    for (let i = 0; i < 12; i++) await split(buyer, { ticketId: t.id, quantity: 1 }).expect(200);
+    const last = (await split(buyer, { ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200)).body.data;
+    expect(last.ticket.quantity).toBe(1);
+
+    // friend passes the ticket they received on to a third person
+    const received = (await mine(friend)).find((x: { receivedFrom: string | null; transferableUnits: number }) => x.receivedFrom && x.transferableUnits > 0);
+    const third = await login(ctx);
+    const pass = (await split(friend, { ticketId: received.id, quantity: 1, phone: third.phone }).expect(200)).body.data;
+    expect(pass).toMatchObject({ delivered: true, status: 'claimed' });
+    const thirds = await mine(third);
+    expect(thirds).toHaveLength(1);
+    expect(thirds[0].qrToken).toMatch(/^GP2\./);
+  });
+
+  it('organisers can still cap or switch off re-sharing per event', async () => {
+    await ctx.ds.getRepository(EventEntity).update({ id: eventId }, { maxTransfersPerTicket: 1, allowResplit: false });
+    const t = await buy(buyer, 3);
+    await split(buyer, { ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200);
+    await split(buyer, { ticketId: t.id, quantity: 1 }).expect(400); // cap of 1 reached
+    const got = (await mine(friend)).filter((x: { receivedFrom: string | null }) => x.receivedFrom).pop();
+    expect(got.transferableUnits).toBe(0);
+    await split(friend, { ticketId: got.id, quantity: 1 }).expect(400);
+    await ctx.ds.getRepository(EventEntity).update({ id: eventId }, { maxTransfersPerTicket: null, allowResplit: true });
   });
 
   it('split to a phone that has no account yet: held, then delivered when they sign in', async () => {
