@@ -94,6 +94,17 @@ CREATE TABLE public.cities (
     lng double precision
 );
 
+CREATE TABLE public.device_tokens (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid NOT NULL,
+    token character varying NOT NULL,
+    platform character varying DEFAULT 'android'::character varying NOT NULL,
+    "deviceId" character varying,
+    "appVersion" character varying,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.event_artists (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     "eventId" uuid NOT NULL,
@@ -239,7 +250,8 @@ CREATE TABLE public.notifications (
     body text DEFAULT ''::text NOT NULL,
     data jsonb DEFAULT '{}'::jsonb NOT NULL,
     "readAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "pushedAt" timestamp with time zone
 );
 
 CREATE TABLE public.payment_events (
@@ -569,6 +581,9 @@ ALTER TABLE ONLY public.voucher_redemptions
 ALTER TABLE ONLY public.refresh_tokens
     ADD CONSTRAINT "PK_7d8bee0204106019488c4c50ffa" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.device_tokens
+    ADD CONSTRAINT "PK_84700be257607cfb1f9dc2e52c3" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.migrations
     ADD CONSTRAINT "PK_8c82d7f526340ab734260ea46be" PRIMARY KEY (id);
 
@@ -665,6 +680,8 @@ CREATE INDEX "IDX_499f672f9ab635111c6988727c" ON public.ticket_tiers USING btree
 
 CREATE INDEX "IDX_4c583ac21123a2b4d15a780e1c" ON public.approval_requests USING btree ("eventId");
 
+CREATE INDEX "IDX_511957e3e8443429dc3fb00120" ON public.device_tokens USING btree ("userId");
+
 CREATE INDEX "IDX_51ed83c9a1acb790e7d51f1358" ON public.event_sessions USING btree ("eventId");
 
 CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
@@ -706,6 +723,8 @@ CREATE INDEX "IDX_8a101375d173c39a7c1d02c9d7" ON public.tickets USING btree ("ev
 CREATE INDEX "IDX_8e9a32f15bd2485ea908787b63" ON public.form_responses USING btree ("formId");
 
 CREATE INDEX "IDX_9291589e1aa8b24959a5e2cc2c" ON public.promo_codes USING btree ("eventId");
+
+CREATE UNIQUE INDEX "IDX_977e24c520c49436d08e5eeea8" ON public.device_tokens USING btree (token);
 
 CREATE UNIQUE INDEX "IDX_9823ddfd063ac6d07da7212a7f" ON public.event_surveys USING btree ("eventId");
 

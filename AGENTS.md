@@ -86,13 +86,14 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Sharing (v0.3): split/share by phone or link, auto-delivery on sign-in, claim-back while unclaimed, unlimited sharing + re-sharing (optional per-event caps); notifications inbox; Excel exports (customer history, admin event report).
 - ✅ Event formats (v0.7): multi-venue/date/time shows, season passes, bundles (one show per night); seat map v2 (aisles, row letters, accessible seats, gates, standing areas) with server seat holds; registration forms (per booking/attendee, conditional, uploads, versioned); request-to-book tickets; post-event surveys.
 - ✅ Partner vouchers (v0.8): campaigns, complimentary per booking, tabs, multi-unit sharing, rotating QR, counter redeem in `/gate`.
+- ✅ Push (v0.8): device tokens, FCM HTTP v1 outbox worker (off until `FCM_SERVICE_ACCOUNT`), tap routing from push and inbox, `device-id`/`selected-city` headers.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 129 (unit + e2e on real Postgres), client 68 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 131 (unit + e2e on real Postgres), client 72 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
-- ⬜ Next (see docs/10, batch B5): push (FCM) + tap routing, device headers, UTM/affiliate attribution, web-only events, organiser tools (event/session/tier CRUD, comp/box-office tickets).
+- ⬜ Next (see docs/10, batch B5): UTM/affiliate attribution, web-only events, organiser tools (event/session/tier CRUD, comp/box-office tickets).
 - ⬜ iOS: configured but not built/tested (needs macOS + Xcode; Razorpay iOS pod).
 
 ## 10. Naming & placeholders to replace

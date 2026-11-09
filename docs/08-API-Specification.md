@@ -307,3 +307,11 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `POST api/vouchers/redeem {code, units?}` (staff/admin): `code` is a voucher QR or reference. Expired QR → 400 "This QR has expired…"; used/expired/revoked → 409. The `/gate` scanner redeems voucher QRs online (they are not part of the offline list).
 - Organiser: `POST api/admin/voucher-campaigns`, `POST api/admin/voucher-campaigns/:id/issue {phones[], quantity}` → `{issued, pendingSignup}`, `POST api/admin/vouchers/:id/revoke`.
 
+## 8.19 As built (v0.8) — push notifications and device headers (legacy B5b)
+- The app sends `device-id` (random per install) and `selected-city` (city id) on every request, next to `platform` and `app-version`.
+- `POST api/user/device {token, platform: android|ios, deviceId?}` (auth) registers this install's FCM token (called on reaching Home and whenever the token rotates). A token belongs to one account: registering it from another account moves it. `DELETE api/user/device {token}` before signing out. Account deletion removes the user's tokens.
+- Every inbox notification is also pushed: the `notifications` table is the outbox (`pushedAt`). A worker sends unsent notifications under an hour old to all the user's devices, at most once (rows are claimed with `FOR UPDATE SKIP LOCKED`, so several API instances can run it). Tokens FCM reports as unregistered are deleted.
+- Push payload: `notification{title, body}`, Android channel `gatepass_default`, `data{type, notificationId, route, …notification data as strings}`. Notifications with an `eventId` also carry `eventSlug`.
+- `route` (also on inbox items from `GET api/notifications`): `tickets` · `requests` · `vouchers` · `voucher/<id>` · `event/<slug>` · `notifications`. The app opens that screen on tap.
+- Config: `FCM_SERVICE_ACCOUNT` (the Firebase service-account JSON, raw or base64) turns push on (`PUSH_DRIVER=fcm`); without it push is off and the inbox still works. `PUSH_INTERVAL_MS` (default 5000).
+

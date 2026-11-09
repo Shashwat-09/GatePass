@@ -100,6 +100,7 @@ class Endpoints {
   static const exportLink = 'api/ticket/export-link';
   static const unreadCount = 'api/notifications/unread-count';
   static const vouchers = 'api/vouchers/me';
+  static const device = 'api/user/device';
   static const voucherCounts = 'api/vouchers/me/counts';
   static const voucherList = 'api/vouchers/me/list';
   static const notifications = 'api/notifications';
@@ -115,4 +116,5 @@ class StorageKeys {
   static const ticketCache = 'ticket_cache';
   static const pendingClaim = 'pending_claim_code';
   static const pendingEvent = 'pending_event_slug';
+  static const deviceId = 'device_id'; // random per install, sent as the device-id header
 }

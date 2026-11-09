@@ -8,6 +8,7 @@ import 'package:gatepass/data/repositories/booking_repository.dart';
 import 'package:gatepass/services/analytics/analytics.dart';
 import 'package:gatepass/services/network/api_service.dart';
 import 'package:gatepass/services/payments/payment_launcher.dart';
+import 'package:gatepass/services/push/push_service.dart';
 import 'package:gatepass/services/storage/local_storage.dart';
 import 'package:gatepass/services/storage/token_store.dart';
 import 'package:get/get.dart';
@@ -75,7 +76,7 @@ class Deps {
   final FakePayments payments;
 }
 
-Future<Deps> setUpDeps({bool loggedIn = true}) async {
+Future<Deps> setUpDeps({bool loggedIn = true, PushService? push}) async {
   await sl.reset();
   Get.reset();
   final backend = FakeBackend();
@@ -84,7 +85,7 @@ Future<Deps> setUpDeps({bool loggedIn = true}) async {
   final storage = LocalStorage.memory();
   final api = ApiService(tokens, client: backend.client, appVersion: '9.9.9');
   final payments = FakePayments();
-  registerDependencies(tokens: tokens, storage: storage, api: api, analytics: Analytics.disabled(), payments: payments);
+  registerDependencies(tokens: tokens, storage: storage, api: api, analytics: Analytics.disabled(), payments: payments, push: push);
   return Deps(backend, tokens, storage, api, payments);
 }
 

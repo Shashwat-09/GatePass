@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { FormsModule } from './forms/forms.module';
 import { SurveyModule } from './survey/survey.module';
 import { VouchersModule } from './vouchers/vouchers.module';
+import { PushModule } from './push/push.module';
 import { BookingModule } from './booking/booking.module';
 import { CitiesModule } from './cities/cities.module';
 import { DbModule } from './db/db.module';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     ApprovalsModule,
     SurveyModule,
     VouchersModule,
+    PushModule,
   ],
 })
 export class AppModule {}

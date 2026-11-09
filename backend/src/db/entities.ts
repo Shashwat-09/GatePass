@@ -2,6 +2,7 @@ import type { PricePhase, TierOffer } from '../pricing/pricing';
 import {
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Entity,
   Index,
   PrimaryColumn,
@@ -465,7 +466,22 @@ export class Notification {
   @Column({ type: 'text', default: '' }) body!: string;
   @Column({ type: 'jsonb', default: () => "'{}'" }) data!: Record<string, unknown>;
   @Column({ type: 'timestamptz', nullable: true }) readAt!: Date | null;
+  /** Push outbox: set once the push for this notification was attempted. */
+  @Column({ type: 'timestamptz', nullable: true }) pushedAt!: Date | null;
   @Index() @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** A signed-in app install that can receive push notifications (FCM token). */
+@Entity('device_tokens')
+export class DeviceToken {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Index({ unique: true }) @Column() token!: string;
+  @Column({ type: 'varchar', default: 'android' }) platform!: 'android' | 'ios';
+  @Column({ type: 'varchar', nullable: true }) deviceId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) appVersion!: string | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+  @UpdateDateColumn({ type: 'timestamptz' }) updatedAt!: Date;
 }
 
 /** Audit log of every gate scan (admitted or rejected), online or synced from offline. */
@@ -699,5 +715,5 @@ export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
-  VoucherCampaign, Voucher, VoucherShare, VoucherRedemption,
+  VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken,
 ];

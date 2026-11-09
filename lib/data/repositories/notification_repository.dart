@@ -21,6 +21,17 @@ class NotificationRepository {
     return r.isOk ? ((r.data as Map<String, dynamic>)['unread'] as num?)?.toInt() ?? 0 : 0;
   }
 
+  /// This install's push token (after sign-in / when it rotates).
+  Future<void> registerDevice(String token, String platform) async {
+    if (AppConfig.useMockData) return;
+    await _api.request(Endpoints.device, method: Method.post, body: {'token': token, 'platform': platform});
+  }
+
+  Future<void> unregisterDevice(String token) async {
+    if (AppConfig.useMockData) return;
+    await _api.request(Endpoints.device, method: Method.delete, body: {'token': token}, retryOnAuth: false);
+  }
+
   Future<void> markAllRead() async {
     if (AppConfig.useMockData) return;
     await _api.request('${Endpoints.notifications}/mark-as-read', method: Method.post, body: {});

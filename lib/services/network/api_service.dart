@@ -44,6 +44,9 @@ class ApiService {
 
   Completer<bool>? _refreshing;
 
+  /// Extra headers on every request (device-id, selected-city).
+  Map<String, String> Function()? extraHeaders;
+
   Map<String, String> _headers({String? idempotencyKey}) => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -52,6 +55,7 @@ class ApiService {
         'accept-language': 'en',
         if (_tokens.accessToken != null) 'Authorization': 'Bearer ${_tokens.accessToken}',
         if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey,
+        ...?extraHeaders?.call(),
       };
 
   Future<ApiResult<dynamic>> request(

@@ -167,5 +167,10 @@ All data screens implement loading / loaded / empty / error-retry.
 - **My vouchers** (`VouchersScreen`, Profile → My vouchers) — tabs Active / Used / Expired with counts; cards with brand colour strip, logo, benefit, "N of M left", validity, NEW badge, "With your tickets" for complimentary ones; pull to refresh, load more; empty/error states per tab.
 - **Voucher** (`VoucherDetailScreen`) — brand header, benefit, units left, validity, min order / max discount; QR (refreshes each time it's opened) and reference; coupon code with copy; how to redeem; shared-with list; terms. "Share with a friend" → sheet with number (contact picker), optional name and units.
 
+### Notifications & push (v0.8)
+- Inbox items open their screen on tap (My tickets, My requests, voucher, event page). Push taps do the same, including the push that launched the app.
+- A push that arrives while the app is open shows as a snackbar with **View**.
+- Android 13+ asks for notification permission the first time Home opens after sign-in.
+
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
 Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.

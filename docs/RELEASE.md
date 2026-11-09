@@ -3,7 +3,8 @@
 ## 1. One-time setup
 - [ ] Owner decisions in `docs/09-Decisions-and-Accounts.md` (name, package id, domain, gateway, SMS).
 - [ ] Final icon & splash: replace `assets/brand/icon.png`, `icon_foreground.png`, `splash.png` (current ones are placeholders), then `dart run flutter_launcher_icons && dart run flutter_native_splash:create`.
-- [ ] Firebase: add `android/app/google-services.json` (+ iOS plist). Crashlytics/Analytics turn on automatically.
+- [ ] Firebase: add `android/app/google-services.json` (+ iOS plist). Crashlytics/Analytics/push turn on automatically.
+- [ ] Push: set `FCM_SERVICE_ACCOUNT` on the API (service-account JSON); test a booking confirmation push on a real phone (Android 13+ asks for notification permission); iOS needs an APNs key in Firebase.
 - [ ] Upload key (keep it safe; never commit):
   ```bash
   keytool -genkey -v -keystore ~/gatepass-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload

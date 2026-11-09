@@ -941,9 +941,11 @@ class NotificationModel {
   final String id;
   final String title;
   final String body;
-  final String type; // 'event' | 'ticket' | 'voucher' | 'generic'
+  final String type; // booking · ticket_received · transfer_* · event_on_sale · approval · voucher …
   final bool isRead;
   final DateTime? createdAt;
+  /// Where a tap goes (server-computed; see NotificationRouter).
+  final String? route;
 
   NotificationModel({
     required this.id,
@@ -952,6 +954,7 @@ class NotificationModel {
     this.type = 'generic',
     this.isRead = false,
     this.createdAt,
+    this.route,
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> j) => NotificationModel(
@@ -961,6 +964,7 @@ class NotificationModel {
         type: (j['type'] ?? 'generic').toString(),
         isRead: (j['isRead'] ?? false) == true,
         createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString()),
+        route: j['route']?.toString(),
       );
 }
 

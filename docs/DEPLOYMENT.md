@@ -30,6 +30,10 @@ All variables are documented in `backend/.env.example`. Minimum set:
 
 The API **refuses to start** if a production setting is unsafe (see API spec §8.10) — read the boot log.
 
+## Push notifications
+- Set `FCM_SERVICE_ACCOUNT` to the Firebase service-account JSON (raw or base64; keep it in the secret store). The API then sends every inbox notification as a push from the outbox worker (every `PUSH_INTERVAL_MS`, default 5 s). Without it, push is off and nothing else changes.
+- Outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com` must be allowed.
+
 ## Database
 - Migrations run on boot (`DB_MIGRATE_ON_BOOT=true`). To run them as a separate release step instead: set it `false` and run `node node_modules/typeorm/cli.js -d dist/db/data-source.js migration:run` in the image.
 - New schema change: edit `src/db/entities.ts`, then `npm run migration:generate -- src/db/migrations/<Name>`, review, commit, and regenerate `backend/schema.sql` (command at its top).

@@ -11,6 +11,7 @@ import '../../core/format.dart';
 import '../../data/repositories/booking_repository.dart';
 import 'edit_profile_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../../services/push/push_coordinator.dart';
 import '../requests/my_requests_screen.dart';
 import '../tickets/claim_screen.dart';
 import '../vouchers/vouchers_screen.dart';
@@ -93,6 +94,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
   Future<void> _logout() async {
+    await sl<PushCoordinator>().onSignedOut();
     await _auth.logout();
     sl<Analytics>().setUserId(null);
     Get.offAllNamed(Routes.login);

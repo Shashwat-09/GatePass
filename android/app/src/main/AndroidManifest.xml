@@ -2,6 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Release builds need network access (flutter create only adds this to debug/profile). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- City detection only needs approximate location -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- No ads: drop advertising-ID permissions merged in by Firebase Analytics
@@ -60,6 +61,9 @@
             android:value="2" />
         <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
         <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="gatepass_default"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

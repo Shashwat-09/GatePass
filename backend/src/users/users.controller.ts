@@ -7,7 +7,7 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
-import { AccountDeletion, City, RefreshToken, User } from '../db/entities';
+import { AccountDeletion, City, DeviceToken, RefreshToken, User } from '../db/entities';
 import { INDIAN_STATES } from '../common/states';
 
 /** dob (YYYY-MM-DD) must be a real date and the user at least `years` old. */
@@ -115,6 +115,7 @@ export class UsersController {
       });
       if (dto?.reason?.trim()) await m.insert(AccountDeletion, { reason: dto.reason.trim() });
       await m.update(RefreshToken, { userId: u.id, revokedAt: IsNull() }, { revokedAt: new Date() });
+      await m.delete(DeviceToken, { userId: u.id });
     });
     return { deleted: true };
   }

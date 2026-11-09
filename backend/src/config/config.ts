@@ -63,6 +63,8 @@ export interface AppConfig {
   /** Pre-checkout seat hold (POST booking/seat-reserve). */
   seatHoldSec: number;
   sweeperEnabled: boolean;
+  /** Push notifications: FCM (service account), `log` (tests/dev), or off. */
+  push: { driver: 'fcm' | 'log' | 'none'; intervalMs: number; fcm: { projectId: string; clientEmail: string; privateKey: string } | null };
   rateLimit: { mutatingPerMin: number; readPerMin: number };
   invoice: { sellerName: string; sellerAddress: string; gstin: string };
   app: {
@@ -94,6 +96,22 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 const WEAK = /change-?me|secret|password|example|dev-/i;
+
+/** FCM_SERVICE_ACCOUNT: the Firebase service-account JSON (raw or base64). Without it push is off. */
+function pushConfig(env: string, errors: string[]): AppConfig['push'] {
+  const intervalMs = Number(process.env.PUSH_INTERVAL_MS ?? 5000);
+  const raw = process.env.FCM_SERVICE_ACCOUNT?.trim();
+  const driver = (process.env.PUSH_DRIVER ?? (raw ? 'fcm' : env === 'test' ? 'log' : 'none')) as 'fcm' | 'log' | 'none';
+  if (driver !== 'fcm') return { driver, intervalMs, fcm: null };
+  try {
+    const j = JSON.parse(raw!.startsWith('{') ? raw! : Buffer.from(raw!, 'base64').toString('utf8')) as Record<string, string>;
+    if (!j.project_id || !j.client_email || !j.private_key) throw new Error('missing fields');
+    return { driver, intervalMs, fcm: { projectId: j.project_id, clientEmail: j.client_email, privateKey: j.private_key } };
+  } catch (e) {
+    errors.push(`FCM_SERVICE_ACCOUNT is not a valid service-account JSON (${(e as Error).message})`);
+    return { driver: 'none', intervalMs, fcm: null };
+  }
+}
 
 function secret(name: string, isProd: boolean, errors: string[]): string {
   const v = str(name);
@@ -192,6 +210,7 @@ export function loadConfig(): AppConfig {
     uploadDir: process.env.UPLOAD_DIR || 'uploads',
     seatHoldSec: num('SEAT_HOLD_SECONDS', 600),
     sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test'),
+    push: pushConfig(env, errors),
     rateLimit: {
       mutatingPerMin: num('RATE_LIMIT_MUTATING_PER_MIN', 60),
       readPerMin: num('RATE_LIMIT_READ_PER_MIN', 300),

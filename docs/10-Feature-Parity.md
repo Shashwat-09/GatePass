@@ -15,7 +15,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 4 | Profile edit: first/last name, email, DOB (DD-MM-YYYY), gender, **address** (house, street, locality, city, state, **PIN code**) — `ProfileController.isValidPinCode…`, `EditProfileBottomSheet` | ✅ | B3 |
 | 5 | **Member ID** shown on profile ("Mates ID : #") — `user_data_response.matesId` | ✅ | B3 |
 | 6 | Delete account **with a reason** ("Enter your reason") — `ProfileController.deleteAccount/isValidFeedback` | ✅ | B3 |
-| 7 | Device headers: `device-id`, `fcm-token`, `selected-city` — `common_values` | 🟡 | B5 |
+| 7 | Device headers: `device-id`, `fcm-token`, `selected-city` — `common_values` | ✅ `device-id` (random per install) + `selected-city` on every request; FCM token via `POST api/user/device` | B5 |
 | **Location** ||||
 | 8 | GPS city detect with reverse geocode, "city not supported" fallback — `LocationController.getCityFromLocation/_resolveSupportedCityName` | ✅ | B3 |
 | 9 | Top cities + city search — `getTopCitiesApi`, `searchCitiesListApi` | ✅ | B3 |
@@ -65,8 +65,8 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
 | 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ✅ campaigns (brand, colour, benefit, min order, max discount, validity, terms, coupon code), complimentary per booking or issued to numbers; Active/Used/Expired tabs + counts; multi-unit; share units by number (also before sign-up); QR rotates on every open (5-min, Ed25519); counter redeem via `/gate` by QR or reference; revoke | B5 |
 | **Engagement** ||||
-| 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | 🟡 inbox | B5 |
-| 50 | **Push notifications** (FCM, local notifications, channel) | ⬜ | B5 |
+| 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | ✅ server-computed `route` (tickets, requests, vouchers, voucher, event, inbox) used by inbox and push taps | B5 |
+| 50 | **Push notifications** (FCM, local notifications, channel) | ✅ FCM HTTP v1 from a transactional outbox, `gatepass_default` channel, Android 13 permission, foreground banner; on once Firebase config + `FCM_SERVICE_ACCOUNT` exist | B5 |
 | 51 | **Force update** — `api/app-update` (min version, force flag, store URL), `AppUpdate` screen | ✅ | B3 |
 | 52 | Deep links: event, explore city, my-tickets, share-tickets; unresolved → web view | 🟡 claim links | B5 |
 | 53 | Marketing attribution: UTM / fbclid / gclid capture, Meta events, affiliate click tracking — `meta_attribution_service`, `trackAffiliateClickApi` | ⬜ (analytics events ✅) | B5 |

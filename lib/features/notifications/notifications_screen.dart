@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+import '../../services/push/notification_router.dart';
 import '../../app/theme.dart';
 import '../../core/di.dart';
 import '../../data/models/models.dart';
@@ -76,15 +77,23 @@ class NotificationsScreen extends StatelessWidget {
               fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700)),
       subtitle: Text('${n.body}\n$when'),
       isThreeLine: true,
+      onTap: () => NotificationRouter.open(n.route),
     );
   }
 
   IconData _iconFor(String type) {
     switch (type) {
       case 'ticket':
+      case 'booking':
+      case 'ticket_received':
+      case 'transfer_claimed':
+      case 'transfer_returned':
         return Icons.confirmation_number_outlined;
       case 'event':
+      case 'event_on_sale':
         return Icons.event_outlined;
+      case 'approval':
+        return Icons.how_to_reg_outlined;
       case 'voucher':
         return Icons.card_giftcard;
       default:

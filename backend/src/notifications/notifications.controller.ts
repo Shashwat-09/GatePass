@@ -1,3 +1,4 @@
+import { routeFor } from '../push/push.service';
 import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ArrayMaxSize, IsArray, IsOptional, IsUUID } from 'class-validator';
@@ -29,7 +30,7 @@ export class NotificationsController {
     return {
       ...paged(
         rows.map((n) => ({
-          id: n.id, type: n.type, title: n.title, body: n.body, data: n.data,
+          id: n.id, type: n.type, title: n.title, body: n.body, data: n.data, route: routeFor(n.type, n.data ?? {}),
           isRead: n.readAt !== null, createdAt: n.createdAt.toISOString(),
         })),
         q,
