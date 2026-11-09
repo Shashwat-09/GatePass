@@ -1,6 +1,6 @@
 import { DataSource } from 'typeorm';
 import {
-  Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, EventSurvey, PromoCode, RegistrationForm, SeatReservation, SeatSection, Tier,
+  Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, EventSurvey, PromoCode, RegistrationForm, VoucherCampaign, SeatReservation, SeatSection, Tier,
 } from './entities';
 
 /**
@@ -159,6 +159,14 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
         ] },
         { key: 'comments', label: 'Anything else?', type: 'textarea', maxLength: 500 },
       ],
+    }));
+
+    // Partner voucher: complimentary with every Neon Nights booking.
+    await m.save(m.create(VoucherCampaign, {
+      name: 'Neon Nights x Volt', brandName: 'Volt Energy', brandLogoUrl: 'https://picsum.photos/seed/volt/200/200', accentColor: '#16A34A',
+      benefitType: 'freebie', benefitValue: 0, displayLabel: 'Free energy drink', couponCode: null,
+      redemptionInstructions: 'Show the QR at the Volt counter near Gate 1.', terms: 'One drink per unit. Not exchangeable for cash.',
+      validFrom: null, validUntil: new Date(inDays(7).getTime() + 12 * 3600_000), canSplit: true, eventId: neon.id, unitsPerIssue: 2,
     }));
 
     // Pricing demo: offer on Neon General, phases on Citadel Standing, VIP per-user cap.

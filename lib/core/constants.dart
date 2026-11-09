@@ -100,6 +100,8 @@ class Endpoints {
   static const exportLink = 'api/ticket/export-link';
   static const unreadCount = 'api/notifications/unread-count';
   static const vouchers = 'api/vouchers/me';
+  static const voucherCounts = 'api/vouchers/me/counts';
+  static const voucherList = 'api/vouchers/me/list';
   static const notifications = 'api/notifications';
 }
 

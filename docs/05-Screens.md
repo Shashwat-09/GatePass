@@ -163,5 +163,9 @@ All data screens implement loading / loaded / empty / error-retry.
 - **My requests** (`MyRequestsScreen`, Profile → My requests) — cards with status chip (Pending review / Approved / Rejected / Cancelled / Booked), rejection reason, "Withdraw request" (pending) and "Book now" (approved paid tickets); load more.
 - **Share feedback** (`SurveyScreen`) — from the ticket screen once the event has started: questions or a link to the organiser's form; thank-you view with optional CTA / auto-redirect.
 
+### Vouchers (v0.8)
+- **My vouchers** (`VouchersScreen`, Profile → My vouchers) — tabs Active / Used / Expired with counts; cards with brand colour strip, logo, benefit, "N of M left", validity, NEW badge, "With your tickets" for complimentary ones; pull to refresh, load more; empty/error states per tab.
+- **Voucher** (`VoucherDetailScreen`) — brand header, benefit, units left, validity, min order / max discount; QR (refreshes each time it's opened) and reference; coupon code with copy; how to redeem; shared-with list; terms. "Share with a friend" → sheet with number (contact picker), optional name and units.
+
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
 Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.

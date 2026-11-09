@@ -612,8 +612,92 @@ export class SurveyResponse {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/**
+ * Partner-brand voucher campaign (legacy `voucher_response`): what the
+ * voucher gives, branding, validity, and who gets it (issued by the organiser,
+ * or one per confirmed booking for `eventId`).
+ */
+@Entity('voucher_campaigns')
+export class VoucherCampaign {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column() name!: string;
+  @Column() brandName!: string;
+  @Column({ type: 'varchar', nullable: true }) brandLogoUrl!: string | null;
+  @Column({ type: 'varchar', nullable: true }) accentColor!: string | null;
+  @Column({ type: 'varchar', nullable: true }) backgroundImageUrl!: string | null;
+  /** percentage | flat | freebie */
+  @Column({ type: 'varchar', default: 'freebie' }) benefitType!: 'percentage' | 'flat' | 'freebie';
+  /** Percent, or paise for `flat`. */
+  @Column({ default: 0 }) benefitValue!: number;
+  /** e.g. "Free coffee", "20% off up to ₹200". */
+  @Column() displayLabel!: string;
+  @Column({ type: 'int', nullable: true }) minOrderPaise!: number | null;
+  @Column({ type: 'int', nullable: true }) maxDiscountPaise!: number | null;
+  /** Shared partner coupon code shown to the holder (optional). */
+  @Column({ type: 'varchar', nullable: true }) couponCode!: string | null;
+  @Column({ type: 'text', default: '' }) redemptionInstructions!: string;
+  @Column({ type: 'text', default: '' }) terms!: string;
+  @Column({ default: 1 }) termsVersion!: number;
+  @Column({ type: 'timestamptz', nullable: true }) validFrom!: Date | null;
+  @Column({ type: 'timestamptz' }) validUntil!: Date;
+  @Column({ default: true }) canSplit!: boolean;
+  /** Complimentary with tickets: one voucher (of `unitsPerIssue`) per confirmed booking for this event. */
+  @Index() @Column({ type: 'uuid', nullable: true }) eventId!: string | null;
+  @Column({ default: 1 }) unitsPerIssue!: number;
+  @Column({ default: true }) isActive!: boolean;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+export type VoucherStatus = 'active' | 'redeemed' | 'revoked' | 'cancelled';
+
+/** A holder's voucher: `quantity` units, some used at the counter, some shared on. */
+@Entity('vouchers')
+export class Voucher {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) campaignId!: string;
+  /** Null while a share waits for the recipient to sign up (see `pendingPhone`). */
+  @Index() @Column({ type: 'uuid', nullable: true }) ownerUserId!: string | null;
+  @Index() @Column({ type: 'varchar', nullable: true }) pendingPhone!: string | null;
+  /** Human reference, e.g. "GV-7KQ2M9XA" (also typed at the counter). */
+  @Index({ unique: true }) @Column() ref!: string;
+  @Column() quantity!: number;
+  @Column({ default: 0 }) usedUnits!: number;
+  @Column({ default: 0 }) sharedUnits!: number;
+  @Column({ type: 'varchar', default: 'active' }) status!: VoucherStatus;
+  /** Booking that earned it (complimentary vouchers). */
+  @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) parentVoucherId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) receivedFromUserId!: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) seenAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) redeemedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) issuedAt!: Date;
+}
+
+/** Units passed from one voucher to someone else (shown as "Shared with"). */
+@Entity('voucher_shares')
+export class VoucherShare {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) voucherId!: string;
+  @Column({ type: 'uuid' }) childVoucherId!: string;
+  @Column() recipientPhone!: string;
+  @Column({ type: 'varchar', nullable: true }) recipientName!: string | null;
+  @Column() units!: number;
+  @CreateDateColumn({ type: 'timestamptz' }) sharedAt!: Date;
+}
+
+/** Counter redemption log (who redeemed how many units, when). */
+@Entity('voucher_redemptions')
+export class VoucherRedemption {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) voucherId!: string;
+  @Column() units!: number;
+  @Column({ type: 'uuid' }) staffUserId!: string;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
+  VoucherCampaign, Voucher, VoucherShare, VoucherRedemption,
 ];

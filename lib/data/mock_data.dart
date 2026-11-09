@@ -92,18 +92,10 @@ class MockData {
 
   static final vouchers = <VoucherModel>[
     VoucherModel(
-      id: 'VCH-100',
-      title: 'Welcome voucher',
-      redeemCode: 'WELCOME-2K4F',
-      balanceUnits: 2,
-      expiry: DateTime.now().add(const Duration(days: 60)),
-    ),
-    VoucherModel(
-      id: 'VCH-101',
-      title: 'Referral reward',
-      redeemCode: 'REF-9ZQA',
-      balanceUnits: 1,
-      expiry: DateTime.now().add(const Duration(days: 20)),
+      id: 'VCH-100', voucherRef: 'GV-DEMO2K4F', brandName: 'Volt Energy', displayLabel: 'Free energy drink', accentColor: '#16A34A',
+      quantity: 2, remainingCount: 2, canSplit: true, canRedeem: true, complimentary: true, daysRemaining: 7,
+      validUntil: DateTime.now().add(const Duration(days: 7)),
+      qrPayload: 'GV1.demo', redemptionInstructions: 'Show the QR at the counter.',
     ),
   ];
 

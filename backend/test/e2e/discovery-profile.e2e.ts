@@ -1,3 +1,4 @@
+import { istDate, istDayRange } from '../../src/common/ist';
 import { AccountDeletion, EventEntity } from '../../src/db/entities';
 import { auth, bootApp, Ctx, eventBySlug, login, tierByName } from '../helpers';
 
@@ -48,7 +49,10 @@ describe('profile, discovery, location, app config (e2e)', () => {
     expect(cheap).toEqual(expect.arrayContaining(['standup-central', 'indie-folk-evening']));
     expect(cheap).not.toContain('citadel-arena-tour');
     const ev = await eventBySlug(ctx, 'standup-central');
-    await ctx.ds.getRepository(EventEntity).update({ id: ev.id }, { startDate: new Date(Date.now() + 3600_000), endDate: new Date(Date.now() + 3 * 3600_000) });
+    // Later today in IST, whatever the time of day the suite runs.
+    const istDayEnd = istDayRange(istDate(new Date()))[1].getTime();
+    const start = Math.min(Date.now() + 3600_000, istDayEnd - 60_000);
+    await ctx.ds.getRepository(EventEntity).update({ id: ev.id }, { startDate: new Date(start), endDate: new Date(start + 2 * 3600_000) });
     const today = (await ctx.http.get('/api/events?day=today')).body.data.items.map((e: { slug: string }) => e.slug);
     expect(today).toContain('standup-central');
     expect(today).not.toContain('citadel-arena-tour');

@@ -232,6 +232,20 @@
     state.busy = true; state.last = { code, at: Date.now() };
     const n = Math.max(1, Math.min(50, Number($('entries').value) || 1));
     let r; let offline = false;
+    if (code.startsWith('GV1.') || /^GV-[A-Z0-9]{8}$/i.test(code)) {
+      // Partner voucher: redeemed online only (its QR rotates and expires in minutes).
+      try {
+        if (!navigator.onLine) throw new NetError('offline');
+        const v = await api('vouchers/redeem', { method: 'POST', body: JSON.stringify({ code, units: n }), timeout: 6000 });
+        r = { result: 'admitted', message: `Voucher: ${v.displayLabel} × ${v.redeemedUnits}`, label: `${v.brandName} · ${v.remainingCount} left` };
+      } catch (e) {
+        r = { result: 'invalid', message: e instanceof NetError ? 'Vouchers need a connection to redeem' : e.message };
+      }
+      showResult(r, false);
+      $('entries').value = 1;
+      state.busy = false;
+      return;
+    }
     try {
       if (!navigator.onLine) throw new NetError('offline');
       r = await api('gate/scan', { method: 'POST', body: JSON.stringify({ qrToken: code, eventId: state.eventId, entries: n }), timeout: 4000 });

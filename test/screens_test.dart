@@ -623,10 +623,13 @@ void main() {
   });
 
   testWidgets('Delete account calls the API and returns to login', (t) async {
+    t.view.physicalSize = const Size(1080, 3200);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
     d.backend.json('DELETE', 'api/user', {'deleted': true});
     await t.pumpWidget(GetMaterialApp(home: const ProfileScreen(), getPages: Routes.pages));
     await t.pumpAndSettle();
-    expect(find.text('My vouchers'), findsNothing); // Phase 2 hidden
+    expect(find.text('My vouchers'), findsOneWidget); // partner vouchers ship in v0.8
     expect(find.text('Claim shared tickets'), findsOneWidget);
     await t.scrollUntilVisible(find.text('Delete account'), 200);
     await t.tap(find.text('Delete account'));

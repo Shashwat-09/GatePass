@@ -436,6 +436,67 @@ CREATE TABLE public.users (
     pincode character varying
 );
 
+CREATE TABLE public.voucher_campaigns (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    name character varying NOT NULL,
+    "brandName" character varying NOT NULL,
+    "brandLogoUrl" character varying,
+    "accentColor" character varying,
+    "backgroundImageUrl" character varying,
+    "benefitType" character varying DEFAULT 'freebie'::character varying NOT NULL,
+    "benefitValue" integer DEFAULT 0 NOT NULL,
+    "displayLabel" character varying NOT NULL,
+    "minOrderPaise" integer,
+    "maxDiscountPaise" integer,
+    "couponCode" character varying,
+    "redemptionInstructions" text DEFAULT ''::text NOT NULL,
+    terms text DEFAULT ''::text NOT NULL,
+    "termsVersion" integer DEFAULT 1 NOT NULL,
+    "validFrom" timestamp with time zone,
+    "validUntil" timestamp with time zone NOT NULL,
+    "canSplit" boolean DEFAULT true NOT NULL,
+    "eventId" uuid,
+    "unitsPerIssue" integer DEFAULT 1 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.voucher_redemptions (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "voucherId" uuid NOT NULL,
+    units integer NOT NULL,
+    "staffUserId" uuid NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.voucher_shares (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "voucherId" uuid NOT NULL,
+    "childVoucherId" uuid NOT NULL,
+    "recipientPhone" character varying NOT NULL,
+    "recipientName" character varying,
+    units integer NOT NULL,
+    "sharedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.vouchers (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "campaignId" uuid NOT NULL,
+    "ownerUserId" uuid,
+    "pendingPhone" character varying,
+    ref character varying NOT NULL,
+    quantity integer NOT NULL,
+    "usedUnits" integer DEFAULT 0 NOT NULL,
+    "sharedUnits" integer DEFAULT 0 NOT NULL,
+    status character varying DEFAULT 'active'::character varying NOT NULL,
+    "bookingId" uuid,
+    "parentVoucherId" uuid,
+    "receivedFromUserId" uuid,
+    "seenAt" timestamp with time zone,
+    "redeemedAt" timestamp with time zone,
+    "issuedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.wallet_entries (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     "userId" uuid NOT NULL,
@@ -453,6 +514,9 @@ ALTER TABLE ONLY public.event_sponsors
 
 ALTER TABLE ONLY public.artists
     ADD CONSTRAINT "PK_09b823d4607d2675dc4ffa82261" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.voucher_shares
+    ADD CONSTRAINT "PK_1780239eff9891acc143f3f103f" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.seat_sections
     ADD CONSTRAINT "PK_3068932c5ab156abbc2eb387655" PRIMARY KEY (id);
@@ -499,6 +563,9 @@ ALTER TABLE ONLY public.account_deletions
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.voucher_redemptions
+    ADD CONSTRAINT "PK_7597edcf0976617dad5154737f6" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.refresh_tokens
     ADD CONSTRAINT "PK_7d8bee0204106019488c4c50ffa" PRIMARY KEY (id);
 
@@ -510,6 +577,9 @@ ALTER TABLE ONLY public.ticket_tiers
 
 ALTER TABLE ONLY public.event_artists
     ADD CONSTRAINT "PK_97ee81ed249b1b381544103ca5f" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.voucher_campaigns
+    ADD CONSTRAINT "PK_9c7d067c7c8883e9d910f5dee6a" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.payment_events
     ADD CONSTRAINT "PK_9f1d16fc78b33e676940a32e8b5" PRIMARY KEY (id);
@@ -531,6 +601,9 @@ ALTER TABLE ONLY public.promo_codes
 
 ALTER TABLE ONLY public.event_sessions
     ADD CONSTRAINT "PK_dbe18de390df26f2dffc4ef3356" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.vouchers
+    ADD CONSTRAINT "PK_ed1b7dd909a696560763acdbc04" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.check_ins
     ADD CONSTRAINT "PK_fac7f27bc829a454ad477c13f62" PRIMARY KEY (id);
@@ -561,6 +634,8 @@ CREATE INDEX "IDX_00b1ee696c4eb7916543d2a815" ON public.ticket_transfers USING b
 CREATE UNIQUE INDEX "IDX_05bd884c03d3f424e2204bd14c" ON public.events USING btree (slug);
 
 CREATE INDEX "IDX_0cc346514503054b3d20c3389f" ON public.event_artists USING btree ("eventId");
+
+CREATE INDEX "IDX_0d857612f2cb20b710f4612b7d" ON public.vouchers USING btree ("ownerUserId");
 
 CREATE UNIQUE INDEX "IDX_1c77cbb3c49baf2feeed3241f1" ON public.tickets USING btree ("qrToken");
 
@@ -594,15 +669,23 @@ CREATE INDEX "IDX_51ed83c9a1acb790e7d51f1358" ON public.event_sessions USING btr
 
 CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
 
+CREATE INDEX "IDX_5aab221bf16e6fb2e22689f4f8" ON public.vouchers USING btree ("campaignId");
+
+CREATE INDEX "IDX_5e98fb1c2391cb25396cdf4bdc" ON public.voucher_shares USING btree ("voucherId");
+
 CREATE INDEX "IDX_5f63cbb95a5f457f258f055c58" ON public.bookings USING btree ("expiresAt");
 
 CREATE INDEX "IDX_610102b60fea1455310ccd299d" ON public.refresh_tokens USING btree ("userId");
 
 CREATE INDEX "IDX_622c1dc200bdd2dc128526f8f6" ON public.event_watchers USING btree ("userId");
 
+CREATE INDEX "IDX_625388a857fadeced7752101bd" ON public.vouchers USING btree ("pendingPhone");
+
 CREATE INDEX "IDX_692a909ee0fa9383e7859f9b40" ON public.notifications USING btree ("userId");
 
 CREATE UNIQUE INDEX "IDX_6bd01a5dbc832a85d50af2dfa3" ON public.bookings USING btree ("txnId") WHERE ("txnId" IS NOT NULL);
+
+CREATE UNIQUE INDEX "IDX_6c3fd74145d13a071066e2be27" ON public.vouchers USING btree (ref);
 
 CREATE INDEX "IDX_712790b5c3b1e6d859c0987c4f" ON public.events USING btree ("cityId");
 
@@ -648,6 +731,8 @@ CREATE INDEX "IDX_cd4bb350a09b34e02b708ad3f5" ON public.form_responses USING btr
 
 CREATE INDEX "IDX_cddc3f77556a26ed4b536a3322" ON public.wallet_entries USING btree ("userId");
 
+CREATE INDEX "IDX_d04937fce00bd8f43d586e576f" ON public.voucher_campaigns USING btree ("eventId");
+
 CREATE INDEX "IDX_d4cdfe3a69b25527954b5957a5" ON public.tickets USING btree ("tierId");
 
 CREATE INDEX "IDX_d6ba170d54388257f185c84c7b" ON public.promo_redemptions USING btree ("userId");
@@ -655,6 +740,8 @@ CREATE INDEX "IDX_d6ba170d54388257f185c84c7b" ON public.promo_redemptions USING 
 CREATE INDEX "IDX_d847b70879e3ac2934dd9a490f" ON public.form_uploads USING btree ("userId");
 
 CREATE UNIQUE INDEX "IDX_d8698856b9f9735db747084136" ON public.artists USING btree (slug);
+
+CREATE INDEX "IDX_de21f6664270e5708497e29746" ON public.voucher_redemptions USING btree ("voucherId");
 
 CREATE INDEX "IDX_de916bd3328a758012a6f72c8e" ON public.ticket_transfers USING btree ("eventId");
 

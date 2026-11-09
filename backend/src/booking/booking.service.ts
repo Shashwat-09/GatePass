@@ -13,6 +13,7 @@ import { eventBadge } from '../events/event-status';
 import { istDate } from '../common/ist';
 import { FormResponseInput, FormsService } from '../forms/forms.service';
 import { notify } from '../notifications/notify';
+import { issueBookingVouchers } from '../vouchers/voucher-core';
 import { PaymentGateway } from '../payments/gateway';
 
 export interface CheckoutOptions {
@@ -714,6 +715,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       await m.update(PromoRedemption, { bookingId: b.id }, { status: 'used' });
       const approvalIds = b.items.map((i) => i.approvalRequestId).filter((x): x is string => !!x);
       if (approvalIds.length) await m.update(ApprovalRequest, { id: In(approvalIds) }, { status: 'booked', bookingId: b.id });
+      await issueBookingVouchers(m, b);
       const cashbackPct = config().pricing.coinsCashbackPct;
       const net = b.basePaise - b.discountPaise;
       if (cashbackPct > 0 && net > 0) {

@@ -63,7 +63,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 46 | Invoice / payment receipt PDF download | ✅ | — |
 | 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | 🟡 bundle night schedule ✅ (B4); box-office/comp tickets with organiser tools (B5); RSVP = free request-to-book or free tier; premiere-specific fields not planned | B4–B5 |
 | **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
-| 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ⬜ | B5 |
+| 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ✅ campaigns (brand, colour, benefit, min order, max discount, validity, terms, coupon code), complimentary per booking or issued to numbers; Active/Used/Expired tabs + counts; multi-unit; share units by number (also before sign-up); QR rotates on every open (5-min, Ed25519); counter redeem via `/gate` by QR or reference; revoke | B5 |
 | **Engagement** ||||
 | 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | 🟡 inbox | B5 |
 | 50 | **Push notifications** (FCM, local notifications, channel) | ⬜ | B5 |

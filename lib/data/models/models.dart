@@ -854,30 +854,86 @@ class QuotePreview {
       );
 }
 
+/// Partner-brand voucher (multi-unit; units can be shared or redeemed at a counter).
 class VoucherModel {
   final String id;
-  final String title;
-  final String redeemCode;
-  final int balanceUnits;
+  final String voucherRef;
+  final String campaignName;
+  final String brandName;
+  final String? brandLogoUrl;
+  final String? accentColor;
+  final String displayLabel;
+  final String benefitType;
+  final int? minOrderPaise;
+  final int? maxDiscountPaise;
+  final DateTime? validUntil;
+  final int daysRemaining;
+  /// ACTIVE | USED | EXPIRED | REVOKED | CANCELLED
+  final String status;
+  final int quantity;
+  final int usedUnits;
+  final int sharedUnits;
+  final int remainingCount;
+  final bool canSplit;
   final bool canRedeem;
-  final DateTime? expiry;
+  final bool complimentary;
+  final bool isSplitChild;
+  final bool isNew;
+  // Detail only.
+  final String? qrPayload;
+  final String? couponCode;
+  final String redemptionInstructions;
+  final String terms;
+  final String? receivedFrom;
+  final List<({String recipient, String? name, int units, DateTime? sharedAt})> shares;
 
-  VoucherModel({
-    required this.id,
-    required this.title,
-    required this.redeemCode,
-    this.balanceUnits = 1,
-    this.canRedeem = true,
-    this.expiry,
+  const VoucherModel({
+    required this.id, required this.voucherRef, this.campaignName = '', required this.brandName, this.brandLogoUrl, this.accentColor,
+    required this.displayLabel, this.benefitType = 'freebie', this.minOrderPaise, this.maxDiscountPaise, this.validUntil,
+    this.daysRemaining = 0, this.status = 'ACTIVE', this.quantity = 1, this.usedUnits = 0, this.sharedUnits = 0, this.remainingCount = 1,
+    this.canSplit = false, this.canRedeem = false, this.complimentary = false, this.isSplitChild = false, this.isNew = false,
+    this.qrPayload, this.couponCode, this.redemptionInstructions = '', this.terms = '', this.receivedFrom, this.shares = const [],
   });
 
+  bool get isActive => status == 'ACTIVE';
+
   factory VoucherModel.fromJson(Map<String, dynamic> j) => VoucherModel(
-        id: (j['id'] ?? '').toString(),
-        title: (j['title'] ?? '').toString(),
-        redeemCode: (j['redeemCode'] ?? '').toString(),
-        balanceUnits: (j['balanceUnits'] ?? 1) as int,
-        canRedeem: (j['canRedeem'] ?? true) == true,
-        expiry: DateTime.tryParse((j['expiry'] ?? '').toString()),
+        id: j['id'].toString(),
+        voucherRef: (j['voucherRef'] ?? '').toString(),
+        campaignName: (j['campaignName'] ?? '').toString(),
+        brandName: (j['brandName'] ?? '').toString(),
+        brandLogoUrl: j['brandLogoUrl']?.toString(),
+        accentColor: j['accentColor']?.toString(),
+        displayLabel: (j['displayLabel'] ?? '').toString(),
+        benefitType: (j['benefitType'] ?? 'freebie').toString(),
+        minOrderPaise: (j['minOrderValuePaise'] as num?)?.toInt(),
+        maxDiscountPaise: (j['maxDiscountAmountPaise'] as num?)?.toInt(),
+        validUntil: DateTime.tryParse((j['validUntil'] ?? '').toString())?.toLocal(),
+        daysRemaining: (j['daysRemaining'] as num?)?.toInt() ?? 0,
+        status: (j['status'] ?? 'ACTIVE').toString(),
+        quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+        usedUnits: (j['usedUnits'] as num?)?.toInt() ?? 0,
+        sharedUnits: (j['sharedUnits'] as num?)?.toInt() ?? 0,
+        remainingCount: (j['remainingCount'] as num?)?.toInt() ?? 0,
+        canSplit: j['canSplit'] == true,
+        canRedeem: j['canRedeem'] == true,
+        complimentary: j['complimentary'] == true,
+        isSplitChild: j['isSplitChild'] == true,
+        isNew: j['isNew'] == true,
+        qrPayload: j['qrPayload']?.toString(),
+        couponCode: j['couponCode']?.toString(),
+        redemptionInstructions: (j['redemptionInstructions'] ?? '').toString(),
+        terms: (j['terms'] ?? '').toString(),
+        receivedFrom: j['receivedFrom']?.toString(),
+        shares: ((j['shares'] as List?) ?? const []).map((x) {
+          final m = x as Map<String, dynamic>;
+          return (
+            recipient: (m['recipientMasked'] ?? '').toString(),
+            name: m['recipientName']?.toString(),
+            units: (m['units'] as num?)?.toInt() ?? 1,
+            sharedAt: DateTime.tryParse((m['sharedAt'] ?? '').toString())?.toLocal(),
+          );
+        }).toList(),
       );
 }
 
