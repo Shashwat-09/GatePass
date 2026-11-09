@@ -4,6 +4,7 @@ import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/booking_repository.dart';
+import '../../data/repositories/ticket_repository.dart';
 import '../../services/analytics/analytics.dart';
 import '../../services/payments/payment_launcher.dart';
 
@@ -208,6 +209,7 @@ class BookingController extends GetxController {
     invoiceUrl.value = r.data!.invoiceUrl;
     payState.value = PayState.done;
     _analytics.purchase(q.bookingCode, q.totalPaise, totalQty);
+    sl<TicketRepository>().syncOffline(); // new tickets available offline right away
     return true;
   }
 

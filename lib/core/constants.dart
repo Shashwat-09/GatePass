@@ -75,6 +75,12 @@ class Endpoints {
   // post-purchase
   static const myTickets = 'api/ticket/my-tickets';
   static const splitTicket = 'api/ticket/split';
+  static const claimTicket = 'api/ticket/claim';
+  static const claimBack = 'api/ticket/claim-back';
+  static const transfers = 'api/ticket/transfers';
+  static const sharedTicket = 'api/ticket/shared-ticket';
+  static const exportLink = 'api/ticket/export-link';
+  static const unreadCount = 'api/notifications/unread-count';
   static const vouchers = 'api/vouchers/me';
   static const notifications = 'api/notifications';
 }
@@ -87,4 +93,5 @@ class StorageKeys {
   static const city = 'selected_city'; // {"id","name"}
   static const onboardingDone = 'onboarding_done';
   static const ticketCache = 'ticket_cache';
+  static const pendingClaim = 'pending_claim_code';
 }

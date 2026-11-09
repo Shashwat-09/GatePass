@@ -4,11 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#5b4bff">
+<link rel="manifest" href="/gate/manifest.webmanifest">
+<link rel="icon" href="/gate/icon-192.png">
 <title>GatePass · Check-in</title>
 <link rel="stylesheet" href="/gate/gate.css">
 </head>
 <body>
-<header><strong>GatePass</strong> <span>Check-in</span> <button id="logout" hidden>Log out</button></header>
+<header>
+  <strong>GatePass</strong> <span>Check-in</span>
+  <span id="net" class="net">…</span>
+  <button id="logout" hidden>Log out</button>
+</header>
 <main>
   <section id="login">
     <h1>Staff sign in</h1>
@@ -26,15 +33,26 @@
     <h1>Choose event</h1>
     <select id="events"></select>
     <button id="start">Start scanning</button>
+    <p class="muted small">Starting downloads the ticket list so scanning keeps working without internet.</p>
   </section>
 
   <section id="scan" hidden>
     <h2 id="evTitle"></h2>
-    <p class="muted"><span id="stats">–</span> checked in</p>
+    <p class="muted"><span id="stats">–</span> checked in · <span id="offlineInfo">offline list not downloaded</span></p>
     <div id="result" class="result idle">Ready</div>
     <div id="cam"><video id="video" playsinline muted></video><p id="camMsg" class="muted"></p></div>
-    <form id="manual"><input id="code" placeholder="Or type / paste ticket code"><button>Check</button></form>
+    <form id="manual"><input id="code" placeholder="Or type / paste ticket code" autocomplete="off"><button>Check</button></form>
     <label class="row">Entries this scan <input id="entries" type="number" min="1" max="50" value="1"></label>
+    <div class="actions">
+      <button id="refreshList" class="secondary">Refresh offline list</button>
+      <button id="syncNow" class="secondary">Sync now (<span id="pending">0</span>)</button>
+      <button id="export" class="secondary" hidden>Excel report</button>
+    </div>
+    <div id="conflictsBox" hidden>
+      <h3>Needs review</h3>
+      <p class="muted small">Admitted while offline but the server says the ticket was already used (e.g. at another gate).</p>
+      <ul id="conflicts"></ul>
+    </div>
     <button id="change" class="link">Change event</button>
   </section>
 </main>

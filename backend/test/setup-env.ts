@@ -3,7 +3,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://postgres:eventa@localhost:5433/eventa_test';
 delete process.env.REDIS_URL;
 process.env.JWT_SECRET = 'test-jwt-0123456789abcdef0123456789abcdef';
-process.env.QR_SIGNING_SECRET = 'test-qr-0123456789abcdef0123456789abcdef';
+delete process.env.TICKET_SIGNING_KEY; // ephemeral Ed25519 key per run
 process.env.URL_SIGNING_SECRET = 'test-url-0123456789abcdef0123456789abcdef';
 process.env.OTP_PEPPER = 'test-otp-0123456789abcdef0123456789abcdef';
 process.env.SMS_PROVIDER = 'console';

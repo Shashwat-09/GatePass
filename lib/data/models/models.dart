@@ -5,7 +5,9 @@ class Paged<T> {
   final List<T> items;
   final int page;
   final int total;
-  const Paged(this.items, {this.page = 1, this.total = 0});
+  /// True when served from the on-device cache (no network / server down).
+  final bool fromCache;
+  const Paged(this.items, {this.page = 1, this.total = 0, this.fromCache = false});
 
   static Paged<T> fromJson<T>(dynamic data, T Function(Map<String, dynamic>) parse) {
     final m = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
@@ -161,6 +163,11 @@ class TicketModel {
   final String? invoiceUrl;
   final int entryUsed;
   final int entryTotal;
+  final String eventId;
+  /// How many unused units can be shared now (0 = sharing not allowed).
+  final int transferableUnits;
+  /// Name of the person who shared this ticket with you, if any.
+  final String? receivedFrom;
 
   TicketModel({
     required this.id,
@@ -175,7 +182,12 @@ class TicketModel {
     this.invoiceUrl,
     this.entryUsed = 0,
     int? entryTotal,
+    this.eventId = '',
+    this.transferableUnits = 0,
+    this.receivedFrom,
   }) : entryTotal = entryTotal ?? quantity;
+
+  int get entriesLeft => (entryTotal - entryUsed).clamp(0, 1 << 30);
 
   factory TicketModel.fromJson(Map<String, dynamic> j) => TicketModel(
         id: (j['ticketId'] ?? j['id'] ?? '').toString(),
@@ -190,6 +202,9 @@ class TicketModel {
         invoiceUrl: j['invoiceUrl']?.toString(),
         entryUsed: (j['entryUsed'] as num?)?.toInt() ?? 0,
         entryTotal: (j['entryTotal'] as num?)?.toInt(),
+        eventId: (j['eventId'] ?? '').toString(),
+        transferableUnits: (j['transferableUnits'] as num?)?.toInt() ?? 0,
+        receivedFrom: j['receivedFrom']?.toString(),
       );
 
   /// For the offline cache (QR must render without network, MVP T4.2).
@@ -206,7 +221,92 @@ class TicketModel {
         'invoiceUrl': invoiceUrl,
         'entryUsed': entryUsed,
         'entryTotal': entryTotal,
+        'eventId': eventId,
+        // Offline copies can't be shared (needs the server).
+        'transferableUnits': 0,
+        'receivedFrom': receivedFrom,
       };
+}
+
+/// A ticket share (split) — sent by me or received by me.
+class TransferModel {
+  final String id;
+  final String direction; // sent | received
+  final String status; // pending | claimed | cancelled
+  final int quantity;
+  final String eventTitle;
+  final DateTime? startDate;
+  final String method; // phone | link
+  final String? counterpart;
+  final String? shareUrl;
+  final DateTime? createdAt;
+
+  TransferModel({
+    required this.id,
+    required this.direction,
+    required this.status,
+    required this.quantity,
+    required this.eventTitle,
+    this.startDate,
+    this.method = 'link',
+    this.counterpart,
+    this.shareUrl,
+    this.createdAt,
+  });
+
+  bool get isPending => status == 'pending';
+
+  factory TransferModel.fromJson(Map<String, dynamic> j) => TransferModel(
+        id: (j['id'] ?? '').toString(),
+        direction: (j['direction'] ?? 'sent').toString(),
+        status: (j['status'] ?? 'pending').toString(),
+        quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+        eventTitle: (j['eventTitle'] ?? '').toString(),
+        startDate: DateTime.tryParse((j['startDate'] ?? '').toString())?.toLocal(),
+        method: (j['method'] ?? 'link').toString(),
+        counterpart: j['counterpart']?.toString(),
+        shareUrl: j['shareUrl']?.toString(),
+        createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+      );
+}
+
+/// Result of sharing tickets.
+class TicketShareResult {
+  final TransferModel transfer;
+  final TicketModel ticket; // the sender's updated ticket (new QR, fewer units)
+  final String? shareUrl;
+  final String? code;
+  final bool delivered;
+  TicketShareResult(this.transfer, this.ticket, this.shareUrl, this.code, this.delivered);
+}
+
+/// What a share link contains (before claiming).
+class SharePreview {
+  final String status;
+  final int quantity;
+  final String fromName;
+  final String eventTitle;
+  final String venueName;
+  final DateTime? startDate;
+  final String label;
+  SharePreview({
+    required this.status,
+    required this.quantity,
+    required this.fromName,
+    required this.eventTitle,
+    required this.venueName,
+    this.startDate,
+    this.label = '',
+  });
+  factory SharePreview.fromJson(Map<String, dynamic> j) => SharePreview(
+        status: (j['status'] ?? '').toString(),
+        quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+        fromName: (j['fromName'] ?? 'A friend').toString(),
+        eventTitle: (j['eventTitle'] ?? '').toString(),
+        venueName: (j['venueName'] ?? '').toString(),
+        startDate: DateTime.tryParse((j['startDate'] ?? '').toString())?.toLocal(),
+        label: (j['seatLabel'] ?? j['tierName'] ?? '').toString(),
+      );
 }
 
 // ───────────────────────── Phase 2 models ─────────────────────────

@@ -61,8 +61,9 @@ describe('gate check-in, invoices, discovery (e2e)', () => {
   it('rejects forged, unknown and wrong-event tickets', async () => {
     const forged = ticket.qrToken.slice(0, -2) + (ticket.qrToken.endsWith('AA') ? 'BB' : 'AA');
     expect((await scan(forged).expect(200)).body.data.result).toBe('invalid');
-    expect((await scan(signTicketQr(randomUUID())).expect(200)).body.data.result).toBe('invalid');
+    expect((await scan(signTicketQr(randomUUID(), eventId)).expect(200)).body.data.result).toBe('invalid');
     expect((await scan('EVENTA-legacy-random-token').expect(200)).body.data.result).toBe('invalid');
+    expect((await scan('GP1.' + ticket.id + '.nonce.sig').expect(200)).body.data.result).toBe('invalid');
     const other = await eventBySlug(ctx, 'citadel-arena-tour');
     const r = await ctx.http.post('/api/gate/scan').set(auth(staff.token)).send({ qrToken: ticket.qrToken, eventId: other.id });
     expect(r.body.data.result).toBe('wrong_event');

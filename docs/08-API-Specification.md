@@ -207,7 +207,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 
 **Tickets, invoices, QR**
 - `GET api/ticket/my-tickets?scope=upcoming|history&page&limit` is paginated in SQL; an event is "upcoming" until it ends. Items add `bookingId, eventId, tierName, seatLabel, invoiceUrl`.
-- `qrToken` = `GP1.<ticketId>.<nonce>.<hmac>` (HMAC-SHA256/128-bit, `QR_SIGNING_SECRET`).
+- `qrToken`: superseded by the Ed25519 `GP2` format — see §8.11.
 - `GET api/invoices/<bookingId>.pdf?exp&sig` → tax invoice PDF. Links are HMAC-signed (`URL_SIGNING_SECRET`) and valid 7 days; they are re-issued with every ticket list.
 
 **Gate check-in (staff/admin role) — interim until the seller app**
@@ -223,3 +223,26 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `GET /health` (no `api/` prefix) → `{status, db, cache, version}`; `503` when a dependency is down.
 - Helmet headers; CORS only for `CORS_ORIGINS`; JSON body ≤ 100 kB; unknown body fields are stripped (never trusted); global per-IP limits (60 writes / 300 reads per minute) shared via Redis.
 - The server refuses to start in production with missing/weak secrets, `SMS_PROVIDER=console`, `PAYMENT_GATEWAY=mock`, `DEV_OTP`, missing Redis, or Razorpay test keys (unless `ALLOW_TEST_PAYMENTS=true` for staging).
+
+## 8.11 As built (v0.3) — QR, offline entry, sharing, notifications, exports
+**QR tokens (replaces the HMAC format in §8.10):** `GP2.<ticketId>.<eventId>.<nonce>.<sig>` — ids as 22-char base64url, 96-bit random nonce, `sig` = Ed25519 over the first four parts with `TICKET_SIGNING_KEY`. Unique per issue (unique DB index) and re-issued whenever units leave the ticket. Gates verify offline with the public key only.
+
+**Gate (staff/admin)**
+- `GET api/gate/events/{id}/manifest` → `{eventId, title, generatedAt, publicKey (raw Ed25519, base64url), tickets:[{id, h: sha256(qrToken), used, total, status, label}]}` — hashes only, never raw tokens.
+- `POST api/gate/sync` `{eventId, deviceId, scans:[{localId, qrToken, entries, scannedAt}]}` (≤500) → `{results:[{localId, result, message, conflict?, duplicate?}]}`. Each scan is re-applied atomically; `(deviceId, localId)` is unique so re-sending is a no-op; `conflict: true` = admitted offline but the server can't honour it (used elsewhere).
+- Scan results add messages for passed-on tickets ("These tickets were passed on…") and stale QRs.
+
+**Sharing (split / transfer)**
+- `POST api/ticket/split` `{ticketId, quantity, phone?}` → transfer view + `{code, shareUrl, delivered, ticket}`. Units leave the sender's ticket immediately and the sender's QR is re-issued. With `phone`: delivered at once if that number has an account, otherwise auto-claimed when they next load their tickets. Without `phone`: a share link `…/t/<code>` (12-char code, derived per transfer; only its hash is stored). Rules: only unused units; per-event `allowTransfers`, `maxTransfersPerTicket` (default 10), `allowResplit` (default false — received tickets can't be passed on); not after the event ends.
+- `POST api/ticket/claim` `{code}` → `{ticket}` (one claimer; the sender can't claim their own link).
+- `POST api/ticket/claim-back` `{transferId}` → units return to the sender while unclaimed; `409` once accepted.
+- `GET api/ticket/transfers?direction=sent|received&page` (paginated; pending link shares include `shareUrl`).
+- `GET api/ticket/shared-ticket?code=` (public) → preview `{status, quantity, fromName, eventTitle, venueName, startDate, tierName, seatLabel}`.
+- `GET /t/<code>` → landing page that opens `gatepass://claim?code=…`.
+- Ticket views add `transferableUnits`, `receivedFrom`; received tickets have no `invoiceUrl`; fully shared tickets (`status: transferred`) leave "My tickets".
+
+**Notifications** — `GET api/notifications` (paginated + `unread`), `GET api/notifications/unread-count`, `POST api/notifications/mark-as-read {ids?}`. Types: `booking`, `ticket_received`, `transfer_claimed`.
+
+**Excel exports**
+- `POST api/ticket/export-link` → `{url}` signed for 10 min → `GET api/exports/me/<userId>.xlsx` with sheets *Purchases, My tickets, Shared, Received*.
+- `GET api/admin/events/{id}/export.xlsx` (admin role) → *Summary, Attendees (holder, phone, entries), Sales, Transfers, Check-ins (incl. offline/device)*.

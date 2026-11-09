@@ -37,7 +37,10 @@ Size: current release APKs are ~19–23 MB per ABI (arm64 21.5 MB) — under the
   - fresh install → onboarding → OTP login → profile + terms → city → home (light **and** dark mode)
   - event → tickets → pay with Razorpay test UPI/card → confirmation → My tickets → QR → invoice opens
   - cancel inside Razorpay → tickets released after leaving checkout; failed payment → clear error
-  - airplane mode → My tickets still shows QR (cached)
+  - airplane mode → My tickets still shows every upcoming ticket + QR (offline banner)
+  - share 1 of 2 tickets by link (WhatsApp) and by number → friend claims → both QRs scan; old QR is refused
+  - gate offline drill: download list, turn off Wi-Fi/data on the scanner, scan, re-enable → queue syncs to 0
+  - My tickets → Export → Excel opens with Purchases / Shared / Received
   - gate: staff scans the QR at `/gate` → ADMIT; second scan → ALREADY USED
   - leave app idle > 15 min → still signed in (token refresh); delete account → back to login
   - every screen: loading, empty, error (turn network off) states

@@ -9,6 +9,7 @@ import 'core/constants.dart';
 import 'core/di.dart';
 import 'data/repositories/auth_repository.dart';
 import 'services/analytics/analytics.dart';
+import 'services/deep_links.dart';
 import 'services/network/api_service.dart';
 
 Future<void> main() async {
@@ -28,4 +29,5 @@ Future<void> main() async {
 
   sl<Analytics>().appOpen();
   runApp(const GatePassApp());
+  unawaited(DeepLinks.init());
 }

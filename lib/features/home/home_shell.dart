@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../core/di.dart';
+import '../../data/repositories/ticket_repository.dart';
+import '../../services/deep_links.dart';
+
 import '../profile/profile_screen.dart';
 import '../tickets/my_tickets_screen.dart';
 import 'home_screen.dart';
@@ -22,6 +26,9 @@ class _HomeShellState extends State<HomeShell> {
     final arg = Get.arguments;
     _index = arg is Map && arg['tab'] is int ? arg['tab'] as int : 0;
     if (_index == 1 && Get.isRegistered<MyTicketsController>()) Get.find<MyTicketsController>().refreshAll();
+    // Keep every upcoming ticket on the phone for entry without internet.
+    sl<TicketRepository>().syncOffline();
+    WidgetsBinding.instance.addPostFrameCallback((_) => DeepLinks.consumePending());
   }
 
   @override

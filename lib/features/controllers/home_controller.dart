@@ -4,6 +4,7 @@ import '../../core/constants.dart';
 import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../services/analytics/analytics.dart';
 import '../../services/storage/local_storage.dart';
 
@@ -15,6 +16,7 @@ class HomeController extends GetxController {
   final error = RxnString();
   final events = <EventModel>[].obs;
   final city = Rxn<CityModel>();
+  final unread = 0.obs;
 
   // Filters (Phase 2)
   final genres = <String>{}.obs;
@@ -42,7 +44,10 @@ class HomeController extends GetxController {
     final j = _storage.getJson(StorageKeys.city);
     if (j != null) city.value = CityModel.fromJson(j);
     load();
+    refreshUnread();
   }
+
+  Future<void> refreshUnread() async => unread.value = await sl<NotificationRepository>().unreadCount();
 
   Future<void> load() async {
     loading.value = true;

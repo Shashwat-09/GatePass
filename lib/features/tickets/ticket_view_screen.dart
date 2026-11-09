@@ -5,11 +5,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/theme.dart';
-import '../../core/constants.dart';
 import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../services/analytics/analytics.dart';
-import 'split_ticket_sheet.dart';
+import '../../data/repositories/ticket_repository.dart';
+import 'my_tickets_screen.dart';
+import 'share_ticket_sheet.dart';
 
 class TicketViewScreen extends StatefulWidget {
   const TicketViewScreen({super.key, required this.ticket});
@@ -19,21 +20,34 @@ class TicketViewScreen extends StatefulWidget {
 }
 
 class _TicketViewScreenState extends State<TicketViewScreen> {
+  late TicketModel t = widget.ticket;
+
   @override
   void initState() {
     super.initState();
     sl<Analytics>().viewTicket(widget.ticket.id);
   }
 
+  Future<void> _share() async {
+    final updated = await showShareSheet(context, t);
+    if (updated == null || !mounted) return;
+    if (Get.isRegistered<MyTicketsController>()) Get.find<MyTicketsController>().refreshAll();
+    if (updated.status == 'transferred' || updated.quantity == 0) {
+      Get.back();
+    } else {
+      setState(() => t = updated);
+    }
+  }
+
   Future<void> _openInvoice() async {
-    final url = widget.ticket.invoiceUrl;
+    final url = t.invoiceUrl;
     final ok = url != null && await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     if (!ok) Get.snackbar('Invoice', 'Could not open the invoice. Pull to refresh your tickets and try again.');
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.ticket;
+    final saved = sl<TicketRepository>().cacheSavedAt;
     final dateStr = t.date == null ? 'Date TBA' : DateFormat('EEE, d MMM yyyy • h:mm a').format(t.date!);
     return Scaffold(
       appBar: AppBar(title: const Text('Your ticket')),
@@ -63,7 +77,12 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Text('Show this QR at the entry gate', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                  Text('Show this QR at the entry gate — works without internet',
+                      textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                  if (t.receivedFrom != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Chip(avatar: const Icon(Icons.card_giftcard, size: 18), label: Text('From ${t.receivedFrom}')),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   _row('Date', dateStr),
                   if (t.tierName.isNotEmpty) _row('Ticket', t.tierName),
@@ -72,19 +91,25 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                   if (t.entryUsed > 0) _row('Checked in', '${t.entryUsed} of ${t.entryTotal}'),
                   _row('Status', t.status),
                   const SizedBox(height: AppSpacing.lg),
-                  if (t.invoiceUrl != null)
+                  if (t.transferableUnits > 0)
+                    FilledButton.icon(
+                      key: const Key('share-tickets'),
+                      onPressed: _share,
+                      icon: const Icon(Icons.ios_share),
+                      label: Text(t.quantity > 1 ? 'Share / split tickets' : 'Send to a friend'),
+                    ),
+                  if (t.invoiceUrl != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
                     OutlinedButton.icon(
                       onPressed: _openInvoice,
                       icon: const Icon(Icons.receipt_long_outlined),
                       label: const Text('View invoice'),
                     ),
-                  if (AppConfig.phase2 && t.status == 'active' && t.quantity > 1) ...[
+                  ],
+                  if (saved != null) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    OutlinedButton.icon(
-                      onPressed: () => showSplitSheet(context, t),
-                      icon: const Icon(Icons.call_split),
-                      label: const Text('Split / transfer'),
-                    ),
+                    Text('Saved on this phone for offline entry · ${DateFormat('d MMM, h:mm a').format(saved)}',
+                        style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
                   ],
                 ],
               ),

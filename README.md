@@ -1,6 +1,6 @@
 # GatePass
 
-Live-events ticketing: a **Flutter + GetX** Android/iOS app and a **NestJS + PostgreSQL + Redis** API. Users discover events in their city, buy general-admission tickets (Razorpay, verified server-side), and get an HMAC-signed QR ticket that gate staff scan at `/gate`.
+Live-events ticketing: a **Flutter + GetX** Android/iOS app and a **NestJS + PostgreSQL + Redis** API. Users discover events in their city, buy general-admission tickets (Razorpay, verified server-side), get a unique Ed25519-signed QR ticket that also works offline, share or split tickets with friends, and export their history to Excel. Gate staff scan at `/gate` — an installable web app that keeps working without internet.
 
 - Product & contract: [`docs/`](docs/00-README.md) — start with [`07-MVP`](docs/07-MVP.md) and [`08-API-Specification`](docs/08-API-Specification.md)
 - Conventions for contributors/agents: [`AGENTS.md`](AGENTS.md)

@@ -5,6 +5,7 @@ import '../data/repositories/auth_repository.dart';
 import '../data/repositories/booking_repository.dart';
 import '../data/repositories/event_repository.dart';
 import '../data/repositories/notification_repository.dart';
+import '../data/repositories/ticket_repository.dart';
 import '../data/repositories/voucher_repository.dart';
 import '../services/analytics/analytics.dart';
 import '../services/network/api_service.dart';
@@ -46,7 +47,8 @@ void registerDependencies({
     ..registerSingleton<Analytics>(analytics)
     ..registerSingleton<PaymentLauncher>(payments)
     ..registerLazySingleton<AuthRepository>(() => AuthRepository(api, storage, tokens))
-    ..registerLazySingleton<EventRepository>(() => EventRepository(api, storage))
+    ..registerLazySingleton<EventRepository>(() => EventRepository(api))
+    ..registerLazySingleton<TicketRepository>(() => TicketRepository(api, storage))
     ..registerLazySingleton<BookingRepository>(() => BookingRepository(api))
     ..registerLazySingleton<VoucherRepository>(() => VoucherRepository(api))
     ..registerLazySingleton<NotificationRepository>(() => NotificationRepository(api));

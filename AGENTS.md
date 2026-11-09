@@ -81,13 +81,16 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
-- ✅ Tickets: HMAC-signed QR tokens; gate check-in API + `/gate` web scanner for staff (atomic entry counting, audit log); invoice PDFs via signed links.
+- ✅ Tickets: unique Ed25519-signed QR (`GP2…`, re-issued on share); invoice PDFs via signed links.
+- ✅ Offline entry: app keeps all upcoming tickets on the phone; `/gate` is a PWA that downloads the event list (QR hashes + public key), scans offline, and syncs idempotently with conflict review.
+- ✅ Sharing (v0.3): split/share by phone or link, auto-delivery on sign-in, claim-back while unclaimed, per-event limits; notifications inbox; Excel exports (customer history, admin event report).
+- 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 63 (unit + e2e on real Postgres), client 33 (repositories, controller, widgets light/dark) + live full-flow test.
+- ✅ Tests: backend 77 (unit + e2e on real Postgres), client 41 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
-- ⬜ Phase 2 (hidden): promo codes API, seat-hold UX against server holds, split/transfer, vouchers, notifications + FCM, location city detect, seller app, admin tooling for events.
+- ⬜ Next (see docs/10): organiser event management, promo codes, push (FCM), event extras, multi-date, vouchers, location detect.
 - ⬜ iOS: configured but not built/tested (needs macOS + Xcode; Razorpay iOS pod).
 
 ## 10. Naming & placeholders to replace

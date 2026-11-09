@@ -77,6 +77,11 @@ export class EventEntity {
   @Column({ default: false }) hasSeatMap!: boolean;
   @Column({ default: 6 }) maxPerUser!: number;
   @Column({ type: 'text', nullable: true }) terms!: string | null;
+  /** Ticket splitting/sharing rules (old app: splitLimitEnabled, maxSplitTransfers). */
+  @Column({ default: true }) allowTransfers!: boolean;
+  @Column({ default: 10 }) maxTransfersPerTicket!: number;
+  /** Whether a received ticket may be passed on again (off = anti-scalping). */
+  @Column({ default: false }) allowResplit!: boolean;
   @Column({ type: 'jsonb', default: () => "'[]'" }) faqs!: { q: string; a: string }[];
 }
 
@@ -183,11 +188,57 @@ export class Ticket {
   @Column({ default: 1 }) quantity!: number;
   @Column({ default: 0 }) entriesUsed!: number;
   @Column({ default: 1 }) entriesTotal!: number;
+  @Column({ default: 1 }) entryPerTicket!: number;
+  /** Set on tickets created by a transfer: the ticket they were split from. */
+  @Column({ type: 'uuid', nullable: true }) parentTicketId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) receivedFromUserId!: string | null;
+  @Column({ default: 0 }) transfersOut!: number;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
-/** Audit log of every gate scan (admitted or rejected). */
+export type TransferStatus = 'pending' | 'claimed' | 'cancelled';
+
+/**
+ * Units moved out of a ticket to someone else — by phone number (auto-claimed
+ * when that person signs in) or by a share link with a one-time claim code.
+ */
+@Entity('ticket_transfers')
+export class TicketTransfer {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Index() @Column({ type: 'uuid' }) fromTicketId!: string;
+  @Index() @Column({ type: 'uuid' }) fromUserId!: string;
+  @Index() @Column({ type: 'uuid', nullable: true }) toUserId!: string | null;
+  @Index() @Column({ type: 'varchar', nullable: true }) toPhone!: string | null;
+  @Column() quantity!: number;
+  @Column() entries!: number;
+  @Index() @Column({ type: 'varchar', default: 'pending' }) status!: TransferStatus;
+  /** sha256 of the link claim code (links only). */
+  @Index({ unique: true, where: '"codeHash" IS NOT NULL' })
+  @Column({ type: 'varchar', nullable: true })
+  codeHash!: string | null;
+  @Column({ type: 'uuid', nullable: true }) createdTicketId!: string | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true }) claimedAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) cancelledAt!: Date | null;
+}
+
+/** In-app notification inbox (booking confirmed, tickets received/claimed…). */
+@Entity('notifications')
+export class Notification {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Column() type!: string;
+  @Column() title!: string;
+  @Column({ type: 'text', default: '' }) body!: string;
+  @Column({ type: 'jsonb', default: () => "'{}'" }) data!: Record<string, unknown>;
+  @Column({ type: 'timestamptz', nullable: true }) readAt!: Date | null;
+  @Index() @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Audit log of every gate scan (admitted or rejected), online or synced from offline. */
 @Entity('check_ins')
+@Unique('uq_checkin_device_local', ['deviceId', 'localId'])
 export class CheckIn {
   @PrimaryGeneratedColumn('uuid') id!: string;
   @Index() @Column({ type: 'uuid', nullable: true }) ticketId!: string | null;
@@ -195,6 +246,11 @@ export class CheckIn {
   @Column({ type: 'uuid' }) staffUserId!: string;
   @Column() result!: string;
   @Column({ default: 0 }) entries!: number;
+  @Column({ default: false }) offline!: boolean;
+  /** For offline scans: scanner device id + its local scan id (sync is idempotent). */
+  @Column({ type: 'varchar', nullable: true }) deviceId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) localId!: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) scannedAt!: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
@@ -209,5 +265,5 @@ export class PaymentEvent {
 
 export const ENTITIES = [
   City, User, RefreshToken, EventEntity, Tier, SeatSection, SeatReservation,
-  Booking, Ticket, CheckIn, PaymentEvent,
+  Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent,
 ];

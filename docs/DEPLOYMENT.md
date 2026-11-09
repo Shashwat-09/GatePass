@@ -19,7 +19,8 @@ All variables are documented in `backend/.env.example`. Minimum set:
 | `PUBLIC_BASE_URL` | `https://api.yourdomain.com/` |
 | `DATABASE_URL`, `DATABASE_SSL=true` | managed Postgres |
 | `REDIS_URL` | `rediss://…` |
-| `JWT_SECRET`, `QR_SIGNING_SECRET`, `URL_SIGNING_SECRET`, `OTP_PEPPER` | each `openssl rand -base64 48`; store in the platform's secret manager. **Rotating `QR_SIGNING_SECRET` invalidates issued QR codes** |
+| `JWT_SECRET`, `URL_SIGNING_SECRET`, `OTP_PEPPER` | each `openssl rand -base64 48`; store in the platform's secret manager |
+| `TICKET_SIGNING_KEY` | `npm run keys:ticket` (Ed25519 private key). **Rotating it invalidates every issued QR code** — keep it stable and backed up |
 | `SMS_PROVIDER` + `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` (or Twilio vars) | |
 | `PAYMENT_GATEWAY=razorpay`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | staging: test keys + `ALLOW_TEST_PAYMENTS=true` |
 | `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_GSTIN` | |
@@ -41,8 +42,13 @@ The API **refuses to start** if a production setting is unsafe (see API spec §8
 3. Payment capture: automatic capture recommended (the server also captures `authorized` payments it verifies).
 4. Reconciliation: watch logs for `REFUND NEEDED` (refund API failed) and `Amount mismatch`; compare daily settlements with `bookings` where `status='confirmed'`.
 
-## Gate staff
-`docker exec <api> node dist/scripts/set-role.js 9876543210 staff`, then staff open `https://api.yourdomain.com/gate` on an Android phone (Chrome) and sign in with OTP.
+## Gate staff & offline entry
+1. `docker exec <api> node dist/scripts/set-role.js 9876543210 staff` (use `admin` for organisers who need the Excel report).
+2. Staff open `https://api.yourdomain.com/gate` in Chrome on Android, sign in with OTP, and **install it** (menu → *Add to Home screen*).
+3. **Before doors open**, with internet, pick the event — the device downloads the ticket list. Press *Refresh offline list* again just before doors to include late buyers and shares.
+4. If the venue loses internet (or the server is down) the scanner switches to offline checks automatically: tickets on the list are checked against their QR hash and entry count; tickets bought later are accepted on their Ed25519 signature. Scans queue on the device and sync when the connection returns.
+5. Limits to brief staff on: two **offline** devices don't see each other's scans until they sync, so a copied QR could pass at two gates during an outage — conflicts appear under *Needs review* and in the Check-ins sheet of the Excel report. Reduce the risk by assigning entry lanes per ticket type and syncing whenever connectivity flickers.
+6. Customers' apps keep all their upcoming tickets on the phone, so QR codes open without internet.
 
 ## Operations
 - Health: `GET /health` → 200 / 503. Alert on 5xx rate, p95 latency, `RATE_LIMITED` spikes, and log lines `REFUND NEEDED`, `refresh token reuse`, `Bad payment signature`.

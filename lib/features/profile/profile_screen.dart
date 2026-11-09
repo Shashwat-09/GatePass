@@ -10,6 +10,7 @@ import '../../services/analytics/analytics.dart';
 import '../../utils/links.dart';
 import '../auth/profile_setup_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../tickets/claim_screen.dart';
 import '../vouchers/vouchers_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -41,11 +42,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
         ),
         const SizedBox(height: AppSpacing.lg),
-        if (AppConfig.phase2) ...[
-          _item(Icons.card_giftcard, 'My vouchers', () => Get.to(() => const VouchersScreen())),
-          _item(Icons.notifications_none, 'Notifications', () => Get.to(() => const NotificationsScreen())),
-          const Divider(),
-        ],
+        _item(Icons.notifications_none, 'Notifications', () => Get.to(() => const NotificationsScreen())),
+        _item(Icons.redeem_outlined, 'Claim shared tickets', () => Get.to(() => const ClaimScreen())),
+        if (AppConfig.phase2) _item(Icons.card_giftcard, 'My vouchers', () => Get.to(() => const VouchersScreen())),
+        const Divider(),
         _item(Icons.edit_outlined, 'Edit profile', () async {
           await Get.to(() => const ProfileSetupScreen(editing: true));
           if (mounted) setState(() {});

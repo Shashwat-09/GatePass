@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { randomBytes } from 'crypto';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, KeyObject, randomBytes } from 'crypto';
 import { Logger } from '@nestjs/common';
 
 /**
@@ -26,7 +26,8 @@ export interface AppConfig {
   trustProxy: boolean;
   enableSwagger: boolean;
   jwtSecret: string;
-  qrSecret: string;
+  /** Ed25519 key that signs ticket QR codes; gates verify offline with the public key. */
+  ticketKey: { privateKey: KeyObject; publicKey: KeyObject; publicKeyRaw: string };
   urlSigningSecret: string;
   otpPepper: string;
   accessTtlSec: number;
@@ -90,6 +91,32 @@ function secret(name: string, isProd: boolean, errors: string[]): string {
   return randomBytes(32).toString('base64url');
 }
 
+/**
+ * TICKET_SIGNING_KEY = base64 of the PKCS#8 DER Ed25519 private key
+ * (`npm run keys:ticket` prints one). Rotating it invalidates issued QR codes.
+ */
+function ticketKey(isProd: boolean, errors: string[]) {
+  const v = str('TICKET_SIGNING_KEY');
+  let privateKey: KeyObject;
+  if (v) {
+    try {
+      privateKey = createPrivateKey({ key: Buffer.from(v, 'base64'), format: 'der', type: 'pkcs8' });
+      if (privateKey.asymmetricKeyType !== 'ed25519') throw new Error('not ed25519');
+    } catch {
+      errors.push('TICKET_SIGNING_KEY must be a base64 PKCS#8 Ed25519 private key (npm run keys:ticket)');
+      privateKey = generateKeyPairSync('ed25519').privateKey;
+    }
+  } else {
+    if (isProd) errors.push('TICKET_SIGNING_KEY is required in production (npm run keys:ticket)');
+    else log.warn('TICKET_SIGNING_KEY not set — using an ephemeral key (dev/test only; QR codes reset on restart)');
+    privateKey = generateKeyPairSync('ed25519').privateKey;
+  }
+  const publicKey = createPublicKey(privateKey);
+  // Raw 32-byte public key (last 32 bytes of the SPKI DER), base64url — what browsers import.
+  const spki = publicKey.export({ format: 'der', type: 'spki' }) as Buffer;
+  return { privateKey, publicKey, publicKeyRaw: spki.subarray(spki.length - 32).toString('base64url') };
+}
+
 let cached: AppConfig | null = null;
 
 export function loadConfig(): AppConfig {
@@ -114,7 +141,7 @@ export function loadConfig(): AppConfig {
     trustProxy: bool('TRUST_PROXY', isProd),
     enableSwagger: bool('ENABLE_SWAGGER', !isProd),
     jwtSecret: secret('JWT_SECRET', isProd, errors),
-    qrSecret: secret('QR_SIGNING_SECRET', isProd, errors),
+    ticketKey: ticketKey(isProd, errors),
     urlSigningSecret: secret('URL_SIGNING_SECRET', isProd, errors),
     otpPepper: secret('OTP_PEPPER', isProd, errors),
     accessTtlSec: num('JWT_ACCESS_TTL', 900),

@@ -5,6 +5,8 @@ import 'package:gatepass/data/models/models.dart';
 import 'package:gatepass/data/repositories/auth_repository.dart';
 import 'package:gatepass/data/repositories/booking_repository.dart';
 import 'package:gatepass/data/repositories/event_repository.dart';
+import 'package:gatepass/data/repositories/ticket_repository.dart';
+import 'package:gatepass/services/deep_links.dart';
 import 'package:http/http.dart' as http;
 
 import 'helpers.dart';
@@ -126,22 +128,87 @@ void main() {
       expect(d.backend.calls.single.path, 'api/home/highlights');
     });
 
-    test('tickets: paginated, cached, and readable offline (QR at the venue)', () async {
-      d.backend.json('GET', 'api/ticket/my-tickets', {'items': [ticketJson('t1'), ticketJson('t2')], 'page': 1, 'limit': 20, 'total': 21});
-      final r = await sl<EventRepository>().myTickets();
-      expect(r.data!.items, hasLength(2));
-      expect(r.data!.total, 21);
-
-      d.backend.on('GET', 'api/ticket/my-tickets', (_) async => throw http.ClientException('offline'));
-      final off = await sl<EventRepository>().myTickets();
-      expect(off.isOk, isTrue);
-      expect(off.data!.items.map((t) => t.qrPayload), ['GP1.t1.nonce.sig', 'GP1.t2.nonce.sig']);
-    });
-
     test('cities parse from a paginated response', () async {
       d.backend.json('GET', 'api/city/cities', {'items': [{'id': 'c1', 'name': 'Pune'}], 'page': 1, 'limit': 50, 'total': 1});
       final r = await sl<EventRepository>().cities();
       expect(r.data!.single.name, 'Pune');
     });
+  });
+
+  group('TicketRepository', () {
+    setUp(() async => d = await setUpDeps());
+
+    test('all upcoming tickets are saved for offline entry, and served when the server is down', () async {
+      // 3 pages on the server: page 1 (2 items) via the screen, then the full sync.
+      d.backend.on('GET', 'api/ticket/my-tickets', (req) async {
+        final limit = req.url.queryParameters['limit'];
+        final page = int.parse(req.url.queryParameters['page']!);
+        if (limit == '50') {
+          return FakeBackend.ok({'items': [for (var i = 0; i < (page == 1 ? 50 : 10); i++) ticketJson('p$page-$i')], 'page': page, 'limit': 50, 'total': 60});
+        }
+        return FakeBackend.ok({'items': [ticketJson('t1'), ticketJson('t2')], 'page': 1, 'limit': 20, 'total': 60});
+      });
+      final r = await sl<TicketRepository>().myTickets();
+      expect(r.data!.items, hasLength(2));
+      expect(r.data!.fromCache, isFalse);
+      expect(sl<TicketRepository>().cachedTickets(), hasLength(60)); // every ticket, not just page 1
+
+      d.backend.on('GET', 'api/ticket/my-tickets', (_) async => FakeBackend.err('SERVER_ERROR', 'down', 503));
+      final off = await sl<TicketRepository>().myTickets();
+      expect(off.isOk, isTrue);
+      expect(off.data!.fromCache, isTrue);
+      expect(off.data!.items, hasLength(60));
+      expect(off.data!.items.first.qrPayload, 'GP1.p1-0.nonce.sig');
+      expect(off.data!.items.first.transferableUnits, 0); // sharing needs the server
+
+      d.backend.on('GET', 'api/ticket/my-tickets', (_) async => throw http.ClientException('offline'));
+      expect((await sl<TicketRepository>().myTickets()).data!.items, hasLength(60));
+    });
+
+    test('a 401 never falls back to the cache (signed-out users see nothing)', () async {
+      await d.storage.setJson(StorageKeys.ticketCache, {'items': [ticketJson('t1')]});
+      d.backend.on('GET', 'api/ticket/my-tickets', (_) async => FakeBackend.err('UNAUTHENTICATED', 'x', 401));
+      d.backend.on('POST', 'api/auth/refresh', (_) async => FakeBackend.err('UNAUTHENTICATED', 'x', 401));
+      expect((await sl<TicketRepository>().myTickets()).isOk, isFalse);
+    });
+
+    test('share by link returns the URL and the sender’s updated ticket', () async {
+      d.backend.json('POST', 'api/ticket/split', {
+        'id': 'tr1', 'direction': 'sent', 'status': 'pending', 'quantity': 2, 'eventTitle': 'Neon Nights', 'method': 'link',
+        'code': 'ABCDEF123456', 'shareUrl': 'https://api.example.org/t/ABCDEF123456', 'delivered': false,
+        'ticket': {...ticketJson('t1'), 'quantity': 1, 'qrToken': 'GP2.new'},
+      });
+      d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+      final r = await sl<TicketRepository>().share(TicketModel.fromJson(ticketJson('t1')), 2);
+      expect(d.backend.callsTo('api/ticket/split').single.body, {'ticketId': 't1', 'quantity': 2});
+      expect(r.data!.shareUrl, endsWith('/t/ABCDEF123456'));
+      expect(r.data!.ticket.qrPayload, 'GP2.new');
+      expect(r.data!.transfer.isPending, isTrue);
+    });
+
+    test('share to a phone sends the number; claim, claim-back and export call the API', () async {
+      d.backend.json('POST', 'api/ticket/split', {
+        'id': 'tr2', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'N', 'method': 'phone', 'delivered': true,
+        'ticket': ticketJson('t1'),
+      });
+      d.backend.json('POST', 'api/ticket/claim', {'ticket': ticketJson('t9')});
+      d.backend.json('POST', 'api/ticket/claim-back', {'id': 'tr2', 'status': 'cancelled', 'quantity': 1, 'eventTitle': 'N'});
+      d.backend.json('POST', 'api/ticket/export-link', {'url': 'https://x/api/exports/me/u.xlsx?exp=1&sig=s'});
+      d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+      final repo = sl<TicketRepository>();
+      expect((await repo.share(TicketModel.fromJson(ticketJson('t1')), 1, phone: '9876543210')).data!.delivered, isTrue);
+      expect(d.backend.callsTo('api/ticket/split').single.body['phone'], '9876543210');
+      expect((await repo.claim(' abc123def456 ')).data!.id, 't9');
+      expect(d.backend.callsTo('api/ticket/claim').single.body, {'code': 'abc123def456'});
+      expect((await repo.claimBack('tr2')).data!.status, 'cancelled');
+      expect((await repo.exportLink()).data, contains('.xlsx'));
+    });
+  });
+
+  test('deep links: gatepass://claim and https /t/<code>', () {
+    expect(claimCodeFrom(Uri.parse('gatepass://claim?code=ABC123')), 'ABC123');
+    expect(claimCodeFrom(Uri.parse('https://api.example.org/t/XYZ789')), 'XYZ789');
+    expect(claimCodeFrom(Uri.parse('https://api.example.org/other/XYZ789')), isNull);
+    expect(claimCodeFrom(Uri.parse('gatepass://event?slug=x')), isNull);
   });
 }

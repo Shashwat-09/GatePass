@@ -8,6 +8,7 @@ import {
   Booking, BookingItem, EventEntity, SeatReservation, SeatSection, Ticket, Tier, User,
 } from '../db/entities';
 import { KvStore } from '../infra/kv.service';
+import { notify } from '../notifications/notify';
 import { PaymentGateway } from '../payments/gateway';
 
 export interface BookItemInput {
@@ -319,6 +320,10 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       b.failureReason = null;
       await m.save(b);
       await this.issueTickets(m, b, event);
+      const qty = b.items.reduce((n, i) => n + (i.qty ?? 1), 0);
+      await notify(m, b.userId, 'booking', 'Booking confirmed', `${qty} ticket${qty === 1 ? '' : 's'} for ${event.title}. Booking ${b.code}.`, {
+        bookingId: b.id, eventId: event.id,
+      });
     });
 
     if (refund) {
@@ -381,8 +386,9 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         eventTitle: event.title, venueName: event.venueName, startDate: event.startDate,
         tierName: it.tierName ?? it.sectionName ?? '',
         seatLabel: it.sectionId ? `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}` : null,
-        qrToken: signTicketQr(id), status: 'active',
+        qrToken: signTicketQr(id, event.id), status: 'active',
         quantity: qty, entriesUsed: 0, entriesTotal: qty * (tier?.entryPerTicket ?? 1),
+        entryPerTicket: tier?.entryPerTicket ?? 1,
       });
     }
   }

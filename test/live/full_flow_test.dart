@@ -13,6 +13,7 @@ import 'package:gatepass/core/constants.dart';
 import 'package:gatepass/core/di.dart';
 import 'package:gatepass/data/repositories/auth_repository.dart';
 import 'package:gatepass/data/repositories/event_repository.dart';
+import 'package:gatepass/data/repositories/ticket_repository.dart';
 import 'package:gatepass/features/controllers/booking_controller.dart';
 import 'package:gatepass/services/analytics/analytics.dart';
 import 'package:gatepass/services/network/api_service.dart';
@@ -45,7 +46,7 @@ void main() {
 
   final phone = '9${(Random().nextInt(899999999) + 100000000)}';
 
-  test('discover → buy → ticket → invoice → gate check-in → refresh → delete', () async {
+  test('discover → buy → ticket → invoice → gate → refresh → share/claim → export → offline → delete', () async {
     final auth = sl<AuthRepository>();
     final events = sl<EventRepository>();
 
@@ -86,11 +87,11 @@ void main() {
     expect(await c.createOrder(), isTrue, reason: c.error.value);
     expect(await c.confirmWith({'mockResult': 'success'}), isTrue, reason: c.error.value);
     final ticket = c.tickets.single;
-    expect(ticket.qrPayload, startsWith('GP1.'));
+    expect(ticket.qrPayload, startsWith('GP2.'));
     expect(ticket.entryTotal, 2);
 
     // 6. My tickets (paginated) + invoice PDF from the signed link
-    final mine = (await events.myTickets()).data!;
+    final mine = (await sl<TicketRepository>().myTickets()).data!;
     expect(mine.items.map((t) => t.id), contains(ticket.id));
     final inv = await http.get(Uri.parse(mine.items.firstWhere((t) => t.id == ticket.id).invoiceUrl!));
     expect(inv.statusCode, 200);
@@ -116,7 +117,50 @@ void main() {
     expect(me.isOk, isTrue, reason: me.error);
     expect(tokens.accessToken, isNot('expired.or.garbage'));
 
-    // 9. Account deletion: server erases the account, client session ends
+    // 9. Split & share: buy 2 more, share 1 by link, a friend claims it
+    final c2 = Get.put(BookingController(), tag: 'second')..start(ev);
+    c2.inc(tier);
+    c2.inc(tier);
+    expect(await c2.createOrder(), isTrue, reason: c2.error.value);
+    expect(await c2.confirmWith({'mockResult': 'success'}), isTrue, reason: c2.error.value);
+    final pair = c2.tickets.single;
+    final tickets = sl<TicketRepository>();
+    final shared = await tickets.share(pair, 1);
+    expect(shared.isOk, isTrue, reason: shared.error);
+    expect(shared.data!.ticket.quantity, 1);
+    expect(shared.data!.ticket.qrPayload, isNot(pair.qrPayload)); // sender's QR re-issued
+    expect(shared.data!.shareUrl, contains('/t/'));
+    final page = await http.get(Uri.parse(shared.data!.shareUrl!));
+    expect(page.statusCode, 200);
+
+    final friendTokens = MemoryTokenStore();
+    final friendApi = ApiService(friendTokens);
+    final fp = '8${(Random().nextInt(899999999) + 100000000)}';
+    await friendApi.request(Endpoints.sendOtp, method: Method.post, body: {'phone': fp});
+    final fl = await friendApi.request(Endpoints.login, method: Method.post, body: {'phone': fp, 'otp': '123456'});
+    await friendTokens.save(accessToken: fl.data['accessToken'], refreshToken: fl.data['refreshToken']);
+    final claimed = await friendApi.request(Endpoints.claimTicket, method: Method.post, body: {'code': shared.data!.code});
+    expect(claimed.isOk, isTrue, reason: claimed.error);
+    expect(claimed.data['ticket']['quantity'], 1);
+    expect(claimed.data['ticket']['qrToken'], startsWith('GP2.'));
+
+    final sent = (await tickets.transfers()).data!;
+    expect(sent.items.first.status, 'claimed');
+    final inbox = await api.request(Endpoints.notifications);
+    expect((inbox.data['items'] as List).map((n) => n['type']), containsAll(['booking', 'transfer_claimed']));
+
+    // 10. Excel export of purchases / tickets / shared / received
+    final link = await tickets.exportLink();
+    final xlsx = await http.get(Uri.parse(link.data!));
+    expect(xlsx.statusCode, 200);
+    expect(xlsx.headers['content-type'], contains('spreadsheetml'));
+    expect(xlsx.bodyBytes.take(2), [0x50, 0x4B]); // zip container
+
+    // 11. Offline copy holds every upcoming ticket
+    expect(await tickets.syncOffline(), isTrue);
+    expect(tickets.cachedTickets()!.map((t) => t.id), contains(pair.id));
+
+    // 12. Account deletion: server erases the account, client session ends
     expect((await auth.deleteAccount()).isOk, isTrue);
     expect(tokens.refreshToken, isNull);
     expect(expired, 0);

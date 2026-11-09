@@ -137,4 +137,7 @@ Map<String, dynamic> ticketJson(String id, {String status = 'active'}) => {
       'entryUsed': 0,
       'entryTotal': 2,
       'invoiceUrl': 'https://api.example.org/api/invoices/bk-1.pdf?exp=1&sig=x',
+      'eventId': 'ev-1',
+      'transferableUnits': 2,
+      'receivedFrom': null,
     };

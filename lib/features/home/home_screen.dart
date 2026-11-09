@@ -99,10 +99,18 @@ class HomeScreen extends StatelessWidget {
               icon: const Icon(Icons.search),
               onPressed: () => Get.to(() => const SearchScreen()),
             ),
-            if (AppConfig.phase2) IconButton(
-              icon: const Icon(Icons.notifications_none),
-              onPressed: () => Get.to(() => const NotificationsScreen()),
-            ),
+            Obx(() => IconButton(
+                  tooltip: 'Notifications',
+                  icon: Badge(
+                    isLabelVisible: c.unread.value > 0,
+                    label: Text('${c.unread.value}'),
+                    child: const Icon(Icons.notifications_none),
+                  ),
+                  onPressed: () async {
+                    await Get.to(() => const NotificationsScreen());
+                    c.refreshUnread();
+                  },
+                )),
           ],
         ),
       );

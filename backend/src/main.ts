@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -42,12 +42,13 @@ export async function createApp(): Promise<NestExpressApplication> {
   });
   app.useBodyParser('json', { limit: '100kb' });
 
-  app.setGlobalPrefix('api', { exclude: ['health'] });
+  app.setGlobalPrefix('api', { exclude: ['health', { path: 't/:code', method: RequestMethod.GET }] });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
-  // Gate check-in web app (staff) at /gate.
-  app.useStaticAssets(join(__dirname, '..', 'public'), { prefix: '/gate', index: 'index.html' });
+  // Gate check-in PWA (staff) at /gate; share-link landing assets at /s.
+  app.useStaticAssets(join(__dirname, '..', 'public', 'gate'), { prefix: '/gate', index: 'index.html' });
+  app.useStaticAssets(join(__dirname, '..', 'public', 'share'), { prefix: '/s', index: false });
 
   if (cfg.enableSwagger) {
     const doc = new DocumentBuilder()

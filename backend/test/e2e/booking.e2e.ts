@@ -50,7 +50,7 @@ describe('booking + payment (e2e)', () => {
     expect(a.bookingStatus).toBe('confirmed');
     expect(b.tickets.map((t: { id: string }) => t.id)).toEqual(a.tickets.map((t: { id: string }) => t.id));
     expect(a.tickets[0]).toMatchObject({ quantity: 2, entryTotal: 2, tierName: 'Early Bird' });
-    expect(a.tickets[0].qrToken).toMatch(/^GP1\./);
+    expect(a.tickets[0].qrToken).toMatch(/^GP2\./);
     expect(a.invoiceUrl).toContain('/api/invoices/');
     const after = await ctx.ds.getRepository(Tier).findOneByOrFail({ id: tier.id });
     expect(after.sold).toBe(before.sold + 2);

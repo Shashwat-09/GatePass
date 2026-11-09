@@ -34,7 +34,8 @@ services:
       PAYMENT_GATEWAY: mock
       ENABLE_SWAGGER: "true"
       JWT_SECRET: local-only-jwt-secret-do-not-use-in-prod-0001
-      QR_SIGNING_SECRET: local-only-qr-secret-do-not-use-in-prod-0002
+      # dev-only Ed25519 key (npm run keys:ticket) — never use in production
+      TICKET_SIGNING_KEY: MC4CAQAwBQYDK2VwBCIEIGxqVOEcAhm8YTRJ5JKYV39nLcqRiTxbh0R9TJNmJbXw
       URL_SIGNING_SECRET: local-only-url-secret-do-not-use-in-prod-0003
       OTP_PEPPER: local-only-otp-pepper-do-not-use-in-prod-0004
 volumes:

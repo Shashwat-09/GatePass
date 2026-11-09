@@ -144,3 +144,14 @@ The runnable schema is `backend/schema.sql`, generated from the TypeORM migratio
 Account deletion erases personal data in place (phone → `deleted:<id>` tombstone, name/email/dob/gender/city/device token nulled, sessions revoked); bookings/tickets are kept without contact data for tax records.
 
 Client storage (updates §4.5): tokens in `flutter_secure_storage` (Keystore/Keychain); the Hive box is AES-encrypted with a key held in secure storage and also caches page 1 of upcoming tickets so QR codes open offline.
+
+## 4.9 As built (v0.3)
+| Table / column | Purpose |
+|---|---|
+| `ticket_transfers` (`fromTicketId`, `fromUserId`, `toUserId`, `toPhone`, `quantity`, `entries`, `status` pending/claimed/cancelled, `codeHash` unique, `createdTicketId`) | ticket sharing by phone or link |
+| `tickets.parentTicketId`, `receivedFromUserId`, `transfersOut`, `entryPerTicket`; status `transferred` | split lineage and limits |
+| `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` | organiser sharing rules |
+| `notifications` (`userId`, `type`, `title`, `body`, `data`, `readAt`) | in-app inbox |
+| `check_ins.offline`, `deviceId`, `localId` (unique pair), `scannedAt` | offline scans synced from gate devices |
+
+Client: every upcoming ticket (up to 200) is kept in the encrypted on-device store and refreshed on app open, after purchase, share and claim.

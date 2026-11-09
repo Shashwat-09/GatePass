@@ -1,7 +1,7 @@
 {
   "name": "gatepass-api",
   "version": "0.2.0",
-  "description": "GatePass backend — NestJS implementation of the API (docs/08).",
+  "description": "GatePass backend \u2014 NestJS implementation of the API (docs/08).",
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -20,7 +20,8 @@
     "seed": "ts-node src/scripts/seed.ts",
     "seed:prod": "node dist/scripts/seed.js",
     "user:role": "ts-node src/scripts/set-role.ts",
-    "user:role:prod": "node dist/scripts/set-role.js"
+    "user:role:prod": "node dist/scripts/set-role.js",
+    "keys:ticket": "ts-node src/scripts/ticket-key.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",
@@ -32,6 +33,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^18.0.9",
+    "exceljs": "^4.4.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "pdfkit": "^0.20.2",

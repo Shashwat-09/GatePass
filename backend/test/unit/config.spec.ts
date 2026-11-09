@@ -14,7 +14,7 @@ describe('config validation', () => {
     process.env.REDIS_URL = 'redis://r:6379';
     process.env.PUBLIC_BASE_URL = 'https://api.example.org/';
     process.env.JWT_SECRET = strong('a');
-    process.env.QR_SIGNING_SECRET = strong('b');
+    process.env.TICKET_SIGNING_KEY = 'MC4CAQAwBQYDK2VwBCIEIGxqVOEcAhm8YTRJ5JKYV39nLcqRiTxbh0R9TJNmJbXw';
     process.env.URL_SIGNING_SECRET = strong('c');
     process.env.OTP_PEPPER = strong('d');
     process.env.SMS_PROVIDER = 'msg91';
@@ -35,7 +35,9 @@ describe('config validation', () => {
   it.each([
     ['missing JWT secret', () => delete process.env.JWT_SECRET, /JWT_SECRET is required/],
     ['placeholder JWT secret', () => (process.env.JWT_SECRET = 'change-me-dev-secret-change-me-dev-secret'), /JWT_SECRET/],
-    ['short secret', () => (process.env.QR_SIGNING_SECRET = 'short'), /at least 32/],
+    ['short secret', () => (process.env.URL_SIGNING_SECRET = 'short'), /at least 32/],
+    ['missing ticket key', () => delete process.env.TICKET_SIGNING_KEY, /TICKET_SIGNING_KEY is required/],
+    ['malformed ticket key', () => (process.env.TICKET_SIGNING_KEY = 'bm90LWEta2V5'), /PKCS#8 Ed25519/],
     ['console SMS', () => (process.env.SMS_PROVIDER = 'console'), /console is not allowed/],
     ['mock payments', () => (process.env.PAYMENT_GATEWAY = 'mock'), /mock is not allowed/],
     ['DEV_OTP in production', () => (process.env.DEV_OTP = '123456'), /DEV_OTP/],

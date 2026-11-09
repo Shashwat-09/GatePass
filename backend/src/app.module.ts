@@ -9,6 +9,8 @@ import { GateModule } from './gate/gate.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ExportsModule } from './exports/exports.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UsersModule } from './users/users.module';
 
@@ -25,6 +27,8 @@ import { UsersModule } from './users/users.module';
     TicketsModule,
     InvoicesModule,
     GateModule,
+    NotificationsModule,
+    ExportsModule,
     ExtrasModule,
   ],
 })
