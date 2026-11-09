@@ -74,6 +74,12 @@ class TierModel {
   final int remaining;
   final int minQty;
   final int entryPerTicket;
+  final String? category;
+  final String? description;
+  final int? strikePricePaise;
+  final String? phaseName;
+  final String? offerLabel;
+  final int? maxPerUser;
 
   TierModel({
     required this.id,
@@ -83,6 +89,12 @@ class TierModel {
     this.remaining = 100,
     this.minQty = 1,
     this.entryPerTicket = 1,
+    this.category,
+    this.description,
+    this.strikePricePaise,
+    this.phaseName,
+    this.offerLabel,
+    this.maxPerUser,
   });
 
   factory TierModel.fromJson(Map<String, dynamic> j) => TierModel(
@@ -93,6 +105,12 @@ class TierModel {
         remaining: (j['remaining'] as num?)?.toInt() ?? 0,
         minQty: (j['minQty'] as num?)?.toInt() ?? 1,
         entryPerTicket: (j['entryPerTicket'] as num?)?.toInt() ?? 1,
+        category: j['category']?.toString(),
+        description: j['description']?.toString(),
+        strikePricePaise: (j['strikePricePaise'] as num?)?.toInt(),
+        phaseName: j['phaseName']?.toString(),
+        offerLabel: (j['offer'] is Map) ? (j['offer']['label'])?.toString() : null,
+        maxPerUser: (j['maxPerUser'] as num?)?.toInt(),
       );
 }
 
@@ -469,40 +487,94 @@ class SharePreview {
 
 /// A promo code and its discount rule. Discount is validated server-side in
 /// production; the client only displays the resulting amount.
+/// A promo code from `api/promocodes` (display only — the server prices it).
 class PromoModel {
   final String code;
-  final String type; // 'flat' | 'percent'
-  final int value; // flat → paise; percent → whole percent
-  final int maxDiscountPaise;
-  final int minOrderPaise;
-  final String label;
+  final String summary;
+  final String description;
+  final DateTime? endsAt;
 
-  PromoModel({
-    required this.code,
-    required this.type,
-    required this.value,
-    this.maxDiscountPaise = 0,
-    this.minOrderPaise = 0,
-    this.label = '',
-  });
-
-  /// Discount in paise for a given subtotal (display-only math).
-  int discountFor(int subtotalPaise) {
-    if (subtotalPaise < minOrderPaise) return 0;
-    var d = type == 'percent'
-        ? (subtotalPaise * value / 100).round()
-        : value;
-    if (maxDiscountPaise > 0 && d > maxDiscountPaise) d = maxDiscountPaise;
-    return d > subtotalPaise ? subtotalPaise : d;
-  }
+  PromoModel({required this.code, this.summary = '', this.description = '', this.endsAt});
 
   factory PromoModel.fromJson(Map<String, dynamic> j) => PromoModel(
         code: (j['code'] ?? '').toString(),
-        type: (j['type'] ?? 'flat').toString(),
-        value: (j['value'] ?? 0) as int,
-        maxDiscountPaise: (j['maxDiscountPaise'] ?? 0) as int,
-        minOrderPaise: (j['minOrderPaise'] ?? 0) as int,
-        label: (j['label'] ?? '').toString(),
+        summary: (j['summary'] ?? '').toString(),
+        description: (j['description'] ?? '').toString(),
+        endsAt: DateTime.tryParse((j['endsAt'] ?? '').toString())?.toLocal(),
+      );
+}
+
+/// GST on the booking fee: CGST+SGST within the organiser's state, else IGST.
+class GstBreakdown {
+  final String type; // cgst_sgst | igst
+  final double ratePct;
+  final int cgstPaise;
+  final int sgstPaise;
+  final int igstPaise;
+  final bool included;
+  const GstBreakdown({this.type = 'igst', this.ratePct = 18, this.cgstPaise = 0, this.sgstPaise = 0, this.igstPaise = 0, this.included = false});
+  bool get isSplit => type == 'cgst_sgst';
+  factory GstBreakdown.fromJson(Map<String, dynamic>? j) => j == null
+      ? const GstBreakdown()
+      : GstBreakdown(
+          type: (j['type'] ?? 'igst').toString(),
+          ratePct: (j['ratePct'] as num?)?.toDouble() ?? 18,
+          cgstPaise: (j['cgstPaise'] as num?)?.toInt() ?? 0,
+          sgstPaise: (j['sgstPaise'] as num?)?.toInt() ?? 0,
+          igstPaise: (j['igstPaise'] as num?)?.toInt() ?? 0,
+          included: j['included'] == true,
+        );
+}
+
+/// Server price breakdown (preview or booked order). All amounts in paise.
+class PriceBreakdown {
+  final int basePaise;
+  final int offerDiscountPaise;
+  final int promoDiscountPaise;
+  final int feePaise;
+  final int taxPaise;
+  final GstBreakdown gst;
+  final int totalPaise;
+  final int coinsPaise;
+  final int payablePaise;
+  const PriceBreakdown({
+    this.basePaise = 0,
+    this.offerDiscountPaise = 0,
+    this.promoDiscountPaise = 0,
+    this.feePaise = 0,
+    this.taxPaise = 0,
+    this.gst = const GstBreakdown(),
+    this.totalPaise = 0,
+    this.coinsPaise = 0,
+    int? payablePaise,
+  }) : payablePaise = payablePaise ?? totalPaise;
+  int get savingsPaise => offerDiscountPaise + promoDiscountPaise;
+  factory PriceBreakdown.fromJson(Map<String, dynamic> d) {
+    int n(String k) => (d[k] as num?)?.toInt() ?? 0;
+    return PriceBreakdown(
+      basePaise: n('basePaise'),
+      offerDiscountPaise: n('offerDiscountPaise'),
+      promoDiscountPaise: n('promoDiscountPaise'),
+      feePaise: n('feePaise'),
+      taxPaise: n('taxPaise'),
+      gst: GstBreakdown.fromJson(d['gst'] as Map<String, dynamic>?),
+      totalPaise: n('totalPaise'),
+      coinsPaise: n('coinsPaise'),
+      payablePaise: d['payablePaise'] == null ? n('totalPaise') : n('payablePaise'),
+    );
+  }
+}
+
+/// `POST api/payment/quote` result.
+class QuotePreview {
+  final PriceBreakdown price;
+  final String? promoCode;
+  final int coinBalancePaise;
+  QuotePreview(this.price, {this.promoCode, this.coinBalancePaise = 0});
+  factory QuotePreview.fromJson(Map<String, dynamic> d) => QuotePreview(
+        PriceBreakdown.fromJson(d),
+        promoCode: d['promoCode']?.toString(),
+        coinBalancePaise: (d['coinBalancePaise'] as num?)?.toInt() ?? 0,
       );
 }
 

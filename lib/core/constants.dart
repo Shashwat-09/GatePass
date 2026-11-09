@@ -70,6 +70,8 @@ class Endpoints {
   static const seatMap = 'api/booking/seat-map';
   static const promocodes = 'api/promocodes';
   static const bookTicket = 'api/payment/book-ticket';
+  static const quote = 'api/payment/quote';
+  static const wallet = 'api/wallet';
   static const processOrder = 'api/payment/process-order';
   static const cancelOrder = 'api/payment/cancel';
 

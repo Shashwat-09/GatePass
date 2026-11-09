@@ -1,7 +1,7 @@
 import { Body, Controller, Headers, HttpCode, Logger, Post, Req, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsObject, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested,
+  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateNested,
 } from 'class-validator';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
@@ -25,7 +25,9 @@ class BookDto {
   @IsOptional() @IsUUID() eventDateId?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ItemDto)
   items!: ItemDto[];
-  @IsOptional() @IsString() promoCode?: string;
+  @IsOptional() @IsString() @Matches(/^[A-Za-z0-9_-]{2,40}$/, { message: 'Invalid promo code' }) promoCode?: string;
+  @IsOptional() @IsBoolean() useCoins?: boolean;
+  @IsOptional() @IsString() @Length(2, 40) billingState?: string;
 }
 class ProcessDto {
   @IsUUID() bookingId!: string;
@@ -53,7 +55,15 @@ export class BookingController {
     if (idem !== undefined && !/^[\w-]{8,64}$/.test(idem)) {
       throw new ApiError('VALIDATION_ERROR', 'Invalid Idempotency-Key header');
     }
-    return this.booking.book(req.userId!, dto.eventId, dto.items, dto.promoCode, idem);
+    return this.booking.book(req.userId!, dto.eventId, dto.items, { promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState }, idem);
+  }
+
+  /** Price preview (summary screen): same rules as book-ticket, nothing is held. */
+  @UseGuards(JwtAuthGuard)
+  @Post('quote')
+  @HttpCode(200)
+  quote(@Req() req: AuthedRequest, @Body() dto: BookDto) {
+    return this.booking.preview(req.userId!, dto.eventId, dto.items, { promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState });
   }
 
   @UseGuards(JwtAuthGuard)

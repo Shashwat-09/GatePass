@@ -12,6 +12,7 @@ import {
   Artist, City, EventArtist, EventEntity, EventSponsor, EventWatcher, SeatReservation, SeatSection, Tier,
 } from '../db/entities';
 import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
+import { currentPrice, offerActive, offerLabel } from '../pricing/pricing';
 import { eventBadge, eventEnd, LISTED_STATUSES } from './event-status';
 import { EventsService } from './events.service';
 
@@ -145,7 +146,7 @@ export class EventsController {
     if (!e || e.status === 'draft') throw new ApiError('NOT_FOUND', 'Event not found');
     await this.events.increment({ id: e.id }, 'viewCount', 1);
     const city = await this.cities.findOne({ where: { id: e.cityId } });
-    const tiers = await this.tiers.find({ where: { eventId: e.id }, order: { pricePaise: 'ASC' } });
+    const tiers = await this.tiers.find({ where: { eventId: e.id, isActive: true }, order: { sortOrder: 'ASC', pricePaise: 'ASC' } });
     const stock = (await this.svc.stock([e.id])).get(e.id);
     const links = await this.eventArtists.find({ where: { eventId: e.id }, order: { isHeadliner: 'DESC', priority: 'ASC' } });
     const artists = links.length ? await this.artists.findBy({ id: In(links.map((l) => l.artistId)) }) : [];
@@ -178,10 +179,17 @@ export class EventsController {
       otherEvents: await this.cards(others),
       shareUrl: eventShareUrl(e.slug),
       notifyMe: watching,
-      tiers: tiers.map((t) => ({
-        id: t.id, name: t.name, type: t.type, pricePaise: t.pricePaise,
-        remaining: Math.max(0, t.quantity - t.sold - t.reserved), minQty: t.minQty, entryPerTicket: t.entryPerTicket,
-      })),
+      tiers: tiers.map((t) => {
+        const p = currentPrice(t);
+        return {
+          id: t.id, name: t.name, type: t.type, category: t.category, description: t.description,
+          pricePaise: p.pricePaise, strikePricePaise: p.strikePricePaise, phaseName: p.phaseName, phaseEndsAt: p.phaseEndsAt,
+          nextPhase: p.nextPhase,
+          offer: offerActive(t.offer) ? { ...t.offer, label: offerLabel(t.offer) } : null,
+          remaining: Math.max(0, t.quantity - t.sold - t.reserved), minQty: t.minQty, entryPerTicket: t.entryPerTicket,
+          maxPerUser: t.maxPerUser,
+        };
+      }),
     };
   }
 

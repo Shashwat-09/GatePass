@@ -33,7 +33,12 @@ class BookingController extends GetxController {
 
   final qtyByTier = <String, int>{}.obs;
   final seats = <SelectedSeat>[].obs;
-  final promo = Rxn<PromoModel>();
+  /// Applied promo code (validated and priced by the server).
+  final promoCode = RxnString();
+  final promoError = RxnString();
+  final useCoins = false.obs;
+  final preview = Rxn<QuotePreview>();
+  final previewLoading = false.obs;
 
   final loading = false.obs;
   final error = RxnString();
@@ -48,7 +53,10 @@ class BookingController extends GetxController {
     event = e;
     qtyByTier.clear();
     seats.clear();
-    promo.value = null;
+    promoCode.value = null;
+    promoError.value = null;
+    useCoins.value = false;
+    preview.value = null;
     quote.value = null;
     tickets.clear();
     error.value = null;
@@ -60,7 +68,8 @@ class BookingController extends GetxController {
   int qtyFor(String tierId) => qtyByTier[tierId] ?? 0;
   int get tierQty => qtyByTier.values.fold(0, (a, b) => a + b);
 
-  bool canInc(TierModel tier) => tierQty < event.maxPerUser && qtyFor(tier.id) < tier.remaining;
+  bool canInc(TierModel tier) =>
+      tierQty < event.maxPerUser && qtyFor(tier.id) < tier.remaining && (tier.maxPerUser == null || qtyFor(tier.id) < tier.maxPerUser!);
 
   void inc(TierModel tier) {
     if (!canInc(tier)) return;
@@ -111,25 +120,51 @@ class BookingController extends GetxController {
     return s;
   }
 
-  int get discountPaise => promo.value?.discountFor(subtotalPaise) ?? 0;
-
-  Future<bool> applyPromo(String code) async {
-    error.value = null;
-    loading.value = true;
-    final r = await _repo.validatePromo(code, subtotalPaise);
-    loading.value = false;
-    if (!r.isOk) {
-      error.value = r.error;
+  /// Re-prices the order on the server (summary screen). Returns false if the
+  /// promo code was rejected (the code is then removed and [promoError] set).
+  Future<bool> refreshPreview() async {
+    if (totalQty == 0) return true;
+    previewLoading.value = true;
+    final r = await _repo.preview(event, items: _items(), promoCode: promoCode.value, useCoins: useCoins.value);
+    previewLoading.value = false;
+    if (r.isOk) {
+      preview.value = r.data;
+      return true;
+    }
+    if (promoCode.value != null && r.code == 'VALIDATION_ERROR') {
+      promoError.value = r.error;
+      promoCode.value = null;
+      await refreshPreview();
       return false;
     }
-    promo.value = r.data;
+    error.value = r.error;
+    return false;
+  }
+
+  Future<bool> applyPromo(String code) async {
+    promoError.value = null;
+    final prev = promoCode.value;
+    promoCode.value = code.trim().toUpperCase();
     _invalidateQuote();
-    return true;
+    final ok = await refreshPreview();
+    if (!ok && prev != null && promoCode.value == null) {
+      promoCode.value = prev;
+      await refreshPreview();
+    }
+    return ok;
   }
 
   void removePromo() {
-    promo.value = null;
+    promoCode.value = null;
+    promoError.value = null;
     _invalidateQuote();
+    refreshPreview();
+  }
+
+  void toggleCoins(bool on) {
+    useCoins.value = on;
+    _invalidateQuote();
+    refreshPreview();
   }
 
   void _invalidateQuote() {
@@ -152,7 +187,8 @@ class BookingController extends GetxController {
     loading.value = true;
     error.value = null;
     errorCode.value = null;
-    final r = await _repo.bookTicket(event, items: _items(), idempotencyKey: _idempotencyKey, promoCode: promo.value?.code);
+    final r = await _repo.bookTicket(event,
+        items: _items(), idempotencyKey: _idempotencyKey, promoCode: promoCode.value, useCoins: useCoins.value);
     loading.value = false;
     if (!r.isOk) {
       error.value = r.error;
@@ -162,6 +198,8 @@ class BookingController extends GetxController {
     }
     quote.value = r.data;
     _analytics.beginCheckout(event.id, totalQty, r.data!.totalPaise);
+    // Free / fully paid with coins: the server already confirmed it.
+    if (r.data!.isConfirmed) return confirmWith(const {});
     return true;
   }
 

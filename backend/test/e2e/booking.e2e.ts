@@ -85,11 +85,11 @@ describe('booking + payment (e2e)', () => {
     await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 3 }] }).expect(400);
   });
 
-  it('rejects promo codes (not offered yet) and unknown tiers', async () => {
+  it('rejects unknown tiers and unknown promo codes', async () => {
     const s = await login(ctx);
     const ev = await eventBySlug(ctx, 'neon-nights');
     const tier = await tierByName(ctx, ev.id, 'General');
-    await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 1 }], promoCode: 'FIRST50' }).expect(400);
+    await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 1 }], promoCode: 'NOPE123' }).expect(400);
     await book(s.token, { eventId: ev.id, items: [{ tierId: '00000000-0000-4000-8000-000000000000', qty: 1 }] }).expect(400);
   });
 

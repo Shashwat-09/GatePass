@@ -37,7 +37,14 @@ CREATE TABLE public.bookings (
     items jsonb DEFAULT '[]'::jsonb NOT NULL,
     "expiresAt" timestamp with time zone NOT NULL,
     "confirmedAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "offerDiscountPaise" integer DEFAULT 0 NOT NULL,
+    "promoDiscountPaise" integer DEFAULT 0 NOT NULL,
+    "promoCodeId" uuid,
+    gst jsonb,
+    "billingState" character varying,
+    "coinsPaise" integer DEFAULT 0 NOT NULL,
+    "payablePaise" integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE public.check_ins (
@@ -126,7 +133,10 @@ CREATE TABLE public.events (
     "viewCount" integer DEFAULT 0 NOT NULL,
     "opensAt" timestamp with time zone,
     "closesAt" timestamp with time zone,
-    "statusNote" character varying
+    "statusNote" character varying,
+    "feeType" character varying,
+    "feeValue" integer,
+    "organizerState" character varying
 );
 
 CREATE TABLE public.migrations (
@@ -161,6 +171,35 @@ CREATE TABLE public.payment_events (
     type character varying NOT NULL,
     payload jsonb NOT NULL,
     "receivedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.promo_codes (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    code character varying NOT NULL,
+    "eventId" uuid,
+    "tierIds" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    type character varying NOT NULL,
+    value integer NOT NULL,
+    "maxDiscountPaise" integer,
+    "minOrderPaise" integer,
+    "minTickets" integer,
+    "usageLimit" integer,
+    "usageLimitPerUser" integer,
+    "startsAt" timestamp with time zone,
+    "endsAt" timestamp with time zone,
+    "isPublic" boolean DEFAULT true NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    description character varying DEFAULT ''::character varying NOT NULL
+);
+
+CREATE TABLE public.promo_redemptions (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "promoId" uuid NOT NULL,
+    "userId" uuid NOT NULL,
+    "bookingId" uuid NOT NULL,
+    "discountPaise" integer NOT NULL,
+    status character varying DEFAULT 'held'::character varying NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE public.refresh_tokens (
@@ -204,7 +243,14 @@ CREATE TABLE public.ticket_tiers (
     sold integer DEFAULT 0 NOT NULL,
     reserved integer DEFAULT 0 NOT NULL,
     "minQty" integer DEFAULT 1 NOT NULL,
-    "entryPerTicket" integer DEFAULT 1 NOT NULL
+    "entryPerTicket" integer DEFAULT 1 NOT NULL,
+    category character varying,
+    description text,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "maxPerUser" integer,
+    phases jsonb DEFAULT '[]'::jsonb NOT NULL,
+    offer jsonb
 );
 
 CREATE TABLE public.ticket_transfers (
@@ -243,7 +289,8 @@ CREATE TABLE public.tickets (
     "entryPerTicket" integer DEFAULT 1 NOT NULL,
     "parentTicketId" uuid,
     "receivedFromUserId" uuid,
-    "transfersOut" integer DEFAULT 0 NOT NULL
+    "transfersOut" integer DEFAULT 0 NOT NULL,
+    "tierId" uuid
 );
 
 CREATE TABLE public.users (
@@ -260,6 +307,22 @@ CREATE TABLE public.users (
     role character varying DEFAULT 'customer'::character varying NOT NULL,
     "deviceToken" character varying,
     "deletedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    house character varying,
+    street character varying,
+    locality character varying,
+    "addressCity" character varying,
+    state character varying,
+    pincode character varying
+);
+
+CREATE TABLE public.wallet_entries (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid NOT NULL,
+    "amountPaise" integer NOT NULL,
+    kind character varying NOT NULL,
+    "bookingId" uuid,
+    note character varying DEFAULT ''::character varying NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -277,11 +340,17 @@ ALTER TABLE ONLY public.seat_sections
 ALTER TABLE ONLY public.tickets
     ADD CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.promo_redemptions
+    ADD CONSTRAINT "PK_34a930e5657a7e0a837b0bb41c9" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.event_watchers
     ADD CONSTRAINT "PK_35ae7557ee7897f6a4d6d2ca64c" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.wallet_entries
+    ADD CONSTRAINT "PK_43159f70238df34adbec8b05505" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.ticket_transfers
     ADD CONSTRAINT "PK_46d92b7f4da96765c2218e96ce5" PRIMARY KEY (id);
@@ -316,6 +385,9 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.bookings
     ADD CONSTRAINT "PK_bee6805982cc1e248e94ce94957" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.promo_codes
+    ADD CONSTRAINT "PK_c7b4f01710fda5afa056a2b4a35" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.check_ins
     ADD CONSTRAINT "PK_fac7f27bc829a454ad477c13f62" PRIMARY KEY (id);
 
@@ -347,9 +419,13 @@ CREATE UNIQUE INDEX "IDX_1c77cbb3c49baf2feeed3241f1" ON public.tickets USING btr
 
 CREATE INDEX "IDX_2332057da6b96737f522d2d595" ON public.event_artists USING btree ("artistId");
 
+CREATE UNIQUE INDEX "IDX_237d6970907b5fbb299364fa74" ON public.promo_redemptions USING btree ("bookingId");
+
 CREATE INDEX "IDX_245de798229ec6e66bb9312f28" ON public.tickets USING btree ("bookingId");
 
 CREATE INDEX "IDX_2ab10e73ed36fa5926589152fa" ON public.event_sponsors USING btree ("eventId");
+
+CREATE UNIQUE INDEX "IDX_2f096c406a9d9d5b8ce204190c" ON public.promo_codes USING btree (code);
 
 CREATE INDEX "IDX_362e1da87c0e1d5ff73b8b454a" ON public.seat_reservations USING btree ("bookingId");
 
@@ -362,6 +438,8 @@ CREATE INDEX "IDX_40e9a8b923a1b3fb4429a5c624" ON public.refresh_tokens USING btr
 CREATE INDEX "IDX_433a24f525b6bb37e20ebc529d" ON public.ticket_transfers USING btree ("toUserId");
 
 CREATE INDEX "IDX_48b267d894e32a25ebde4b207a" ON public.bookings USING btree (status);
+
+CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
 
 CREATE INDEX "IDX_5f63cbb95a5f457f258f055c58" ON public.bookings USING btree ("expiresAt");
 
@@ -387,11 +465,15 @@ CREATE INDEX "IDX_842598ebf1da29c4de2999d447" ON public.event_watchers USING btr
 
 CREATE INDEX "IDX_8a101375d173c39a7c1d02c9d7" ON public.tickets USING btree ("eventId");
 
+CREATE INDEX "IDX_9291589e1aa8b24959a5e2cc2c" ON public.promo_codes USING btree ("eventId");
+
 CREATE UNIQUE INDEX "IDX_9add00bfd42ae2bbe830bab9aa" ON public.bookings USING btree (code);
 
 CREATE INDEX "IDX_9dfb0167fbe7623a59100f132a" ON public.bookings USING btree ("orderRef");
 
 CREATE UNIQUE INDEX "IDX_a000cca60bcf04454e72769949" ON public.users USING btree (phone);
+
+CREATE INDEX "IDX_a2cd7a0d725ad9514c9a90aa02" ON public.wallet_entries USING btree ("bookingId");
 
 CREATE INDEX "IDX_a58947aa4999755168d6d351ba" ON public.check_ins USING btree ("ticketId");
 
@@ -400,6 +482,12 @@ CREATE INDEX "IDX_a9059a9111a2206081a347d3b6" ON public.ticket_tiers USING btree
 CREATE INDEX "IDX_b4b6eedd8891e7cf45c500081a" ON public.ticket_transfers USING btree ("toPhone");
 
 CREATE INDEX "IDX_c37e9818eeaad9543032f6a6f1" ON public.tickets USING btree ("ownerUserId");
+
+CREATE INDEX "IDX_cddc3f77556a26ed4b536a3322" ON public.wallet_entries USING btree ("userId");
+
+CREATE INDEX "IDX_d4cdfe3a69b25527954b5957a5" ON public.tickets USING btree ("tierId");
+
+CREATE INDEX "IDX_d6ba170d54388257f185c84c7b" ON public.promo_redemptions USING btree ("userId");
 
 CREATE UNIQUE INDEX "IDX_d8698856b9f9735db747084136" ON public.artists USING btree (slug);
 

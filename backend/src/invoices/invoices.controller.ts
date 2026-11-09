@@ -61,15 +61,26 @@ export class InvoicesController {
       doc.moveDown(0.3);
     };
     for (const it of b.items) {
-      const label = it.tierId ? `${it.tierName} × ${it.qty}` : `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}`;
+      const label = it.tierId ? `${it.tierName}${it.phaseName ? ` (${it.phaseName})` : ''} × ${it.qty}` : `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}`;
       row(label, rupees(it.unitPricePaise * (it.qty ?? 1)));
     }
     doc.moveDown(0.5);
-    row('Subtotal', rupees(b.basePaise));
-    if (b.discountPaise) row('Discount', `- ${rupees(b.discountPaise)}`);
-    row(`Convenience fee (${config().pricing.feePct}%)`, rupees(b.feePaise));
-    row(`GST (${config().pricing.gstPct}%)`, rupees(b.taxPaise));
-    row('Total paid', rupees(b.totalPaise), true);
+    row('Base price', rupees(b.basePaise));
+    if (b.offerDiscountPaise) row('Offer savings', `- ${rupees(b.offerDiscountPaise)}`);
+    if (b.promoDiscountPaise) row('Coupon savings', `- ${rupees(b.promoDiscountPaise)}`);
+    row('Booking fee', rupees(b.feePaise));
+    const g = (b.gst ?? {}) as { type?: string; ratePct?: number; cgstPaise?: number; sgstPaise?: number; igstPaise?: number; included?: boolean };
+    const inc = g.included ? ' (included in fee)' : '';
+    if (g.type === 'cgst_sgst') {
+      row(`Central GST (CGST) @ ${(g.ratePct ?? 0) / 2}%${inc}`, rupees(g.cgstPaise ?? 0));
+      row(`State GST (SGST) @ ${(g.ratePct ?? 0) / 2}%${inc}`, rupees(g.sgstPaise ?? 0));
+    } else {
+      row(`Integrated GST (IGST) @ ${g.ratePct ?? config().pricing.gstPct}%${inc}`, rupees(g.igstPaise ?? b.taxPaise));
+    }
+    row('Total', rupees(b.totalPaise), true);
+    if (b.coinsPaise) row('Paid with coins', `- ${rupees(b.coinsPaise)}`);
+    row('Amount paid', rupees(b.payablePaise), true);
+    if (b.billingState) row('Place of supply', b.billingState);
     doc.moveDown(2).font('Helvetica').fontSize(8).fillColor('#666')
       .text('This is a computer-generated invoice and does not require a signature.');
     doc.end();

@@ -14,7 +14,7 @@ Code can't make these choices or open these accounts. Each line shows the **defa
 | 8 | **Firebase project** (Crashlytics + Analytics) | Code ready; disabled until config files exist | Add `android/app/google-services.json` and `ios/Runner/GoogleService-Info.plist` (the Gradle plugins switch on automatically) |
 | 9 | **Play Console account** | — | Create developer account (organisation), enrol in Play App Signing; see `docs/RELEASE.md` |
 | 10 | **Privacy policy & terms** | Drafts in `docs/legal/` (need legal review) | Publish at the URLs in row 7 |
-| 11 | **Fee & GST** | 3% convenience fee; 18% GST on (tickets + fee) — carried over from the original code | Backend `FEE_PCT`, `GST_PCT`. **Confirm with your accountant** (ticket GST rates and whether GST applies to the fee alone differ by case) |
+| 11 | **Fee & GST** | 3% booking fee; 18% GST **on the fee only**, split CGST+SGST when the buyer's state = `ORGANIZER_STATE` (Maharashtra), else IGST — matches the legacy app | Backend `FEE_TYPE`, `FEE_PCT`, `GST_PCT`, `GST_ON`, `GST_INCLUDED`, `ORGANIZER_STATE`, per-event fee override. **Confirm with your accountant**: if your ticket prices are not GST-inclusive, use `GST_ON=fee_and_tickets` |
 | 13 | **Ticket sharing rules** | Sharing on; **unlimited** shares per ticket; received tickets **can** be passed on; claim-back only before the friend accepts | `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` per event |
 | 12 | **Invoice seller details** | Placeholder | Backend `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_GSTIN` |
 

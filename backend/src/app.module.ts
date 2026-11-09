@@ -11,6 +11,7 @@ import { InfraModule } from './infra/infra.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ExportsModule } from './exports/exports.module';
+import { PromosModule } from './promos/promos.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UsersModule } from './users/users.module';
 
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     GateModule,
     NotificationsModule,
     ExportsModule,
+    PromosModule,
     ExtrasModule,
   ],
 })

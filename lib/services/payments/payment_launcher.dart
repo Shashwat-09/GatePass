@@ -62,7 +62,7 @@ class RazorpayLauncher implements PaymentLauncher {
     rp.open({
       'key': quote.gatewayKey,
       'order_id': quote.orderRef,
-      'amount': quote.totalPaise,
+      'amount': quote.payablePaise,
       'currency': 'INR',
       'name': AppConfig.appName,
       'description': description,

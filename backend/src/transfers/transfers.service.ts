@@ -154,7 +154,7 @@ export class TransfersService {
     const receiver = await m.findOneBy(User, { id: userId });
     const id = randomUUID();
     await m.insert(Ticket, {
-      id, bookingId: src.bookingId, ownerUserId: userId, eventId: src.eventId,
+      id, bookingId: src.bookingId, ownerUserId: userId, eventId: src.eventId, tierId: src.tierId,
       eventTitle: src.eventTitle, venueName: src.venueName, startDate: src.startDate,
       tierName: src.tierName, seatLabel: src.seatLabel,
       qrToken: signTicketQr(id, src.eventId), status: 'active',

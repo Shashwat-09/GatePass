@@ -5,12 +5,20 @@ import { ApiError } from '../common/api-error';
 import { signPath, signTicketQr } from '../common/signing';
 import { config } from '../config/config';
 import {
-  Booking, BookingItem, EventEntity, SeatReservation, SeatSection, Ticket, Tier, User,
+  Booking, BookingItem, EventEntity, PromoCode, PromoRedemption, SeatReservation, SeatSection, Ticket, Tier, User, WalletEntry,
 } from '../db/entities';
+import { currentPrice, FeeConfig, PromoError, quote, Quote, sameState } from '../pricing/pricing';
 import { KvStore } from '../infra/kv.service';
 import { eventBadge } from '../events/event-status';
 import { notify } from '../notifications/notify';
 import { PaymentGateway } from '../payments/gateway';
+
+export interface CheckoutOptions {
+  promoCode?: string;
+  useCoins?: boolean;
+  /** Buyer's state for GST (defaults to the profile state). */
+  billingState?: string;
+}
 
 export interface BookItemInput {
   tierId?: string;
@@ -21,6 +29,7 @@ export interface BookItemInput {
 }
 
 const PG_UNIQUE_VIOLATION = '23505';
+export { currentPrice };
 const INVOICE_LINK_TTL_SEC = 7 * 86400;
 
 function bookingCode() {
@@ -34,14 +43,6 @@ export function invoiceUrl(bookingId: string) {
   return signPath(`api/invoices/${bookingId}.pdf`, INVOICE_LINK_TTL_SEC);
 }
 
-/** Price breakdown, all integer paise. Fee and GST percentages come from config. */
-export function priceBreakdown(basePaise: number, discountPaise = 0) {
-  const { feePct, gstPct } = config().pricing;
-  const net = Math.max(0, basePaise - discountPaise);
-  const fee = Math.round((net * feePct) / 100);
-  const tax = Math.round(((net + fee) * gstPct) / 100);
-  return { net, fee, tax, total: net + fee + tax };
-}
 
 @Injectable()
 export class BookingService implements OnModuleInit, OnModuleDestroy {
@@ -66,17 +67,15 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────────────────────── create (book-ticket) ─────────────────────────────
 
-  async book(userId: string, eventId: string, items: BookItemInput[], promoCode?: string, idempotencyKey?: string) {
+  async book(userId: string, eventId: string, items: BookItemInput[], opts: CheckoutOptions = {}, idempotencyKey?: string) {
     // Per-user checkout limit (each attempt holds stock for the hold window).
     if ((await this.kv.incr(`rl:book:user:${userId}`, 60)) > 20) {
       throw new ApiError('RATE_LIMITED', 'Too many checkout attempts. Wait a minute and try again.');
     }
-    if (promoCode) {
-      throw new ApiError('VALIDATION_ERROR', 'Promo codes are not available yet', { promoCode: 'Not available' });
-    }
     if (idempotencyKey) {
       const prev = await this.ds.getRepository(Booking).findOne({ where: { userId, idempotencyKey } });
       if (prev) {
+        if (prev.status === 'confirmed' && prev.payablePaise === 0) return this.quote(prev);
         if (prev.status !== 'pending' || prev.expiresAt.getTime() <= Date.now()) {
           throw new ApiError('CONFLICT', 'This checkout has already finished; start a new one');
         }
@@ -88,48 +87,37 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     let booking: Booking;
     try {
       booking = await this.ds.transaction(async (m) => {
-        const event = await m.findOne(EventEntity, { where: { id: eventId } });
-        if (!event) throw new ApiError('NOT_FOUND', 'Event not found');
-        const badge = eventBadge(event);
-        if (!badge.isBookable) {
-          const why: Record<string, string> = {
-            opening_soon: 'Tickets aren’t on sale yet', sale_ended: 'Ticket sales have closed', finished: 'This event has ended',
-            cancelled: 'This event was cancelled', postponed: 'This event is postponed', draft: 'This event is not on sale',
-          };
-          throw new ApiError('VALIDATION_ERROR', why[badge.key] ?? 'This event is not on sale');
-        }
-
-        // Serialize this user's concurrent checkouts so the per-user limit holds.
-        await m.createQueryBuilder(User, 'u').setLock('pessimistic_write').where('u.id = :userId', { userId }).getOne();
+        const event = await this.bookableEvent(m, eventId);
+        // Serialize this user's concurrent checkouts so the per-user limits hold.
+        const user = await m.createQueryBuilder(User, 'u').setLock('pessimistic_write').where('u.id = :userId', { userId }).getOneOrFail();
 
         const id = randomUUID();
         const expiresAt = new Date(Date.now() + holdMs);
         const lines = event.hasSeatMap
           ? await this.reserveSeats(m, event, items, expiresAt, id)
-          : await this.reserveTiers(m, event, items);
-        const qty = lines.reduce((n, l) => n + (l.qty ?? 1), 0);
+          : await this.reserveTiers(m, event, items, userId);
+        await this.checkEventLimit(m, event, userId, lines);
 
-        if (qty > event.maxPerUser) {
-          throw new ApiError('VALIDATION_ERROR', `Max ${event.maxPerUser} per booking`, { qty: `Limit ${event.maxPerUser}` });
-        }
-        const already = await this.heldByUser(m, userId, event.id);
-        if (already + qty > event.maxPerUser) {
-          throw new ApiError('VALIDATION_ERROR', `Limit ${event.maxPerUser} per user`, {
-            qty: `You can buy ${Math.max(0, event.maxPerUser - already)} more`,
-          });
-        }
-
-        const base = lines.reduce((s, l) => s + l.unitPricePaise * (l.qty ?? 1), 0);
-        const p = priceBreakdown(base);
-        if (p.total < 100) throw new ApiError('VALIDATION_ERROR', 'Order total is too small');
-
-        return m.save(m.create(Booking, {
+        const priced = await this.price(m, event, user, lines, opts, true);
+        const b = await m.save(m.create(Booking, {
           id, code: bookingCode(), userId, eventId: event.id, status: 'pending',
-          basePaise: base, discountPaise: 0, feePaise: p.fee, taxPaise: p.tax, totalPaise: p.total,
-          gateway: this.gateway.name, orderRef: '', txnId: null,
+          basePaise: priced.q.basePaise, discountPaise: priced.q.discountPaise,
+          offerDiscountPaise: priced.q.offerDiscountPaise, promoDiscountPaise: priced.q.promoDiscountPaise,
+          promoCodeId: priced.promo?.id ?? null, feePaise: priced.q.feePaise, taxPaise: priced.q.taxPaise,
+          gst: priced.q.gst as unknown as Record<string, unknown>, billingState: priced.billingState,
+          totalPaise: priced.q.totalPaise, coinsPaise: priced.q.coinsPaise, payablePaise: priced.q.payablePaise,
+          gateway: priced.q.payablePaise === 0 ? 'none' : this.gateway.name, orderRef: '', txnId: null,
           idempotencyKey: idempotencyKey ?? null, failureReason: null,
-          items: lines, expiresAt, confirmedAt: null,
+          items: lines.map((l, i) => ({ ...l, offerDiscountPaise: priced.q.lineOfferDiscounts[i] })),
+          expiresAt, confirmedAt: null,
         }));
+        if (priced.promo) {
+          await m.insert(PromoRedemption, { promoId: priced.promo.id, userId, bookingId: id, discountPaise: priced.q.promoDiscountPaise, status: 'held' });
+        }
+        if (priced.q.coinsPaise > 0) {
+          await m.insert(WalletEntry, { userId, amountPaise: -priced.q.coinsPaise, kind: 'spend', bookingId: id, note: `Booking ${b.code}` });
+        }
+        return b;
       });
     } catch (err) {
       const e = err as { code?: string; constraint?: string };
@@ -144,9 +132,15 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       throw e;
     }
 
+    // Nothing to charge (free tickets, or fully paid with coins): confirm now.
+    if (booking.payablePaise === 0) {
+      await this.confirm(booking.id, `free_${booking.id}`);
+      return this.quote((await this.ds.getRepository(Booking).findOneByOrFail({ id: booking.id })));
+    }
+
     // Create the gateway order outside the transaction (network call, no locks held).
     try {
-      const order = await this.gateway.createOrder(booking.id, booking.totalPaise);
+      const order = await this.gateway.createOrder(booking.id, booking.payablePaise);
       booking.orderRef = order.orderRef;
       await this.ds.getRepository(Booking).update({ id: booking.id }, { orderRef: order.orderRef });
     } catch (e) {
@@ -157,14 +151,135 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     return this.quote(booking);
   }
 
+  /** Price preview for the summary screen — same rules as checkout, nothing held. */
+  async preview(userId: string, eventId: string, items: BookItemInput[], opts: CheckoutOptions = {}) {
+    return this.ds.transaction(async (m) => {
+      const event = await this.bookableEvent(m, eventId);
+      const user = await m.findOneByOrFail(User, { id: userId });
+      const lines = event.hasSeatMap ? await this.priceSeats(m, event, items) : await this.priceTiers(m, event, items, userId, false);
+      await this.checkEventLimit(m, event, userId, lines);
+      const priced = await this.price(m, event, user, lines, opts, false);
+      return {
+        ...this.breakdown(priced.q),
+        promoCode: priced.promo?.code ?? null,
+        coinBalancePaise: priced.coinBalance,
+        billingState: priced.billingState,
+        lines: lines.map((l, i) => ({
+          tierId: l.tierId, name: l.tierName ?? l.sectionName, qty: l.qty ?? 1, unitPricePaise: l.unitPricePaise,
+          offerDiscountPaise: priced.q.lineOfferDiscounts[i], phaseName: l.phaseName ?? null,
+        })),
+      };
+    });
+  }
+
+  private async bookableEvent(m: EntityManager, eventId: string) {
+    const event = await m.findOne(EventEntity, { where: { id: eventId } });
+    if (!event) throw new ApiError('NOT_FOUND', 'Event not found');
+    const badge = eventBadge(event);
+    if (!badge.isBookable) {
+      const why: Record<string, string> = {
+        opening_soon: 'Tickets aren’t on sale yet', sale_ended: 'Ticket sales have closed', finished: 'This event has ended',
+        cancelled: 'This event was cancelled', postponed: 'This event is postponed', draft: 'This event is not on sale',
+      };
+      throw new ApiError('VALIDATION_ERROR', why[badge.key] ?? 'This event is not on sale');
+    }
+    return event;
+  }
+
+  private async checkEventLimit(m: EntityManager, event: EventEntity, userId: string, lines: BookingItem[]) {
+    const qty = lines.reduce((n, l) => n + (l.qty ?? 1), 0);
+    if (qty > event.maxPerUser) {
+      throw new ApiError('VALIDATION_ERROR', `Max ${event.maxPerUser} tickets allowed.`, { qty: `Limit ${event.maxPerUser}` });
+    }
+    const already = await this.heldByUser(m, userId, event.id);
+    if (already + qty > event.maxPerUser) {
+      const left = Math.max(0, event.maxPerUser - already);
+      throw new ApiError('VALIDATION_ERROR', left
+        ? `You can book only ${left} more ticket${left === 1 ? '' : 's'} for this event.`
+        : `You've reached the maximum booking limit of ${event.maxPerUser} tickets for this event.`, {
+        qty: `You can buy ${left} more`,
+      });
+    }
+  }
+
+  /** Runs the pricing engine: promo validation, fee config, GST state split, coins. */
+  private async price(m: EntityManager, event: EventEntity, user: User, lines: BookingItem[], opts: CheckoutOptions, lock: boolean) {
+    const tierIds = lines.map((l) => l.tierId).filter((x): x is string => !!x);
+    const tiers = tierIds.length ? await m.findBy(Tier, { id: In(tierIds) }) : [];
+    const engineLines = lines.map((l) => ({
+      tierId: l.tierId, qty: l.qty ?? 1, unitPricePaise: l.unitPricePaise,
+      offer: tiers.find((t) => t.id === l.tierId)?.offer ?? null,
+    }));
+
+    let promo: PromoCode | null = null;
+    if (opts.promoCode?.trim()) promo = await this.validPromo(m, opts.promoCode, event.id, user.id, lock);
+
+    const cfg = config().pricing;
+    const fee: FeeConfig = {
+      type: event.feeType ?? cfg.feeType, value: event.feeValue ?? cfg.feePct,
+      gstPct: cfg.gstPct, gstIncluded: cfg.gstIncluded, gstOn: cfg.gstOn,
+    };
+    const billingState = opts.billingState?.trim() || user.state || null;
+    const intraState = sameState(billingState ?? cfg.organizerState, event.organizerState ?? cfg.organizerState);
+    const coinBalance = await this.coinBalance(m, user.id);
+    try {
+      const q = quote(engineLines, fee, {
+        intraState,
+        coinsAvailable: opts.useCoins ? coinBalance : 0,
+        promo: promo ? {
+          id: promo.id, code: promo.code, type: promo.type, value: promo.value, maxDiscountPaise: promo.maxDiscountPaise,
+          minOrderPaise: promo.minOrderPaise, minTickets: promo.minTickets, tierIds: promo.tierIds,
+        } : null,
+      });
+      return { q, promo, billingState, coinBalance };
+    } catch (e) {
+      if (e instanceof PromoError) throw new ApiError('VALIDATION_ERROR', e.message, { promoCode: e.message });
+      throw e;
+    }
+  }
+
+  private async validPromo(m: EntityManager, raw: string, eventId: string, userId: string, lock: boolean) {
+    const code = raw.trim().toUpperCase();
+    const qb = m.createQueryBuilder(PromoCode, 'p').where('p.code = :code', { code });
+    if (lock) qb.setLock('pessimistic_write');
+    const p = await qb.getOne();
+    const bad = (msg: string) => new ApiError('VALIDATION_ERROR', msg, { promoCode: msg });
+    if (!p || !p.isActive) throw bad('Promo code doesn\'t exist');
+    if (p.eventId && p.eventId !== eventId) throw bad('This promo code is not valid for this event.');
+    const now = Date.now();
+    if (p.startsAt && p.startsAt.getTime() > now) throw bad('This promo code is not active yet.');
+    if (p.endsAt && p.endsAt.getTime() <= now) throw bad('This promo code has expired.');
+    const live = { promoId: p.id, status: In(['held', 'used']) };
+    if (p.usageLimit != null && (await m.countBy(PromoRedemption, live)) >= p.usageLimit) throw bad('This promo code has been fully used.');
+    if (p.usageLimitPerUser != null && (await m.countBy(PromoRedemption, { ...live, userId })) >= p.usageLimitPerUser) {
+      throw bad('You have already used this promo code.');
+    }
+    return p;
+  }
+
+  async coinBalance(m: EntityManager, userId: string) {
+    const r = await m.createQueryBuilder(WalletEntry, 'w').select('COALESCE(SUM(w."amountPaise"),0)', 'b')
+      .where('w."userId" = :userId', { userId }).getRawOne<{ b: string }>();
+    return Math.max(0, Number(r?.b ?? 0));
+  }
+
+  private breakdown(q: Quote) {
+    return {
+      basePaise: q.basePaise, offerDiscountPaise: q.offerDiscountPaise, promoDiscountPaise: q.promoDiscountPaise,
+      discountPaise: q.discountPaise, feePaise: q.feePaise, gst: q.gst, taxPaise: q.taxPaise,
+      totalPaise: q.totalPaise, coinsPaise: q.coinsPaise, payablePaise: q.payablePaise, currency: 'INR',
+    };
+  }
+
   private quote(b: Booking) {
     return {
-      bookingId: b.id, bookingCode: b.code,
-      basePaise: b.basePaise, discountPaise: b.discountPaise, feePaise: b.feePaise,
-      taxPaise: b.taxPaise, totalPaise: b.totalPaise, currency: 'INR',
+      bookingId: b.id, bookingCode: b.code, bookingStatus: b.status,
+      basePaise: b.basePaise, offerDiscountPaise: b.offerDiscountPaise, promoDiscountPaise: b.promoDiscountPaise,
+      discountPaise: b.discountPaise, feePaise: b.feePaise, gst: b.gst, taxPaise: b.taxPaise,
+      totalPaise: b.totalPaise, coinsPaise: b.coinsPaise, payablePaise: b.payablePaise, currency: 'INR',
       orderRef: b.orderRef, gateway: b.gateway,
       // Public SDK key (Razorpay key id) — never a secret.
-      gatewayToken: config().payment.gateway === 'razorpay' ? config().payment.razorpayKeyId : 'mock',
+      gatewayToken: b.gateway === 'razorpay' ? config().payment.razorpayKeyId : b.gateway,
       expiresAt: b.expiresAt.toISOString(),
     };
   }
@@ -185,7 +300,14 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Locks the tier rows, checks availability and moves stock into `reserved`. */
-  private async reserveTiers(m: EntityManager, event: EventEntity, items: BookItemInput[]): Promise<BookingItem[]> {
+  private async reserveTiers(m: EntityManager, event: EventEntity, items: BookItemInput[], userId: string): Promise<BookingItem[]> {
+    const lines = await this.priceTiers(m, event, items, userId, true);
+    for (const l of lines) await m.increment(Tier, { id: l.tierId! }, 'reserved', l.qty!);
+    return lines;
+  }
+
+  /** Validates GA items against tiers (stock, min qty, per-ticket limit) and prices them. */
+  private async priceTiers(m: EntityManager, event: EventEntity, items: BookItemInput[], userId: string, lock: boolean): Promise<BookingItem[]> {
     const want = new Map<string, number>();
     for (const it of items) {
       if (it.sectionId != null || !it.tierId) {
@@ -196,16 +318,14 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       want.set(it.tierId, (want.get(it.tierId) ?? 0) + q);
     }
     const ids = [...want.keys()].sort();
-    const tiers = await m.createQueryBuilder(Tier, 't')
-      .setLock('pessimistic_write')
-      .where('t.id IN (:...ids) AND t.eventId = :eventId', { ids, eventId: event.id })
-      .orderBy('t.id')
-      .getMany()
-      .catch(() => [] as Tier[]); // malformed uuid → treated as unknown below
+    const qb = m.createQueryBuilder(Tier, 't').where('t.id IN (:...ids) AND t.eventId = :eventId', { ids, eventId: event.id }).orderBy('t.id');
+    if (lock) qb.setLock('pessimistic_write');
+    const tiers = await qb.getMany().catch(() => [] as Tier[]); // malformed uuid → unknown below
     const lines: BookingItem[] = [];
     for (const id of ids) {
       const tier = tiers.find((t) => t.id === id);
       if (!tier) throw new ApiError('VALIDATION_ERROR', 'Unknown ticket type');
+      if (!tier.isActive) throw new ApiError('VALIDATION_ERROR', 'This ticket is currently unavailable.');
       const qty = want.get(id)!;
       if (qty < tier.minQty) {
         throw new ApiError('VALIDATION_ERROR', `Minimum ${tier.minQty} for ${tier.name}`, { qty: `Min ${tier.minQty}` });
@@ -214,10 +334,40 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       if (qty > available) {
         throw new ApiError('SOLD_OUT', available > 0 ? `Only ${available} ${tier.name} left` : `${tier.name} is sold out`);
       }
-      await m.increment(Tier, { id: tier.id }, 'reserved', qty);
-      lines.push({ tierId: tier.id, tierName: tier.name, qty, unitPricePaise: tier.pricePaise });
+      if (tier.maxPerUser != null) {
+        const held = await this.heldForTier(m, userId, tier.id);
+        if (held + qty > tier.maxPerUser) {
+          const left = Math.max(0, tier.maxPerUser - held);
+          throw new ApiError('VALIDATION_ERROR', left
+            ? `You can book only ${left} more ${tier.name} ticket${left === 1 ? '' : 's'}.`
+            : 'You\'ve reached the maximum booking limit for this ticket.', { qty: `You can buy ${left} more` });
+        }
+      }
+      const p = currentPrice(tier);
+      lines.push({ tierId: tier.id, tierName: tier.name, qty, unitPricePaise: p.pricePaise, phaseName: p.phaseName ?? undefined });
     }
     return lines;
+  }
+
+  /** Seat items priced from their sections (no holds) — used by the price preview. */
+  private async priceSeats(m: EntityManager, event: EventEntity, items: BookItemInput[]): Promise<BookingItem[]> {
+    const sections = await m.find(SeatSection, { where: { eventId: event.id } });
+    return items.map((it) => {
+      const sec = sections.find((s) => s.key === it.sectionId);
+      if (!sec) throw new ApiError('VALIDATION_ERROR', 'Choose seats from the seat map');
+      return { sectionId: sec.key, sectionName: sec.name, row: it.row, col: it.col, qty: 1, unitPricePaise: sec.pricePaise };
+    });
+  }
+
+  /** Units of one ticket type the user holds (owned tickets + live pending bookings). */
+  private async heldForTier(m: EntityManager, userId: string, tierId: string) {
+    const t = await m.createQueryBuilder(Ticket, 't').select('COALESCE(SUM(t.quantity),0)', 'n')
+      .where('t."ownerUserId" = :userId AND t."tierId" = :tierId AND t.status NOT IN (:...s)', { userId, tierId, s: ['cancelled', 'transferred'] })
+      .getRawOne<{ n: string }>();
+    const pending = await m.find(Booking, { where: { userId, status: 'pending' } });
+    const p = pending.filter((b) => b.expiresAt.getTime() > Date.now())
+      .reduce((n, b) => n + b.items.filter((i) => i.tierId === tierId).reduce((k, i) => k + (i.qty ?? 0), 0), 0);
+    return Number(t?.n ?? 0) + p;
   }
 
   /** Inserts `held` seat rows; the unique constraint rejects already-taken seats. */
@@ -263,6 +413,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     const b = await repo.findOne({ where: { id: bookingId, userId } }).catch(() => null);
     if (!b) throw new ApiError('NOT_FOUND', 'Booking not found');
     if (b.status === 'confirmed') return this.confirmedView(b.id);
+    if (b.payablePaise === 0) throw new ApiError('VALIDATION_ERROR', 'Nothing to pay for this booking');
     if (b.orderRef !== orderRef) throw new ApiError('VALIDATION_ERROR', 'Order reference does not match');
     if (b.status === 'refund_pending' || b.status === 'refunded') {
       throw new ApiError('PAYMENT_FAILED', 'This booking could not be completed; your payment is being refunded');
@@ -270,7 +421,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
     let result;
     try {
-      result = await this.gateway.verifyClientPayment(b, payload ?? {});
+      result = await this.gateway.verifyClientPayment({ id: b.id, orderRef: b.orderRef, totalPaise: b.payablePaise }, payload ?? {});
     } catch (e) {
       this.log.error(`verify failed for ${b.id}: ${(e as Error).message}`);
       throw new ApiError('SERVER_ERROR', 'Could not confirm payment yet. If you were charged, your tickets will appear shortly.');
@@ -316,7 +467,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         b.txnId = paymentId;
         b.failureReason = 'Sold out after hold expired';
         await m.save(b);
-        refund = { paymentId, amount: b.totalPaise };
+        await this.releaseExtras(m, b);
+        refund = { paymentId, amount: b.payablePaise };
         return;
       }
 
@@ -326,6 +478,13 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       b.failureReason = null;
       await m.save(b);
       await this.issueTickets(m, b, event);
+      await m.update(PromoRedemption, { bookingId: b.id }, { status: 'used' });
+      const cashbackPct = config().pricing.coinsCashbackPct;
+      const net = b.basePaise - b.discountPaise;
+      if (cashbackPct > 0 && net > 0) {
+        const cb = Math.floor((net * cashbackPct) / 100 / 100) * 100; // whole coins
+        if (cb > 0) await m.insert(WalletEntry, { userId: b.userId, amountPaise: cb, kind: 'cashback', bookingId: b.id, note: `Cashback on ${b.code}` });
+      }
       const qty = b.items.reduce((n, i) => n + (i.qty ?? 1), 0);
       await notify(m, b.userId, 'booking', 'Booking confirmed', `${qty} ticket${qty === 1 ? '' : 's'} for ${event.title}. Booking ${b.code}.`, {
         bookingId: b.id, eventId: event.id,
@@ -388,7 +547,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       const qty = it.qty ?? 1;
       const tier = tiers.find((t) => t.id === it.tierId);
       await m.insert(Ticket, {
-        id, bookingId: b.id, ownerUserId: b.userId, eventId: event.id,
+        id, bookingId: b.id, ownerUserId: b.userId, eventId: event.id, tierId: it.tierId ?? null,
         eventTitle: event.title, venueName: event.venueName, startDate: event.startDate,
         tierName: it.tierName ?? it.sectionName ?? '',
         seatLabel: it.sectionId ? `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}` : null,
@@ -436,6 +595,17 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       }
     }
     await m.delete(SeatReservation, { bookingId: b.id, status: 'held' });
+    await this.releaseExtras(m, b);
+  }
+
+  /** Returns a held promo use and any coins spent on a booking that won't complete. */
+  private async releaseExtras(m: EntityManager, b: Booking) {
+    await m.update(PromoRedemption, { bookingId: b.id, status: 'held' }, { status: 'released' });
+    const spent = await m.findOneBy(WalletEntry, { bookingId: b.id, kind: 'spend' });
+    const refunded = await m.findOneBy(WalletEntry, { bookingId: b.id, kind: 'refund' });
+    if (spent && !refunded) {
+      await m.insert(WalletEntry, { userId: b.userId, amountPaise: -spent.amountPaise, kind: 'refund', bookingId: b.id, note: `Refund for ${b.code}` });
+    }
   }
 
   /** Releases stock held by unpaid bookings past their hold time. */
@@ -457,8 +627,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       this.log.warn(`Webhook for unknown order ${orderRef}`);
       return;
     }
-    if (amountPaise !== b.totalPaise) {
-      this.log.error(`Webhook amount mismatch booking=${b.id} paid=${amountPaise} expected=${b.totalPaise}`);
+    if (amountPaise !== b.payablePaise) {
+      this.log.error(`Webhook amount mismatch booking=${b.id} paid=${amountPaise} expected=${b.payablePaise}`);
       return;
     }
     await this.confirm(b.id, paymentId).catch((e) => {

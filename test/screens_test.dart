@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass/app/routes.dart';
@@ -6,6 +8,8 @@ import 'package:gatepass/data/models/models.dart';
 import 'package:gatepass/features/artist/artist_screen.dart';
 import 'package:gatepass/features/auth/otp_screen.dart';
 import 'package:gatepass/features/booking/payment_screen.dart';
+import 'package:gatepass/features/booking/select_ticket_screen.dart';
+import 'package:gatepass/features/booking/summary_screen.dart';
 import 'package:gatepass/features/controllers/auth_controller.dart';
 import 'package:gatepass/features/controllers/booking_controller.dart';
 import 'package:gatepass/features/profile/profile_screen.dart';
@@ -141,6 +145,104 @@ void main() {
     await t.tap(find.text('Add to my tickets'));
     await t.pumpAndSettle();
     expect(d.backend.callsTo('api/ticket/claim').single.body, {'code': 'ABC123DEF456'});
+  });
+
+  Map<String, dynamic> previewJson({String? promo, bool coins = false}) => {
+        'basePaise': 159800, 'offerDiscountPaise': 0, 'promoDiscountPaise': promo != null ? 20000 : 0,
+        'feePaise': 4194, 'taxPaise': 755,
+        'gst': {'type': 'cgst_sgst', 'ratePct': 18, 'cgstPaise': 377, 'sgstPaise': 378, 'igstPaise': 0, 'included': false},
+        'totalPaise': 144749, 'coinsPaise': coins ? 10000 : 0, 'payablePaise': coins ? 134749 : 144749,
+        'promoCode': promo, 'coinBalancePaise': 10000,
+      };
+
+  testWidgets('Summary: server breakdown with CGST/SGST, promo applied from the list, coins toggle', (t) async {
+    t.view.physicalSize = const Size(1080, 3200);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    d.backend.on('POST', 'api/payment/quote', (req) async {
+      final b = jsonDecode(req.body) as Map<String, dynamic>;
+      return FakeBackend.ok(previewJson(promo: b['promoCode'] as String?, coins: b['useCoins'] == true));
+    });
+    d.backend.json('GET', 'api/promocodes', {'items': [{'code': 'FIRST50', 'summary': '50% off up to ₹200', 'description': ''}]});
+    final c = Get.put(BookingController())..start(EventModel.fromJson(eventJson()));
+    c.inc(c.event.tiers.first);
+    c.inc(c.event.tiers.first);
+    await t.pumpWidget(app(const SummaryScreen()));
+    await t.pumpAndSettle();
+    expect(find.textContaining('Central GST (CGST) @ 9%'), findsOneWidget);
+    expect(find.textContaining('State GST (SGST) @ 9%'), findsOneWidget);
+    expect(find.text('Pay ₹1,447.49'), findsOneWidget);
+
+    await t.tap(find.text('Apply promo code'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('APPLY').last);
+    await t.pumpAndSettle(const Duration(seconds: 5));
+    expect(find.text('FIRST50 applied'), findsOneWidget);
+    expect(find.text('Coupon savings'), findsOneWidget);
+    expect(d.backend.callsTo('api/payment/quote').last.body['promoCode'], 'FIRST50');
+
+    await t.tap(find.text('Use coins'));
+    await t.pumpAndSettle();
+    expect(find.text('Coins applied'), findsOneWidget);
+    expect(find.text('Pay ₹1,347.49'), findsOneWidget);
+    expect(d.backend.callsTo('api/payment/quote').last.body['useCoins'], true);
+  });
+
+  testWidgets('Rejected promo shows the server message and keeps the order unchanged', (t) async {
+    d.backend.on('POST', 'api/payment/quote', (req) async {
+      final b = jsonDecode(req.body) as Map<String, dynamic>;
+      if (b['promoCode'] == 'BADCODE') return FakeBackend.err('VALIDATION_ERROR', 'Promo code doesn\'t exist', 400);
+      return FakeBackend.ok(previewJson());
+    });
+    d.backend.json('GET', 'api/promocodes', {'items': []});
+    final c = Get.put(BookingController())..start(EventModel.fromJson(eventJson()));
+    c.inc(c.event.tiers.first);
+    await t.pumpWidget(app(const SummaryScreen()));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Apply promo code'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('promo-input')), 'badcode');
+    await t.tap(find.text('APPLY'));
+    await t.pumpAndSettle();
+    expect(find.text('Promo code doesn\'t exist'), findsOneWidget);
+    expect(c.promoCode.value, isNull);
+  });
+
+  testWidgets('Free / fully covered order: confirmed without opening the payment gateway', (t) async {
+    d.backend.json('POST', 'api/payment/quote', {...previewJson(coins: true), 'coinsPaise': 144749, 'payablePaise': 0});
+    d.backend.json('POST', 'api/payment/book-ticket', {...quoteJson(), 'bookingStatus': 'confirmed', 'gateway': 'none', 'payablePaise': 0});
+    d.backend.json('POST', 'api/payment/process-order', {'bookingStatus': 'confirmed', 'tickets': [ticketJson('t1')], 'invoiceUrl': null});
+    d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+    final c = Get.put(BookingController())..start(EventModel.fromJson(eventJson()));
+    c.inc(c.event.tiers.first);
+    await t.pumpWidget(GetMaterialApp(home: const SummaryScreen(), getPages: Routes.pages));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Confirm booking'));
+    await t.pumpAndSettle();
+    expect(find.text('Booking confirmed!'), findsOneWidget);
+    expect(d.payments.opened, 0);
+  });
+
+  testWidgets('Ticket picker shows categories, phase + strike price, offers and per-person limits', (t) async {
+    final ev = EventModel.fromJson({
+      ...eventJson(),
+      'tiers': [
+        {'id': 'a', 'name': 'General', 'category': 'Standing', 'pricePaise': 79900, 'strikePricePaise': 99900, 'phaseName': 'Early bird',
+         'remaining': 50, 'offer': {'label': 'Buy 3 get 1 free'}},
+        {'id': 'b', 'name': 'VIP', 'category': 'VIP Lounge', 'pricePaise': 249900, 'remaining': 3, 'maxPerUser': 2, 'description': 'Lounge access'},
+      ],
+    });
+    await t.pumpWidget(app(SelectTicketScreen(event: ev)));
+    await t.pumpAndSettle();
+    for (final text in ['Standing', 'VIP Lounge', 'Early bird', '₹999', 'Buy 3 get 1 free', 'Lounge access', 'Only 3 left', 'Max 2 per person']) {
+      expect(find.text(text), findsWidgets, reason: text);
+    }
+    final c = Get.find<BookingController>();
+    final vip = ev.tiers.last;
+    c.inc(vip);
+    c.inc(vip);
+    c.inc(vip);
+    expect(c.qtyFor(vip.id), 2); // per-person cap
   });
 
   testWidgets('My tickets: error state retries', (t) async {

@@ -7,12 +7,15 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../widgets/common.dart';
 import '../controllers/booking_controller.dart';
+import '../../widgets/price_breakdown.dart';
 import 'confirmation_screen.dart';
 
 /// Shows the server-computed total and hold timer, then opens the gateway
 /// checkout. The server verifies every payment before tickets are issued.
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
+
+  static void goToConfirmation() => Get.offUntil(GetPageRoute(page: () => const ConfirmationScreen()), (r) => r.isFirst);
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
 }
@@ -45,7 +48,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _onPaid(bool ok) async {
     if (ok && mounted) {
-      Get.offUntil(GetPageRoute(page: () => const ConfirmationScreen()), (r) => r.isFirst);
+      PaymentScreen.goToConfirmation();
     }
   }
 
@@ -75,12 +78,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const SizedBox(height: 4),
                 Text('Booking ${q.bookingCode}', style: TextStyle(color: Theme.of(context).hintColor)),
                 const SizedBox(height: AppSpacing.md),
-                _line('Tickets', formatPaise(q.basePaise)),
-                if (q.discountPaise > 0) _line('Discount', '- ${formatPaise(q.discountPaise)}'),
-                _line('Convenience fee', formatPaise(q.feePaise)),
-                _line('GST', formatPaise(q.taxPaise)),
-                const Divider(height: AppSpacing.lg),
-                _line('Total', formatPaise(q.totalPaise), bold: true),
+                PriceBreakdownView(q.price),
                 const SizedBox(height: AppSpacing.md),
                 if (q.expiresAt != null)
                   Row(children: [
@@ -101,7 +99,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ),
                 if (q.gateway == 'mock') ..._testMode(busy) else
                   PrimaryButton(
-                    label: 'Pay ${formatPaise(q.totalPaise)}',
+                    label: 'Pay ${formatPaise(q.payablePaise)}',
                     loading: busy,
                     onPressed: () async => _onPaid(await c.pay()),
                   ),
@@ -142,11 +140,5 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
       ];
 
-  Widget _line(String label, String amount, {bool bold = false}) {
-    final style = TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w500, fontSize: bold ? 18 : 15);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: style), Text(amount, style: style)]),
-    );
-  }
+
 }

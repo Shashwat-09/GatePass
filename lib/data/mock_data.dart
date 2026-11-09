@@ -87,19 +87,7 @@ class MockData {
   static const genres = ['Music', 'Comedy', 'Theatre', 'Festival', 'Sports'];
 
   static final promos = <PromoModel>[
-    PromoModel(
-        code: 'FIRST50',
-        type: 'percent',
-        value: 50,
-        maxDiscountPaise: 20000,
-        minOrderPaise: 50000,
-        label: '50% off up to ₹200'),
-    PromoModel(
-        code: 'FLAT100',
-        type: 'flat',
-        value: 10000,
-        minOrderPaise: 100000,
-        label: '₹100 off over ₹1000'),
+    PromoModel(code: 'FIRST50', summary: '50% off up to ₹200 on orders above ₹500'),
   ];
 
   static final vouchers = <VoucherModel>[

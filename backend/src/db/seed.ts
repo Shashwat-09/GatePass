@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { Artist, City, EventArtist, EventEntity, EventSponsor, SeatReservation, SeatSection, Tier } from './entities';
+import { Artist, City, EventArtist, EventEntity, EventSponsor, PromoCode, SeatReservation, SeatSection, Tier } from './entities';
 
 /**
  * Inserts demo reference data (cities, 3 events, tiers, seat sections) if the
@@ -77,6 +77,25 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
       tier(citadel.id, 'Standing', 'ga', 149900, 500, 120),
       tier(citadel.id, 'Floor', 'ga', 299900, 100, 30),
       tier(folk.id, 'General', 'ga', 59900, 200, 0),
+    ]);
+    // Pricing demo: offer on Neon General, phases on Citadel Standing, VIP per-user cap.
+    await m.update(Tier, { eventId: neon.id, name: 'General' }, {
+      category: 'Standing', offer: { type: 'bxgy', buyQuantity: 3, getFreeQuantity: 1 },
+    });
+    await m.update(Tier, { eventId: neon.id, name: 'Early Bird' }, { category: 'Standing', sortOrder: -1 });
+    await m.update(Tier, { eventId: neon.id, name: 'VIP' }, {
+      category: 'VIP Lounge', description: 'Lounge access, fast-lane entry', maxPerUser: 4,
+      offer: { type: 'bulk_discount', minQuantity: 4, discountType: 'percentage', discountValue: 10 },
+    });
+    await m.update(Tier, { eventId: citadel.id, name: 'Standing' }, {
+      phases: [
+        { name: 'Early bird', pricePaise: 129900, startsAt: inDays(-10).toISOString(), endsAt: inDays(3).toISOString() },
+        { name: 'Phase 2', pricePaise: 149900, startsAt: inDays(3).toISOString(), endsAt: inDays(10).toISOString() },
+      ],
+    });
+    await m.save([
+      m.create(PromoCode, { code: 'FIRST50', type: 'percentage', value: 50, maxDiscountPaise: 20000, minOrderPaise: 50000, usageLimitPerUser: 1, isPublic: true, description: '50% off your first booking, up to ₹200' }),
+      m.create(PromoCode, { code: 'NEONVIP', eventId: neon.id, type: 'fixed', value: 30000, minTickets: 2, isPublic: false, description: 'Friends of the artist' }),
     ]);
 
     const artist = (slug: string, name: string, occupation: string, about: string) => m.create(Artist, {

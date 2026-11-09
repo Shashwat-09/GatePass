@@ -1,3 +1,4 @@
+import type { PricePhase, TierOffer } from '../pricing/pricing';
 import {
   Column,
   CreateDateColumn,
@@ -35,6 +36,13 @@ export class User {
   @Column({ type: 'varchar', nullable: true }) dob!: string | null;
   @Column({ type: 'varchar', nullable: true }) gender!: string | null;
   @Column({ type: 'uuid', nullable: true }) cityId!: string | null;
+  // address (profile + GST billing state)
+  @Column({ type: 'varchar', nullable: true }) house!: string | null;
+  @Column({ type: 'varchar', nullable: true }) street!: string | null;
+  @Column({ type: 'varchar', nullable: true }) locality!: string | null;
+  @Column({ type: 'varchar', nullable: true }) addressCity!: string | null;
+  @Column({ type: 'varchar', nullable: true }) state!: string | null;
+  @Column({ type: 'varchar', nullable: true }) pincode!: string | null;
   @Column({ default: false }) acceptedTerms!: boolean;
   @Column({ type: 'varchar', nullable: true }) termsVersion!: string | null;
   @Column({ type: 'varchar', default: 'customer' }) role!: UserRole;
@@ -95,6 +103,11 @@ export class EventEntity {
   @Column({ type: 'timestamptz', nullable: true }) closesAt!: Date | null;
   /** Shown for postponed/rescheduled/cancelled events. */
   @Column({ type: 'varchar', nullable: true }) statusNote!: string | null;
+  /** Booking-fee override for this event (null = global FEE_* config). */
+  @Column({ type: 'varchar', nullable: true }) feeType!: 'percentage' | 'fixed_per_ticket' | null;
+  @Column({ type: 'int', nullable: true }) feeValue!: number | null;
+  /** Organiser's GST state: same state as the buyer → CGST+SGST, else IGST. */
+  @Column({ type: 'varchar', nullable: true }) organizerState!: string | null;
   /** Ticket splitting/sharing rules (old app: splitLimitEnabled, maxSplitTransfers). */
   @Column({ default: true }) allowTransfers!: boolean;
   /** Optional cap on how many times one ticket can be shared; null = unlimited (default). */
@@ -169,6 +182,65 @@ export class Tier {
   @Column({ default: 0 }) reserved!: number;
   @Column({ default: 1 }) minQty!: number;
   @Column({ default: 1 }) entryPerTicket!: number;
+  /** Group heading in the ticket list, e.g. "Standing", "VIP Lounge". */
+  @Column({ type: 'varchar', nullable: true }) category!: string | null;
+  @Column({ type: 'text', nullable: true }) description!: string | null;
+  @Column({ default: 0 }) sortOrder!: number;
+  @Column({ default: true }) isActive!: boolean;
+  /** Per-user cap for this ticket type (null = only the event cap applies). */
+  @Column({ type: 'int', nullable: true }) maxPerUser!: number | null;
+  /** Price phases (early bird…): [{name, pricePaise, startsAt, endsAt}]. */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) phases!: PricePhase[];
+  /** Offer: buy-X-get-Y or bulk discount (see pricing.ts). */
+  @Column({ type: 'jsonb', nullable: true }) offer!: TierOffer | null;
+}
+
+export type PromoType = 'percentage' | 'fixed';
+
+@Entity('promo_codes')
+export class PromoCode {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index({ unique: true }) @Column() code!: string; // stored upper-case
+  /** null = valid for every event. */
+  @Index() @Column({ type: 'uuid', nullable: true }) eventId!: string | null;
+  @Column({ type: 'jsonb', default: () => "'[]'" }) tierIds!: string[];
+  @Column({ type: 'varchar' }) type!: PromoType;
+  @Column() value!: number;
+  @Column({ type: 'int', nullable: true }) maxDiscountPaise!: number | null;
+  @Column({ type: 'int', nullable: true }) minOrderPaise!: number | null;
+  @Column({ type: 'int', nullable: true }) minTickets!: number | null;
+  @Column({ type: 'int', nullable: true }) usageLimit!: number | null;
+  @Column({ type: 'int', nullable: true }) usageLimitPerUser!: number | null;
+  @Column({ type: 'timestamptz', nullable: true }) startsAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) endsAt!: Date | null;
+  /** Public codes are listed at checkout; private ones must be typed. */
+  @Column({ default: true }) isPublic!: boolean;
+  @Column({ default: true }) isActive!: boolean;
+  @Column({ default: '' }) description!: string;
+}
+
+/** A promo held by a pending booking or used by a confirmed one. */
+@Entity('promo_redemptions')
+export class PromoRedemption {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) promoId!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Index({ unique: true }) @Column({ type: 'uuid' }) bookingId!: string;
+  @Column() discountPaise!: number;
+  @Column({ type: 'varchar', default: 'held' }) status!: 'held' | 'used' | 'released';
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Coins wallet ledger (1 coin = ₹1). Balance = SUM(amountPaise). */
+@Entity('wallet_entries')
+export class WalletEntry {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Column() amountPaise!: number;
+  @Column({ type: 'varchar' }) kind!: 'grant' | 'cashback' | 'spend' | 'refund';
+  @Index() @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  @Column({ default: '' }) note!: string;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
 @Entity('seat_sections')
@@ -211,6 +283,8 @@ export interface BookingItem {
   row?: number;
   col?: number;
   unitPricePaise: number;
+  phaseName?: string;
+  offerDiscountPaise?: number;
 }
 
 @Entity('bookings')
@@ -223,9 +297,18 @@ export class Booking {
   @Index() @Column({ type: 'varchar', default: 'pending' }) status!: BookingStatus;
   @Column({ default: 0 }) basePaise!: number;
   @Column({ default: 0 }) discountPaise!: number;
+  @Column({ default: 0 }) offerDiscountPaise!: number;
+  @Column({ default: 0 }) promoDiscountPaise!: number;
+  @Column({ type: 'uuid', nullable: true }) promoCodeId!: string | null;
   @Column({ default: 0 }) feePaise!: number;
   @Column({ default: 0 }) taxPaise!: number;
+  @Column({ type: 'jsonb', nullable: true }) gst!: Record<string, unknown> | null;
+  @Column({ type: 'varchar', nullable: true }) billingState!: string | null;
+  /** Order total before coins. */
   @Column({ default: 0 }) totalPaise!: number;
+  @Column({ default: 0 }) coinsPaise!: number;
+  /** Charged through the gateway (total − coins). */
+  @Column({ default: 0 }) payablePaise!: number;
   @Column({ default: 'mock' }) gateway!: string;
   @Index() @Column({ default: '' }) orderRef!: string;
   /** Gateway payment id. Unique so one payment can never confirm two bookings. */
@@ -246,6 +329,7 @@ export class Ticket {
   @Index() @Column({ type: 'uuid' }) bookingId!: string;
   @Index() @Column({ type: 'uuid' }) ownerUserId!: string;
   @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Index() @Column({ type: 'uuid', nullable: true }) tierId!: string | null;
   @Column() eventTitle!: string;
   @Column() venueName!: string;
   @Column({ default: '' }) tierName!: string;
@@ -333,5 +417,5 @@ export class PaymentEvent {
 
 export const ENTITIES = [
   City, User, RefreshToken, EventEntity, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
-  Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent,
+  Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
 ];

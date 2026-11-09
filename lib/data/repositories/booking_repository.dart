@@ -20,6 +20,12 @@ class BookingQuote {
   /// Public gateway key for the SDK (Razorpay key id) — not a secret.
   final String gatewayKey;
   final DateTime? expiresAt;
+  final PriceBreakdown price;
+  final String status;
+
+  /// Nothing to charge (free / fully paid with coins): already confirmed.
+  bool get isConfirmed => status == 'confirmed';
+  int get payablePaise => price.payablePaise;
 
   BookingQuote({
     required this.bookingId,
@@ -33,7 +39,9 @@ class BookingQuote {
     required this.gatewayKey,
     this.discountPaise = 0,
     this.expiresAt,
-  });
+    PriceBreakdown? price,
+    this.status = 'pending',
+  }) : price = price ?? PriceBreakdown(basePaise: basePaise, feePaise: feePaise, taxPaise: taxPaise, totalPaise: totalPaise, offerDiscountPaise: discountPaise);
 
   factory BookingQuote.fromJson(Map<String, dynamic> d) => BookingQuote(
         bookingId: d['bookingId'].toString(),
@@ -47,6 +55,8 @@ class BookingQuote {
         gateway: (d['gateway'] ?? 'mock').toString(),
         gatewayKey: (d['gatewayToken'] ?? '').toString(),
         expiresAt: DateTime.tryParse((d['expiresAt'] ?? '').toString())?.toLocal(),
+        price: PriceBreakdown.fromJson(d),
+        status: (d['bookingStatus'] ?? 'pending').toString(),
       );
 }
 
@@ -65,16 +75,45 @@ class BookingRepository {
     return List.generate(24, (_) => r.nextInt(36).toRadixString(36)).join();
   }
 
-  /// Phase 2 — validate a promo code (server endpoint not live yet).
-  Future<ApiResult<PromoModel>> validatePromo(String code, int subtotalPaise) async {
-    if (AppConfig.useMockData) {
-      final match = MockData.promos.where((p) => p.code.toUpperCase() == code.trim().toUpperCase()).toList();
-      if (match.isEmpty) return const ApiResult.fail('Invalid promo code');
-      return ApiResult.ok(match.first);
-    }
-    final r = await _api.request(Endpoints.promocodes, method: Method.post, body: {'code': code, 'subtotalPaise': subtotalPaise});
+  /// Public promo codes for an event ("View all promo codes").
+  Future<ApiResult<List<PromoModel>>> promoCodes(String eventId) async {
+    if (AppConfig.useMockData) return ApiResult.ok(MockData.promos);
+    final r = await _api.request(Endpoints.promocodes, query: {'eventId': eventId});
     if (!r.isOk) return r.cast();
-    return ApiResult.ok(PromoModel.fromJson(r.data as Map<String, dynamic>));
+    final items = (r.data as Map<String, dynamic>)['items'] as List? ?? const [];
+    return ApiResult.ok(items.map((e) => PromoModel.fromJson(e as Map<String, dynamic>)).toList());
+  }
+
+  /// Server price preview for the summary (offers, promo, fee, GST split, coins).
+  Future<ApiResult<QuotePreview>> preview(
+    EventModel event, {
+    required List<Map<String, dynamic>> items,
+    String? promoCode,
+    bool useCoins = false,
+  }) async {
+    if (AppConfig.useMockData) {
+      final base = _mockBase(event, items);
+      final fee = (base * 3 / 100).round();
+      final gst = (fee * 18 / 100).round();
+      return ApiResult.ok(QuotePreview(PriceBreakdown(basePaise: base, feePaise: fee, taxPaise: gst,
+          gst: GstBreakdown(type: 'cgst_sgst', cgstPaise: gst ~/ 2, sgstPaise: gst - gst ~/ 2), totalPaise: base + fee + gst)));
+    }
+    final r = await _api.request(Endpoints.quote, method: Method.post, body: {
+      'eventId': event.id,
+      'items': items,
+      if (promoCode != null) 'promoCode': promoCode,
+      if (useCoins) 'useCoins': true,
+    });
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(QuotePreview.fromJson(r.data as Map<String, dynamic>));
+  }
+
+  /// Coins balance (1 coin = ₹1).
+  Future<ApiResult<int>> coinBalance() async {
+    if (AppConfig.useMockData) return const ApiResult.ok(0);
+    final r = await _api.request(Endpoints.wallet, query: {'limit': '1'});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(((r.data as Map<String, dynamic>)['balancePaise'] as num?)?.toInt() ?? 0);
   }
 
   Future<ApiResult<List<SeatSectionModel>>> seatMap(String eventId) async {
@@ -101,6 +140,7 @@ class BookingRepository {
     required List<Map<String, dynamic>> items,
     required String idempotencyKey,
     String? promoCode,
+    bool useCoins = false,
   }) async {
     if (AppConfig.useMockData) {
       final base = _mockBase(event, items);
@@ -123,6 +163,7 @@ class BookingRepository {
       'eventId': event.id,
       'items': items,
       if (promoCode != null) 'promoCode': promoCode,
+      if (useCoins) 'useCoins': true,
     });
     if (!r.isOk) return r.cast();
     return ApiResult.ok(BookingQuote.fromJson(r.data as Map<String, dynamic>));

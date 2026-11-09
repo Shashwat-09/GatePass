@@ -48,7 +48,15 @@ export interface AppConfig {
     razorpayWebhookSecret?: string;
     razorpayApiBase: string;
   };
-  pricing: { feePct: number; gstPct: number };
+  pricing: {
+    feeType: 'percentage' | 'fixed_per_ticket';
+    feePct: number; // percentage, or paise per ticket for fixed_per_ticket
+    gstPct: number;
+    gstOn: 'fee' | 'fee_and_tickets';
+    gstIncluded: boolean;
+    organizerState: string;
+    coinsCashbackPct: number;
+  };
   bookingHoldSec: number;
   sweeperEnabled: boolean;
   rateLimit: { mutatingPerMin: number; readPerMin: number };
@@ -162,7 +170,15 @@ export function loadConfig(): AppConfig {
       razorpayWebhookSecret: str('RAZORPAY_WEBHOOK_SECRET'),
       razorpayApiBase: str('RAZORPAY_API_BASE', 'https://api.razorpay.com/v1/')!,
     },
-    pricing: { feePct: num('FEE_PCT', 3), gstPct: num('GST_PCT', 18) },
+    pricing: {
+      feeType: (str('FEE_TYPE', 'percentage') as 'percentage' | 'fixed_per_ticket'),
+      feePct: num('FEE_PCT', 3),
+      gstPct: num('GST_PCT', 18),
+      gstOn: (str('GST_ON', 'fee') as 'fee' | 'fee_and_tickets'),
+      gstIncluded: bool('GST_INCLUDED', false),
+      organizerState: str('ORGANIZER_STATE', 'Maharashtra')!,
+      coinsCashbackPct: num('COINS_CASHBACK_PCT', 0),
+    },
     bookingHoldSec: num('BOOKING_HOLD_SECONDS', 600),
     sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test'),
     rateLimit: {
@@ -188,6 +204,8 @@ export function loadConfig(): AppConfig {
   }
 
   if (!['mock', 'razorpay'].includes(cfg.payment.gateway)) errors.push('PAYMENT_GATEWAY must be mock|razorpay');
+  if (!['percentage', 'fixed_per_ticket'].includes(cfg.pricing.feeType)) errors.push('FEE_TYPE must be percentage|fixed_per_ticket');
+  if (!['fee', 'fee_and_tickets'].includes(cfg.pricing.gstOn)) errors.push('GST_ON must be fee|fee_and_tickets');
   if (isProd && cfg.payment.gateway === 'mock') errors.push('PAYMENT_GATEWAY=mock is not allowed in production');
   if (cfg.payment.gateway === 'razorpay') {
     const p = cfg.payment;
