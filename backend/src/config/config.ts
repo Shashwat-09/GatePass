@@ -61,6 +61,11 @@ export interface AppConfig {
   sweeperEnabled: boolean;
   rateLimit: { mutatingPerMin: number; readPerMin: number };
   invoice: { sellerName: string; sellerAddress: string; gstin: string };
+  app: {
+    android: { latestVersion: string; minVersion: string; storeUrl: string };
+    ios: { latestVersion: string; minVersion: string; storeUrl: string };
+    maintenance: { on: boolean; message: string };
+  };
 }
 
 const log = new Logger('Config');
@@ -184,6 +189,17 @@ export function loadConfig(): AppConfig {
     rateLimit: {
       mutatingPerMin: num('RATE_LIMIT_MUTATING_PER_MIN', 60),
       readPerMin: num('RATE_LIMIT_READ_PER_MIN', 300),
+    },
+    app: {
+      android: {
+        latestVersion: str('APP_ANDROID_LATEST', '0.1.0')!, minVersion: str('APP_ANDROID_MIN', '0.0.0')!,
+        storeUrl: str('APP_ANDROID_STORE_URL', 'https://play.google.com/store/apps/details?id=com.gatepass.app')!,
+      },
+      ios: {
+        latestVersion: str('APP_IOS_LATEST', '0.1.0')!, minVersion: str('APP_IOS_MIN', '0.0.0')!,
+        storeUrl: str('APP_IOS_STORE_URL', 'https://apps.apple.com/')!,
+      },
+      maintenance: { on: bool('MAINTENANCE_MODE', false), message: str('MAINTENANCE_MESSAGE', 'We are making things better. Back shortly!')! },
     },
     invoice: {
       sellerName: str('INVOICE_SELLER_NAME', 'GatePass (set INVOICE_SELLER_NAME)')!,

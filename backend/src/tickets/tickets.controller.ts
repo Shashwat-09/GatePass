@@ -49,6 +49,10 @@ export class TicketsController {
         qrToken: t.qrToken, status: t.status, quantity: t.quantity,
         entryUsed: t.entriesUsed, entryTotal: t.entriesTotal,
         transferableUnits: canShare ? transferableUnits(t) : 0,
+        eventSlug: e?.slug ?? null,
+        notes: e?.ticketNotes ?? null,
+        mapLink: e?.mapLink ?? null,
+        terms: e?.terms ?? null,
         receivedFrom: t.receivedFromUserId ? from.get(t.receivedFromUserId)?.name ?? 'A friend' : null,
         // Invoices belong to the buyer, not to people who received a share.
         invoiceUrl: t.receivedFromUserId ? null : invoiceUrl(t.bookingId),
@@ -61,6 +65,7 @@ export class TicketsController {
   async mine(
     @Req() req: AuthedRequest,
     @Query('scope') scope = 'upcoming',
+    @Query('source') source?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -76,6 +81,7 @@ export class TicketsController {
           ? `COALESCE(e."endDate", e."startDate" + interval '6 hours') < now()`
           : `(COALESCE(e."endDate", e."startDate" + interval '6 hours') >= now() OR e."startDate" IS NULL)`,
       )
+      .andWhere(source === 'received' ? 't."receivedFromUserId" IS NOT NULL' : source === 'booked' ? 't."receivedFromUserId" IS NULL' : '1=1')
       .orderBy('t.startDate', history ? 'DESC' : 'ASC')
       .addOrderBy('t.createdAt', 'ASC')
       .skip(q.skip)

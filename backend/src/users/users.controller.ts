@@ -7,7 +7,8 @@ import { DataSource, IsNull, Repository } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
-import { City, RefreshToken, User } from '../db/entities';
+import { AccountDeletion, City, RefreshToken, User } from '../db/entities';
+import { INDIAN_STATES } from '../common/states';
 
 /** dob (YYYY-MM-DD) must be a real date and the user at least `years` old. */
 function MinAge(years: number, opts?: ValidationOptions) {
@@ -38,6 +39,16 @@ class UpdateUserDto {
   @IsOptional() @IsUUID() cityId?: string;
   @IsOptional() @IsBoolean() acceptedTerms?: boolean;
   @IsOptional() @IsString() @Matches(/^[\w.-]{1,20}$/) termsVersion?: string;
+  @IsOptional() @IsString() @Length(1, 120) house?: string;
+  @IsOptional() @IsString() @Length(1, 120) street?: string;
+  @IsOptional() @IsString() @Length(1, 120) locality?: string;
+  @IsOptional() @IsString() @Length(1, 80) city?: string;
+  @IsOptional() @IsIn(INDIAN_STATES, { message: 'Choose a valid state' }) state?: string;
+  @IsOptional() @Matches(/^[1-9]\d{5}$/, { message: 'Please enter valid pin code' }) pincode?: string;
+}
+
+class DeleteDto {
+  @IsOptional() @IsString() @Length(0, 500) reason?: string;
 }
 
 @UseGuards(JwtAuthGuard)
@@ -77,6 +88,12 @@ export class UsersController {
     if (dto.cityId !== undefined) u.cityId = dto.cityId;
     if (dto.acceptedTerms !== undefined) u.acceptedTerms = dto.acceptedTerms;
     if (dto.termsVersion !== undefined) u.termsVersion = dto.termsVersion;
+    if (dto.house !== undefined) u.house = dto.house.trim();
+    if (dto.street !== undefined) u.street = dto.street.trim();
+    if (dto.locality !== undefined) u.locality = dto.locality.trim();
+    if (dto.city !== undefined) u.addressCity = dto.city.trim();
+    if (dto.state !== undefined) u.state = dto.state;
+    if (dto.pincode !== undefined) u.pincode = dto.pincode;
     await this.users.save(u);
     return this.auth.publicUser(u);
   }
@@ -88,13 +105,15 @@ export class UsersController {
    * because tax law requires retaining transaction records.
    */
   @Delete()
-  async remove(@Req() req: AuthedRequest) {
+  async remove(@Req() req: AuthedRequest, @Body() dto: DeleteDto) {
     const u = await this.current(req.userId!);
     await this.ds.transaction(async (m) => {
       await m.update(User, { id: u.id }, {
         phone: `deleted:${u.id}`, name: null, email: null, dob: null, gender: null,
         cityId: null, deviceToken: null, deletedAt: new Date(),
+        house: null, street: null, locality: null, addressCity: null, state: null, pincode: null,
       });
+      if (dto?.reason?.trim()) await m.insert(AccountDeletion, { reason: dto.reason.trim() });
       await m.update(RefreshToken, { userId: u.id, revokedAt: IsNull() }, { revokedAt: new Date() });
     });
     return { deleted: true };

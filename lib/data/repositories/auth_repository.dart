@@ -71,6 +71,7 @@ class AuthRepository {
     String? gender,
     String? cityId,
     bool? acceptedTerms,
+    Address? address,
   }) async {
     final existing = currentUser;
     if (AppConfig.useMockData) {
@@ -94,6 +95,14 @@ class AuthRepository {
       if (cityId != null) 'cityId': cityId,
       if (acceptedTerms != null) 'acceptedTerms': acceptedTerms,
       if (acceptedTerms == true) 'termsVersion': AppConfig.termsVersion,
+      if (address != null) ...{
+        if ((address.house ?? '').isNotEmpty) 'house': address.house,
+        if ((address.street ?? '').isNotEmpty) 'street': address.street,
+        if ((address.locality ?? '').isNotEmpty) 'locality': address.locality,
+        if ((address.city ?? '').isNotEmpty) 'city': address.city,
+        if ((address.state ?? '').isNotEmpty) 'state': address.state,
+        if ((address.pincode ?? '').isNotEmpty) 'pincode': address.pincode,
+      },
     });
     if (!r.isOk) return r.cast();
     final user = UserModel.fromJson(r.data as Map<String, dynamic>);
@@ -102,9 +111,9 @@ class AuthRepository {
   }
 
   /// Permanently deletes the account on the server, then clears this device.
-  Future<ApiResult<bool>> deleteAccount() async {
+  Future<ApiResult<bool>> deleteAccount({String? reason}) async {
     if (!AppConfig.useMockData) {
-      final r = await _api.request(Endpoints.user, method: Method.delete);
+      final r = await _api.request(Endpoints.user, method: Method.delete, body: {if ((reason ?? '').trim().isNotEmpty) 'reason': reason!.trim()});
       if (!r.isOk) return r.cast();
     }
     await clearLocalSession();

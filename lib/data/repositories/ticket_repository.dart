@@ -15,13 +15,15 @@ class TicketRepository {
 
   /// A page of tickets. If the network or server is down, upcoming tickets
   /// come from the on-device copy so QR codes still open at the venue.
-  Future<ApiResult<Paged<TicketModel>>> myTickets({String scope = 'upcoming', int page = 1}) async {
+  Future<ApiResult<Paged<TicketModel>>> myTickets({String scope = 'upcoming', int page = 1, String? source}) async {
     if (AppConfig.useMockData) {
       return ApiResult.ok(Paged(scope == 'upcoming' ? MockData.tickets : <TicketModel>[], total: MockData.tickets.length));
     }
-    final r = await _api.request(Endpoints.myTickets, query: {'scope': scope, 'page': '$page', 'limit': '${AppConfig.pageSize}'});
+    final r = await _api.request(Endpoints.myTickets,
+        query: {'scope': scope, 'page': '$page', 'limit': '${AppConfig.pageSize}', if (source != null) 'source': source});
     if (!r.isOk) {
-      final cached = scope == 'upcoming' ? cachedTickets() : null;
+      final all = scope == 'upcoming' ? cachedTickets() : null;
+      final cached = all?.where((t) => source == null || (source == 'received') == (t.receivedFrom != null)).toList();
       if (cached != null && r.statusCode != 401 && r.statusCode != 403) {
         if (page > 1) return const ApiResult.ok(Paged([], total: 0, fromCache: true));
         return ApiResult.ok(Paged(cached, total: cached.length, fromCache: true));
@@ -29,7 +31,7 @@ class TicketRepository {
       return r.cast();
     }
     final p = Paged.fromJson(r.data, TicketModel.fromJson);
-    if (scope == 'upcoming' && page == 1) {
+    if (scope == 'upcoming' && page == 1 && source == null) {
       if (p.total <= p.items.length) {
         await _saveCache(p.items);
       } else {

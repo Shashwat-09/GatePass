@@ -44,6 +44,8 @@ Size: current release APKs are ~19–23 MB per ABI (arm64 21.5 MB) — under the
   - gate: staff scans the QR at `/gate` → ADMIT; second scan → ALREADY USED
   - leave app idle > 15 min → still signed in (token refresh); delete account → back to login
   - every screen: loading, empty, error (turn network off) states
+  - ticket screen: screenshots are blocked (secure mode)
+  - set `APP_ANDROID_MIN` above the build version → app shows the forced-update screen; `MAINTENANCE_MODE=true` → maintenance screen
   - cold start ≤ 2.5 s on the mid-tier device (stopwatch from tap to first frame of Home)
 - [ ] Switch staging → production: live Razorpay keys, live webhook, prod Firebase, prod `BASE_URL`; one real low-value purchase and refund.
 
@@ -62,6 +64,8 @@ Size: current release APKs are ~19–23 MB per ABI (arm64 21.5 MB) — under the
 | Email | Yes | No | Invoices/receipts | Yes |
 | Date of birth, gender | Yes | No | Account management (age check) | Yes |
 | Purchase history | Yes | No | App functionality, invoices | No |
+| Approximate location | Yes (only when you tap "Use my current location"; not stored) | No | Pick your city | Yes |
+| Address (house, street, PIN, state) | Yes | No | GST invoices | Yes |
 | Payment info | Handled by Razorpay (cards/UPI never reach our servers) | Razorpay | Payments | No |
 | Crash logs, diagnostics | Yes (Crashlytics) | Google | Analytics / stability | No |
 | App interactions | Yes (Firebase Analytics, no PII, no advertising ID) | Google | Analytics | No |

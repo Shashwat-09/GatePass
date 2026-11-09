@@ -57,7 +57,8 @@ class PagedList<T> {
 
 class MyTicketsController extends GetxController {
   final _repo = sl<TicketRepository>();
-  late final upcoming = PagedList<TicketModel>((p) => _repo.myTickets(scope: 'upcoming', page: p));
+  late final upcoming = PagedList<TicketModel>((p) => _repo.myTickets(scope: 'upcoming', page: p, source: 'booked'));
+  late final received = PagedList<TicketModel>((p) => _repo.myTickets(scope: 'upcoming', page: p, source: 'received'));
   late final history = PagedList<TicketModel>((p) => _repo.myTickets(scope: 'history', page: p));
   late final sent = PagedList<TransferModel>((p) => _repo.transfers(direction: 'sent', page: p));
   final exporting = false.obs;
@@ -68,7 +69,7 @@ class MyTicketsController extends GetxController {
     refreshAll();
   }
 
-  Future<void> refreshAll() => Future.wait([upcoming.load(), history.load(), sent.load()]);
+  Future<void> refreshAll() => Future.wait([upcoming.load(), received.load(), history.load(), sent.load()]);
 
   Future<void> claimBack(TransferModel t) async {
     final r = await _repo.claimBack(t.id);
@@ -96,7 +97,7 @@ class MyTicketsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Get.put(MyTicketsController());
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My tickets'),
@@ -114,12 +115,17 @@ class MyTicketsScreen extends StatelessWidget {
                   onPressed: c.exporting.value ? null : c.export,
                 )),
           ],
-          bottom: const TabBar(tabs: [Tab(text: 'Upcoming'), Tab(text: 'Past'), Tab(text: 'Shared')]),
+          bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [Tab(text: 'Booked'), Tab(text: 'Received'), Tab(text: 'Shared'), Tab(text: 'History')],
+          ),
         ),
         body: TabBarView(children: [
-          _tickets(c.upcoming, 'No upcoming tickets — explore events'),
-          _tickets(c.history, 'Past events you attended will show here'),
+          _tickets(c.upcoming, 'You haven’t booked a ticket yet'),
+          _tickets(c.received, 'No tickets received yet'),
           _transfers(c),
+          _tickets(c.history, 'No past tickets yet'),
         ]),
       ),
     );
@@ -201,7 +207,7 @@ class MyTicketsScreen extends StatelessWidget {
       if (l.items.isEmpty) {
         return RefreshIndicator(
           onRefresh: l.load,
-          child: ListView(children: const [SizedBox(height: 160), StateView.empty('Tickets you share with friends show here')]),
+          child: ListView(children: const [SizedBox(height: 160), StateView.empty('You haven’t shared a ticket yet')]),
         );
       }
       return RefreshIndicator(

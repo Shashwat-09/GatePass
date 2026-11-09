@@ -22,6 +22,20 @@ export class City {
   @Column({ type: 'varchar', nullable: true }) state!: string | null;
   @Column({ default: '' }) iconUrl!: string;
   @Column({ default: true }) isActive!: boolean;
+  /** Shown as quick picks on the city screen. */
+  @Column({ default: false }) isTop!: boolean;
+  @Column({ default: 0 }) sortOrder!: number;
+  /** City centre — used to detect the user's city from GPS. */
+  @Column({ type: 'double precision', nullable: true }) lat!: number | null;
+  @Column({ type: 'double precision', nullable: true }) lng!: number | null;
+}
+
+/** Reasons people give when deleting their account (no personal data kept). */
+@Entity('account_deletions')
+export class AccountDeletion {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ type: 'text', default: '' }) reason!: string;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
 export type UserRole = 'customer' | 'staff' | 'admin';
@@ -103,6 +117,8 @@ export class EventEntity {
   @Column({ type: 'timestamptz', nullable: true }) closesAt!: Date | null;
   /** Shown for postponed/rescheduled/cancelled events. */
   @Column({ type: 'varchar', nullable: true }) statusNote!: string | null;
+  /** Notes / disclaimers printed on every ticket for this event. */
+  @Column({ type: 'text', nullable: true }) ticketNotes!: string | null;
   /** Booking-fee override for this event (null = global FEE_* config). */
   @Column({ type: 'varchar', nullable: true }) feeType!: 'percentage' | 'fixed_per_ticket' | null;
   @Column({ type: 'int', nullable: true }) feeValue!: number | null;
@@ -416,6 +432,6 @@ export class PaymentEvent {
 }
 
 export const ENTITIES = [
-  City, User, RefreshToken, EventEntity, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
+  City, AccountDeletion, User, RefreshToken, EventEntity, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
 ];

@@ -6,6 +6,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
+CREATE TABLE public.account_deletions (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    reason text DEFAULT ''::text NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.artists (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     slug character varying NOT NULL,
@@ -66,7 +72,11 @@ CREATE TABLE public.cities (
     name character varying NOT NULL,
     state character varying,
     "iconUrl" character varying DEFAULT ''::character varying NOT NULL,
-    "isActive" boolean DEFAULT true NOT NULL
+    "isActive" boolean DEFAULT true NOT NULL,
+    "isTop" boolean DEFAULT false NOT NULL,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    lat double precision,
+    lng double precision
 );
 
 CREATE TABLE public.event_artists (
@@ -136,7 +146,8 @@ CREATE TABLE public.events (
     "statusNote" character varying,
     "feeType" character varying,
     "feeValue" integer,
-    "organizerState" character varying
+    "organizerState" character varying,
+    "ticketNotes" text
 );
 
 CREATE TABLE public.migrations (
@@ -357,6 +368,9 @@ ALTER TABLE ONLY public.ticket_transfers
 
 ALTER TABLE ONLY public.cities
     ADD CONSTRAINT "PK_4762ffb6e5d198cfec5606bc11e" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.account_deletions
+    ADD CONSTRAINT "PK_4d5b2aea48b5d5777b3421ec05c" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY (id);

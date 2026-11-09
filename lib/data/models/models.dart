@@ -33,6 +33,8 @@ class UserModel {
   final String? gender;
   final String? dob;
   final bool acceptedTerms;
+  final String? memberId;
+  final Address address;
 
   UserModel({
     required this.id,
@@ -42,6 +44,8 @@ class UserModel {
     this.gender,
     this.dob,
     this.acceptedTerms = false,
+    this.memberId,
+    this.address = const Address(),
   });
 
   factory UserModel.fromJson(Map<String, dynamic> j) => UserModel(
@@ -52,6 +56,8 @@ class UserModel {
         gender: j['gender'],
         dob: j['dob'],
         acceptedTerms: j['acceptedTerms'] == true,
+        memberId: j['memberId']?.toString(),
+        address: Address.fromJson(j['address'] as Map<String, dynamic>?),
       );
 
   Map<String, dynamic> toJson() => {
@@ -62,6 +68,8 @@ class UserModel {
         'gender': gender,
         'dob': dob,
         'acceptedTerms': acceptedTerms,
+        'memberId': memberId,
+        'address': address.toJson(),
       };
 }
 
@@ -111,6 +119,107 @@ class TierModel {
         phaseName: j['phaseName']?.toString(),
         offerLabel: (j['offer'] is Map) ? (j['offer']['label'])?.toString() : null,
         maxPerUser: (j['maxPerUser'] as num?)?.toInt(),
+      );
+}
+
+class Address {
+  final String? house;
+  final String? street;
+  final String? locality;
+  final String? city;
+  final String? state;
+  final String? pincode;
+  const Address({this.house, this.street, this.locality, this.city, this.state, this.pincode});
+  factory Address.fromJson(Map<String, dynamic>? j) => j == null
+      ? const Address()
+      : Address(
+          house: j['house']?.toString(),
+          street: j['street']?.toString(),
+          locality: j['locality']?.toString(),
+          city: j['city']?.toString(),
+          state: j['state']?.toString(),
+          pincode: j['pincode']?.toString(),
+        );
+  Map<String, dynamic> toJson() => {'house': house, 'street': street, 'locality': locality, 'city': city, 'state': state, 'pincode': pincode};
+  String get oneLine => [house, street, locality, city, state, pincode].where((s) => (s ?? '').isNotEmpty).join(', ');
+}
+
+/// Server filter options + the user's choices.
+class FilterOption {
+  final String key;
+  final String label;
+  final int? min;
+  final int? max;
+  const FilterOption(this.key, this.label, {this.min, this.max});
+  factory FilterOption.fromJson(Map<String, dynamic> j) => FilterOption(
+        (j['key'] ?? '').toString(),
+        (j['label'] ?? '').toString(),
+        min: (j['min'] as num?)?.toInt(),
+        max: (j['max'] as num?)?.toInt(),
+      );
+}
+
+class FilterOptions {
+  final List<FilterOption> categories;
+  final List<FilterOption> languages;
+  final List<FilterOption> prices;
+  final List<FilterOption> days;
+  const FilterOptions({this.categories = const [], this.languages = const [], this.prices = const [], this.days = const []});
+  factory FilterOptions.fromJson(Map<String, dynamic> j) {
+    List<FilterOption> l(String k) => ((j[k] as List?) ?? const []).map((e) => FilterOption.fromJson(e as Map<String, dynamic>)).toList();
+    return FilterOptions(categories: l('categories'), languages: l('languages'), prices: l('prices'), days: l('days'));
+  }
+}
+
+class EventFilter {
+  final Set<String> categories;
+  final Set<String> languages;
+  final FilterOption? price;
+  final String? day;
+  final String sort; // date | popular | price
+  const EventFilter({this.categories = const {}, this.languages = const {}, this.price, this.day, this.sort = 'date'});
+  bool get isEmpty => categories.isEmpty && languages.isEmpty && price == null && day == null;
+  int get count => categories.length + languages.length + (price == null ? 0 : 1) + (day == null ? 0 : 1);
+  Map<String, String> toQuery() => {
+        if (categories.isNotEmpty) 'category': categories.join(','),
+        if (languages.isNotEmpty) 'language': languages.join(','),
+        if (price?.min != null) 'priceMin': '${price!.min}',
+        if (price?.max != null) 'priceMax': '${price!.max}',
+        if (day != null) 'day': day!,
+        if (sort != 'date') 'sort': sort,
+      };
+}
+
+class ExploreData {
+  final List<EventModel> topShows;
+  final List<ArtistModel> artists;
+  final List<FilterOption> categories;
+  const ExploreData({this.topShows = const [], this.artists = const [], this.categories = const []});
+}
+
+/// Server app config: update policy + maintenance.
+class AppConfigInfo {
+  final String update; // force | optional | none | unknown
+  final String latestVersion;
+  final String storeUrl;
+  final String message;
+  final bool maintenance;
+  final String maintenanceMessage;
+  const AppConfigInfo({
+    this.update = 'none',
+    this.latestVersion = '',
+    this.storeUrl = '',
+    this.message = '',
+    this.maintenance = false,
+    this.maintenanceMessage = '',
+  });
+  factory AppConfigInfo.fromJson(Map<String, dynamic> j) => AppConfigInfo(
+        update: (j['update'] ?? 'none').toString(),
+        latestVersion: (j['latestVersion'] ?? '').toString(),
+        storeUrl: (j['storeUrl'] ?? '').toString(),
+        message: (j['updateMessage'] ?? '').toString(),
+        maintenance: (j['maintenance'] as Map?)?['on'] == true,
+        maintenanceMessage: ((j['maintenance'] as Map?)?['message'] ?? '').toString(),
       );
 }
 
@@ -342,6 +451,9 @@ class TicketModel {
   final int transferableUnits;
   /// Name of the person who shared this ticket with you, if any.
   final String? receivedFrom;
+  final String? eventSlug;
+  final String? notes;
+  final String? mapLink;
 
   TicketModel({
     required this.id,
@@ -359,6 +471,9 @@ class TicketModel {
     this.eventId = '',
     this.transferableUnits = 0,
     this.receivedFrom,
+    this.eventSlug,
+    this.notes,
+    this.mapLink,
   }) : entryTotal = entryTotal ?? quantity;
 
   int get entriesLeft => (entryTotal - entryUsed).clamp(0, 1 << 30);
@@ -379,6 +494,9 @@ class TicketModel {
         eventId: (j['eventId'] ?? '').toString(),
         transferableUnits: (j['transferableUnits'] as num?)?.toInt() ?? 0,
         receivedFrom: j['receivedFrom']?.toString(),
+        eventSlug: j['eventSlug']?.toString(),
+        notes: j['notes']?.toString(),
+        mapLink: j['mapLink']?.toString(),
       );
 
   /// For the offline cache (QR must render without network, MVP T4.2).
@@ -399,6 +517,9 @@ class TicketModel {
         // Offline copies can't be shared (needs the server).
         'transferableUnits': 0,
         'receivedFrom': receivedFrom,
+        'eventSlug': eventSlug,
+        'notes': notes,
+        'mapLink': mapLink,
       };
 }
 

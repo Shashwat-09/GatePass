@@ -65,6 +65,13 @@ class Endpoints {
   static const search = 'api/events/search';
   static const cities = 'api/city/cities';
   static const artists = 'api/artists';
+  static const filterOptions = 'api/events/filter-options';
+  static const explore = 'api/home/explore';
+  static const searchAll = 'api/search';
+  static const topCities = 'api/city/top';
+  static const nearestCity = 'api/city/nearest';
+  static const states = 'api/meta/states';
+  static const appConfig = 'api/app-config';
 
   // booking
   static const seatMap = 'api/booking/seat-map';

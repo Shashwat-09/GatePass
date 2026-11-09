@@ -263,3 +263,12 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - **Fees & GST**: per-event `feeType` (`percentage` | `fixed_per_ticket`) and `feeValue`, else global `FEE_TYPE`/`FEE_PCT`. GST (`GST_PCT`) is charged on the booking fee (`GST_ON=fee`, legacy behaviour) or on tickets + fee (`fee_and_tickets`); `GST_INCLUDED` treats the fee as GST-inclusive. Billing state (request `billingState`, else profile `state`) equal to the organiser's state (`events.organizerState`, else `ORGANIZER_STATE`) → CGST + SGST, otherwise IGST. Invoices show the split and place of supply.
 - **Promo codes**: `GET api/promocodes?eventId=` lists public, live, still-available codes (`summary` e.g. "50% off up to ₹200 on orders above ₹500"). Codes can be global or per event, scoped to tiers, percentage (with cap) or fixed, with min order, min tickets, total and per-user limits and a validity window. A pending booking holds the use; payment failure / expiry releases it. Admin: `POST api/admin/promocodes`.
 - **Coins wallet** (1 coin = ₹1): `GET api/wallet` → `{balancePaise, items}`. Coins spent at checkout are returned if payment fails or the hold expires. Optional cashback `COINS_CASHBACK_PCT`. Admin: `POST api/admin/wallet/grant {phone, amountPaise, note}`.
+
+## 8.14 As built (v0.6) — profile, discovery, location, app config (legacy B3)
+- `PUT api/user` adds address `house, street, locality, city, state (Indian state/UT list, GET api/meta/states), pincode (6 digits)`; `user` adds `memberId` (e.g. `GP7KQ2M9X`) and `address`. Profile `state` is the default GST billing state.
+- `DELETE api/user {reason?}` — the reason is stored without any personal data.
+- `GET api/city/top` (quick picks), `GET api/city/nearest?lat=&lng=` → nearest supported city within 120 km or `{city:null, message}` (no third-party geocoding).
+- `GET api/events` filters: `category` and `language` (comma lists), `priceMin/priceMax` (paise), `day=today|tomorrow|weekend|YYYY-MM-DD` (IST), `sort=date|popular|price`. `GET api/events/filter-options` → categories, languages, price ranges, days.
+- `GET api/home/explore` → `topShows, artists, categories[{key,label,totalEvents}]`; `GET api/search?q=` → `{events, artists}`.
+- `GET api/app-config?platform=&version=` → `{latestVersion, minVersion, storeUrl, update: force|optional|none, updateMessage, maintenance{on,message}}` (env `APP_*`, `MAINTENANCE_*`).
+- Tickets add `eventSlug` ("Buy more"), `notes` (event `ticketNotes`), `mapLink`, `terms`; `my-tickets?source=booked|received`.

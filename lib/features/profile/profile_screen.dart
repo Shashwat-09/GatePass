@@ -8,7 +8,9 @@ import '../../core/di.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../services/analytics/analytics.dart';
 import '../../utils/links.dart';
-import '../auth/profile_setup_screen.dart';
+import '../../core/format.dart';
+import '../../data/repositories/booking_repository.dart';
+import 'edit_profile_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../tickets/claim_screen.dart';
 import '../vouchers/vouchers_screen.dart';
@@ -21,6 +23,19 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _auth = sl<AuthRepository>();
+  int? _coins;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    await _auth.fetchProfile();
+    final r = await sl<BookingRepository>().coinBalance();
+    if (mounted) setState(() => _coins = r.data);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,15 +54,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: AppSpacing.sm),
             Text(user?.name ?? 'Guest', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             Text(user == null ? '' : '+91 ${user.phone}', style: TextStyle(color: Theme.of(context).hintColor)),
+            if (user?.memberId != null)
+              Text('Member ID : #${user!.memberId}', style: TextStyle(color: Theme.of(context).hintColor, fontSize: 12)),
           ]),
         ),
         const SizedBox(height: AppSpacing.lg),
+        if (_coins != null)
+          ListTile(
+            leading: const Icon(Icons.toll_outlined, color: AppColors.warning),
+            title: const Text('Coins balance'),
+            trailing: Text(formatPaise(_coins!), style: const TextStyle(fontWeight: FontWeight.w800)),
+          ),
         _item(Icons.notifications_none, 'Notifications', () => Get.to(() => const NotificationsScreen())),
         _item(Icons.redeem_outlined, 'Claim shared tickets', () => Get.to(() => const ClaimScreen())),
         if (AppConfig.phase2) _item(Icons.card_giftcard, 'My vouchers', () => Get.to(() => const VouchersScreen())),
         const Divider(),
-        _item(Icons.edit_outlined, 'Edit profile', () async {
-          await Get.to(() => const ProfileSetupScreen(editing: true));
+        _item(Icons.edit_outlined, 'Edit account details', () async {
+          await Get.to(() => const EditProfileScreen());
           if (mounted) setState(() {});
         }),
         _item(Icons.privacy_tip_outlined, 'Privacy policy', openPrivacy),
@@ -77,12 +100,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _confirmDelete() {
     final deleting = false.obs;
     final error = RxnString();
+    final reason = TextEditingController();
     Get.dialog(
       Obx(() => AlertDialog(
             title: const Text('Delete account?'),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('This permanently deletes your profile and signs you out on all devices. '
                   'Booking records are kept only as required for tax law. This cannot be undone.'),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('delete-reason'),
+                controller: reason,
+                maxLines: 2,
+                decoration: const InputDecoration(hintText: 'Enter your reason (optional)'),
+              ),
               if (error.value != null) ...[
                 const SizedBox(height: 8),
                 Text(error.value!, style: const TextStyle(color: Colors.red)),
@@ -97,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : () async {
                         deleting.value = true;
                         error.value = null;
-                        final r = await _auth.deleteAccount();
+                        final r = await _auth.deleteAccount(reason: reason.text);
                         deleting.value = false;
                         if (!r.isOk) {
                           error.value = r.error;

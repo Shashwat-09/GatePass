@@ -67,4 +67,76 @@ class EventRepository {
     if (!r.isOk) return r.cast();
     return ApiResult.ok((r.data as Map<String, dynamic>)['notifyMe'] == true);
   }
+
+  /// Paginated event list with filters (popular / see-all screens).
+  Future<ApiResult<Paged<EventModel>>> list({String? cityId, EventFilter filter = const EventFilter(), int page = 1}) async {
+    if (AppConfig.useMockData) return ApiResult.ok(Paged(MockData.events, total: MockData.events.length));
+    final r = await _api.request(Endpoints.events, query: {
+      if (cityId != null) 'cityId': cityId,
+      ...filter.toQuery(),
+      'page': '$page',
+      'limit': '${AppConfig.pageSize}',
+    });
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(Paged.fromJson(r.data, EventModel.fromJson));
+  }
+
+  Future<ApiResult<FilterOptions>> filterOptions({String? cityId}) async {
+    if (AppConfig.useMockData) return const ApiResult.ok(FilterOptions());
+    final r = await _api.request(Endpoints.filterOptions, query: {if (cityId != null) 'cityId': cityId});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(FilterOptions.fromJson(r.data as Map<String, dynamic>));
+  }
+
+  Future<ApiResult<ExploreData>> explore({String? cityId}) async {
+    if (AppConfig.useMockData) return const ApiResult.ok(ExploreData());
+    final r = await _api.request(Endpoints.explore, query: {if (cityId != null) 'cityId': cityId});
+    if (!r.isOk) return r.cast();
+    final d = r.data as Map<String, dynamic>;
+    return ApiResult.ok(ExploreData(
+      topShows: ((d['topShows'] as List?) ?? const []).map((e) => EventModel.fromJson(e as Map<String, dynamic>)).toList(),
+      artists: ((d['artists'] as List?) ?? const []).map((e) => ArtistModel.fromJson(e as Map<String, dynamic>)).toList(),
+      categories: ((d['categories'] as List?) ?? const [])
+          .map((e) => FilterOption((e['key'] ?? '').toString(), (e['label'] ?? '').toString(), min: (e['totalEvents'] as num?)?.toInt()))
+          .toList(),
+    ));
+  }
+
+  /// Search events and artists together.
+  Future<ApiResult<({List<EventModel> events, List<ArtistModel> artists})>> searchAll(String q, {String? cityId}) async {
+    if (AppConfig.useMockData) {
+      final ev = MockData.events.where((e) => e.title.toLowerCase().contains(q.toLowerCase())).toList();
+      return ApiResult.ok((events: ev, artists: <ArtistModel>[]));
+    }
+    final r = await _api.request(Endpoints.searchAll, query: {'q': q, if (cityId != null) 'cityId': cityId});
+    if (!r.isOk) return r.cast();
+    final d = r.data as Map<String, dynamic>;
+    return ApiResult.ok((
+      events: ((d['events'] as List?) ?? const []).map((e) => EventModel.fromJson(e as Map<String, dynamic>)).toList(),
+      artists: ((d['artists'] as List?) ?? const []).map((e) => ArtistModel.fromJson(e as Map<String, dynamic>)).toList(),
+    ));
+  }
+
+  Future<ApiResult<List<CityModel>>> topCities() async {
+    if (AppConfig.useMockData) return ApiResult.ok(MockData.cities.map((c) => CityModel(id: c, name: c)).toList());
+    final r = await _api.request(Endpoints.topCities);
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(((r.data as Map<String, dynamic>)['items'] as List).map((e) => CityModel.fromJson(e as Map<String, dynamic>)).toList());
+  }
+
+  /// Nearest supported city to GPS coordinates; fails with the server message if none.
+  Future<ApiResult<CityModel>> nearestCity(double lat, double lng) async {
+    final r = await _api.request(Endpoints.nearestCity, query: {'lat': '$lat', 'lng': '$lng'});
+    if (!r.isOk) return r.cast();
+    final d = r.data as Map<String, dynamic>;
+    if (d['city'] == null) return ApiResult.fail((d['message'] ?? 'Your city isn’t supported yet.').toString(), code: 'NOT_SUPPORTED');
+    return ApiResult.ok(CityModel.fromJson(d['city'] as Map<String, dynamic>));
+  }
+
+  Future<ApiResult<AppConfigInfo>> appConfig(String platform, String version) async {
+    if (AppConfig.useMockData) return const ApiResult.ok(AppConfigInfo());
+    final r = await _api.request(Endpoints.appConfig, query: {'platform': platform, 'version': version});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(AppConfigInfo.fromJson(r.data as Map<String, dynamic>));
+  }
 }

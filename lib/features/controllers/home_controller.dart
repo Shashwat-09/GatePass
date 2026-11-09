@@ -18,25 +18,10 @@ class HomeController extends GetxController {
   final city = Rxn<CityModel>();
   final unread = 0.obs;
 
-  // Filters (Phase 2)
-  final genres = <String>{}.obs;
-  final maxPriceRs = 5000.0.obs;
+  final explore = Rxn<ExploreData>();
 
-  bool get hasFilters => genres.isNotEmpty || maxPriceRs.value < 5000;
   String get cityName => city.value?.name ?? 'Select city';
-
-  List<EventModel> get visible => events.where((e) {
-        if (genres.isNotEmpty && (e.genre == null || !genres.contains(e.genre))) return false;
-        if (e.priceFrom / 100 > maxPriceRs.value) return false;
-        return true;
-      }).toList();
-
-  void applyFilters(Set<String> g, double price) {
-    genres
-      ..clear()
-      ..addAll(g);
-    maxPriceRs.value = price;
-  }
+  List<EventModel> get visible => events;
 
   @override
   void onInit() {
@@ -57,6 +42,7 @@ class HomeController extends GetxController {
     if (r.isOk) {
       events.assignAll(r.data ?? []);
       sl<Analytics>().viewHome(cityName, events.isEmpty ? 0 : 1);
+      _repo.explore(cityId: city.value?.id).then((x) => explore.value = x.data);
     } else {
       error.value = r.error;
     }

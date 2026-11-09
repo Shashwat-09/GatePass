@@ -6,6 +6,11 @@ import 'package:gatepass/app/routes.dart';
 import 'package:gatepass/core/constants.dart';
 import 'package:gatepass/data/models/models.dart';
 import 'package:gatepass/features/artist/artist_screen.dart';
+import 'package:gatepass/features/config/update_screen.dart';
+import 'package:gatepass/features/home/city_picker_screen.dart';
+import 'package:gatepass/features/home/event_list_screen.dart';
+import 'package:gatepass/features/home/search_screen.dart';
+import 'package:gatepass/features/profile/edit_profile_screen.dart';
 import 'package:gatepass/features/auth/otp_screen.dart';
 import 'package:gatepass/features/booking/payment_screen.dart';
 import 'package:gatepass/features/booking/select_ticket_screen.dart';
@@ -35,9 +40,9 @@ void main() {
         await t.pumpWidget(app(const MyTicketsScreen(), mode: mode));
         await t.pumpAndSettle();
         expect(find.text('Neon Nights'), findsOneWidget);
-        await t.tap(find.text('Past'));
+        await t.tap(find.text('History'));
         await t.pumpAndSettle();
-        expect(find.textContaining('Past events'), findsOneWidget);
+        expect(find.text('No past tickets yet'), findsOneWidget);
         expect(t.takeException(), isNull);
       });
 
@@ -245,6 +250,104 @@ void main() {
     expect(c.qtyFor(vip.id), 2); // per-person cap
   });
 
+  testWidgets('Edit profile: address with state picker and PIN validation', (t) async {
+    t.view.physicalSize = const Size(1080, 4000);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    await d.storage.setJson('user_data', {'userId': 'u1', 'phone': '9876543210', 'fullName': 'Asha', 'acceptedTerms': true});
+    d.backend.on('PUT', 'api/user', (req) async => FakeBackend.ok({'id': 'u1', 'phone': '9876543210', 'name': 'Asha', ...jsonDecode(req.body)}));
+    await t.pumpWidget(app(const EditProfileScreen()));
+    await t.pumpAndSettle();
+    await t.enterText(find.widgetWithText(TextFormField, 'Pin code'), '01234');
+    await t.tap(find.text('Save changes'));
+    await t.pumpAndSettle();
+    expect(find.text('Please enter valid pin code'), findsOneWidget);
+    await t.enterText(find.widgetWithText(TextFormField, 'Pin code'), '411001');
+    await t.enterText(find.widgetWithText(TextFormField, 'City'), 'Pune');
+    await t.tap(find.byKey(const Key('state-field')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Maharashtra').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Save changes'));
+    await t.pumpAndSettle();
+    final body = d.backend.callsTo('api/user').single.body as Map;
+    expect(body, containsPair('state', 'Maharashtra'));
+    expect(body, containsPair('pincode', '411001'));
+    expect(body, containsPair('city', 'Pune'));
+  });
+
+  testWidgets('Event list + filters: server options, applied as query, badge count', (t) async {
+    t.view.physicalSize = const Size(1080, 3000);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    d.backend.json('GET', 'api/events/filter-options', {
+      'categories': [{'key': 'music', 'label': 'Music'}, {'key': 'comedy', 'label': 'Comedy'}],
+      'languages': [{'key': 'english', 'label': 'English'}],
+      'prices': [{'key': 'under500', 'label': 'Under ₹500', 'min': 0, 'max': 50000}],
+      'days': [{'key': 'today', 'label': 'Today'}, {'key': 'weekend', 'label': 'This weekend'}],
+    });
+    d.backend.on('GET', 'api/events', (req) async => FakeBackend.ok({
+          'items': [{'id': 'e1', 'slug': 's', 'title': req.url.queryParameters['category'] == 'comedy' ? 'Comedy Night' : 'Any Show', 'cardImageUrl': '', 'priceFromPaise': 49900}],
+          'page': 1, 'limit': 20, 'total': 1,
+        }));
+    await t.pumpWidget(GetMaterialApp(home: const EventListScreen(title: 'All events'), getPages: Routes.pages));
+    await t.pumpAndSettle();
+    expect(find.text('Any Show'), findsOneWidget);
+    await t.tap(find.byTooltip('Filters'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Comedy'));
+    await t.tap(find.text('This weekend'));
+    await t.tap(find.text('Under ₹500'));
+    await t.tap(find.text('APPLY'));
+    await t.pumpAndSettle();
+    final q = d.backend.callsTo('api/events').last;
+    expect(q.path, 'api/events');
+    expect(find.text('Comedy Night'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget); // filter badge
+  });
+
+  testWidgets('Search shows artists and events', (t) async {
+    d.backend.json('GET', 'api/search', {
+      'artists': [{'id': 'a1', 'slug': 'dj-aurora', 'name': 'DJ Aurora', 'imageUrl': '', 'occupation': 'DJ'}],
+      'events': [{'id': 'e1', 'slug': 'neon', 'title': 'Neon Nights', 'cardImageUrl': '', 'venueName': 'Riverside', 'priceFromPaise': 79900}],
+    });
+    await t.pumpWidget(app(const SearchScreen()));
+    await t.enterText(find.byType(TextField), 'aur');
+    await t.pump(const Duration(milliseconds: 400));
+    await t.pumpAndSettle();
+    expect(find.text('Artists'), findsOneWidget);
+    expect(find.text('DJ Aurora'), findsOneWidget);
+    expect(find.text('Neon Nights'), findsOneWidget);
+  });
+
+  testWidgets('City picker shows top cities and the location option', (t) async {
+    d.backend.json('GET', 'api/city/cities', {'items': [{'id': 'c1', 'name': 'Pune'}, {'id': 'c2', 'name': 'Mumbai'}], 'page': 1, 'limit': 50, 'total': 2});
+    d.backend.json('GET', 'api/city/top', {'items': [{'id': 'c1', 'name': 'Pune'}]});
+    await t.pumpWidget(app(const CityPickerScreen()));
+    await t.pumpAndSettle();
+    expect(find.text('Use my current location'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, 'Pune'), findsOneWidget);
+    expect(find.text('Mumbai'), findsOneWidget);
+  });
+
+  testWidgets('Forced update screen cannot be dismissed and links to the store', (t) async {
+    await t.pumpWidget(app(const UpdateScreen(title: 'Update required', message: 'A new version is required to continue.', storeUrl: 'https://play.google.com/x')));
+    expect(find.text('Update required'), findsOneWidget);
+    expect(find.text('Update now'), findsOneWidget);
+  });
+
+  testWidgets('Ticket view shows notes, Buy more and map link', (t) async {
+    t.view.physicalSize = const Size(1080, 3600);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final tk = TicketModel.fromJson({...ticketJson('t1'), 'notes': 'Carry a photo ID.', 'eventSlug': 'neon-nights', 'mapLink': 'https://maps.example/x'});
+    await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
+    await t.pumpAndSettle();
+    expect(find.text('Carry a photo ID.'), findsOneWidget);
+    expect(find.text('Buy more'), findsOneWidget);
+    expect(find.text('View in map'), findsOneWidget);
+  });
+
   testWidgets('My tickets: error state retries', (t) async {
     var fail = true;
     d.backend.on('GET', 'api/ticket/my-tickets', (_) async => fail
@@ -373,9 +476,11 @@ void main() {
     await t.scrollUntilVisible(find.text('Delete account'), 200);
     await t.tap(find.text('Delete account'));
     await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('delete-reason')), 'Moving to another app');
     await t.tap(find.byKey(const Key('confirm-delete')));
     await t.pumpAndSettle();
-    expect(d.backend.callsTo('api/user').single.method, 'DELETE');
+    final del = d.backend.callsTo('api/user').where((c) => c.method == 'DELETE').single;
+    expect(del.body, {'reason': 'Moving to another app'});
     expect(d.tokens.refreshToken, isNull);
     expect(Get.currentRoute, Routes.login);
     await t.pumpAndSettle(const Duration(seconds: 5)); // let the confirmation snackbar finish

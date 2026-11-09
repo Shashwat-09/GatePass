@@ -10,9 +10,11 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
   if ((await cities.count()) > 0) return false;
 
   await ds.transaction(async (m) => {
-    const mk = (name: string, state: string) => m.create(City, { name, state, iconUrl: '', isActive: true });
+    const mk = (name: string, state: string, lat: number, lng: number, isTop = true) =>
+      m.create(City, { name, state, iconUrl: '', isActive: true, isTop, lat, lng });
     const [pune, mumbai, delhi] = await m.save([
-      mk('Pune', 'MH'), mk('Mumbai', 'MH'), mk('Delhi', 'DL'), mk('Bengaluru', 'KA'), mk('Hyderabad', 'TG'),
+      mk('Pune', 'Maharashtra', 18.5204, 73.8567), mk('Mumbai', 'Maharashtra', 19.076, 72.8777), mk('Delhi', 'Delhi', 28.6139, 77.209),
+      mk('Bengaluru', 'Karnataka', 12.9716, 77.5946), mk('Hyderabad', 'Telangana', 17.385, 78.4867),
     ]);
 
     const inDays = (d: number) => new Date(Date.now() + d * 86400000);
@@ -36,6 +38,7 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
       videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', venueLayoutUrl: 'https://picsum.photos/seed/layout/1200/800',
       mapLink: 'https://maps.google.com/?q=Riverside+Grounds+Pune', organizerName: 'Neon Live Pvt Ltd',
       terms: '1. Tickets are non-refundable.\n2. Entry for 18+ only, ID required.\n3. The organiser may refuse entry.',
+      ticketNotes: 'Carry a government photo ID. Gates close at 10 PM.',
       viewCount: 1240,
     });
     const standup = await ev({

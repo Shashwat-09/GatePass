@@ -8,7 +8,10 @@ import '../../app/theme.dart';
 import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../services/analytics/analytics.dart';
+import '../../app/routes.dart';
 import '../../data/repositories/ticket_repository.dart';
+import '../../services/secure_screen.dart';
+import '../../utils/links.dart';
 import 'my_tickets_screen.dart';
 import 'share_ticket_sheet.dart';
 
@@ -26,6 +29,13 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
   void initState() {
     super.initState();
     sl<Analytics>().viewTicket(widget.ticket.id);
+    SecureScreen.set(true);
+  }
+
+  @override
+  void dispose() {
+    SecureScreen.set(false);
+    super.dispose();
   }
 
   Future<void> _share() async {
@@ -91,6 +101,19 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                   if (t.entryUsed > 0) _row('Checked in', '${t.entryUsed} of ${t.entryTotal}'),
                   _row('Status', t.status),
                   const SizedBox(height: AppSpacing.lg),
+                  if ((t.notes ?? '').isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                      decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Icon(Icons.info_outline, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(t.notes!)),
+                      ]),
+                    ),
+                  ],
                   if (t.transferableUnits > 0)
                     FilledButton.icon(
                       key: const Key('share-tickets'),
@@ -106,6 +129,16 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                       label: const Text('View invoice'),
                     ),
                   ],
+                  Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
+                    if (t.mapLink != null)
+                      TextButton.icon(onPressed: () => openLink(t.mapLink!), icon: const Icon(Icons.map_outlined), label: const Text('View in map')),
+                    if (t.eventSlug != null)
+                      TextButton.icon(
+                        onPressed: () => Get.toNamed(Routes.eventDetails, arguments: t.eventSlug),
+                        icon: const Icon(Icons.add_shopping_cart),
+                        label: const Text('Buy more'),
+                      ),
+                  ]),
                   if (saved != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text('Saved on this phone for offline entry · ${DateFormat('d MMM, h:mm a').format(saved)}',

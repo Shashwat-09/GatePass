@@ -100,10 +100,37 @@ export class EventsController {
     };
   }
 
+  /** Day window for the "day" filter, in IST (Asia/Kolkata, UTC+5:30). */
+  private dayWindow(day?: string): [Date, Date] | null {
+    if (!day) return null;
+    const IST = 330 * 60_000;
+    const nowIst = new Date(Date.now() + IST);
+    const startOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - IST);
+    const today = startOf(nowIst);
+    const dayMs = 86400_000;
+    if (day === 'today') return [today, new Date(today.getTime() + dayMs)];
+    if (day === 'tomorrow') return [new Date(today.getTime() + dayMs), new Date(today.getTime() + 2 * dayMs)];
+    if (day === 'weekend') {
+      const dow = nowIst.getUTCDay(); // 0 Sun … 6 Sat
+      const sat = dow === 0 ? today.getTime() - dayMs : today.getTime() + ((6 - dow) % 7) * dayMs;
+      return [new Date(Math.max(sat, today.getTime())), new Date(sat + 2 * dayMs)];
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      const d = new Date(`${day}T00:00:00+05:30`);
+      return [d, new Date(d.getTime() + dayMs)];
+    }
+    return null;
+  }
+
   @Get('events')
   async list(
     @Query('cityId') cityRef?: string,
     @Query('category') category?: string,
+    @Query('language') language?: string,
+    @Query('priceMin') priceMin?: string,
+    @Query('priceMax') priceMax?: string,
+    @Query('day') day?: string,
+    @Query('sort') sort?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -111,9 +138,79 @@ export class EventsController {
     const cid = await this.resolveCityId(cityRef);
     if (cid === null) return paged([], q, 0);
     const qb = this.live(cid);
-    if (category) qb.andWhere('LOWER(e.genre) = LOWER(:category)', { category });
+    const cats = (category ?? '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+    if (cats.length) qb.andWhere('LOWER(e.genre) IN (:...cats)', { cats });
+    const langs = (language ?? '').split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+    if (langs.length) qb.andWhere('LOWER(e.language) IN (:...langs)', { langs });
+    if (priceMin && Number.isFinite(Number(priceMin))) qb.andWhere('e."priceFromPaise" >= :pmin', { pmin: Number(priceMin) });
+    if (priceMax && Number.isFinite(Number(priceMax))) qb.andWhere('e."priceFromPaise" <= :pmax', { pmax: Number(priceMax) });
+    const w = this.dayWindow(day);
+    if (w) qb.andWhere('e."startDate" >= :ds AND e."startDate" < :de', { ds: w[0], de: w[1] });
+    if (sort === 'popular') qb.orderBy('e.viewCount', 'DESC').addOrderBy('e.startDate', 'ASC');
+    else if (sort === 'price') qb.orderBy('e.priceFromPaise', 'ASC');
     const [rows, total] = await qb.skip(q.skip).take(q.limit).getManyAndCount();
     return paged(await this.cards(rows), q, total);
+  }
+
+  /** Options for the filter screen (legacy `api/events/filter-options`). */
+  @Get('events/filter-options')
+  async filterOptions(@Query('cityId') cityRef?: string) {
+    const cid = await this.resolveCityId(cityRef);
+    const list = cid === null ? [] : await this.live(cid).getMany();
+    const count = (f: (e: EventEntity) => string) => {
+      const m = new Map<string, number>();
+      list.forEach((e) => { const k = f(e); if (k) m.set(k, (m.get(k) ?? 0) + 1); });
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ key: k.toLowerCase(), label: k, count: n }));
+    };
+    return {
+      categories: count((e) => e.genre),
+      languages: count((e) => e.language),
+      prices: [
+        { key: 'free', label: 'Free', min: 0, max: 0 },
+        { key: 'under500', label: 'Under ₹500', min: 0, max: 50000 },
+        { key: '500to1500', label: '₹500 – ₹1,500', min: 50000, max: 150000 },
+        { key: '1500to3000', label: '₹1,500 – ₹3,000', min: 150000, max: 300000 },
+        { key: 'above3000', label: 'Above ₹3,000', min: 300000, max: null },
+      ],
+      days: [
+        { key: 'today', label: 'Today' }, { key: 'tomorrow', label: 'Tomorrow' }, { key: 'weekend', label: 'This weekend' },
+      ],
+    };
+  }
+
+  /** Explore tab: popular shows, artists playing in the city, categories. */
+  @Get('home/explore')
+  async explore(@Query('cityId') cityRef?: string) {
+    const cid = await this.resolveCityId(cityRef);
+    const list = cid === null ? [] : await this.live(cid).getMany();
+    const top = [...list].sort((a, b) => b.viewCount - a.viewCount).slice(0, 10);
+    const links = list.length ? await this.eventArtists.find({ where: { eventId: In(list.map((e) => e.id)) } }) : [];
+    const artists = links.length ? await this.artists.findBy({ id: In([...new Set(links.map((l) => l.artistId))]) }) : [];
+    const cats = new Map<string, number>();
+    list.forEach((e) => e.genre && cats.set(e.genre, (cats.get(e.genre) ?? 0) + 1));
+    return {
+      topShows: await this.cards(top),
+      artists: artists.map((a) => ({ id: a.id, slug: a.slug, name: a.name, imageUrl: a.imageUrl, occupation: a.occupation })),
+      categories: [...cats.entries()].map(([g, n]) => ({ key: g.toLowerCase(), label: g, totalEvents: n })),
+    };
+  }
+
+  /** Search across events and artists (legacy grouped search). */
+  @Get('search')
+  async searchAll(@Query('q') term = '', @Query('cityId') cityRef?: string) {
+    const t = term.trim().slice(0, 80);
+    if (t.length < 2) return { events: [], artists: [] };
+    const like = `%${t.replace(/[%_\\]/g, '\\$&')}%`;
+    const cid = await this.resolveCityId(cityRef);
+    const evs = cid === null ? [] : await this.live(cid).andWhere(new Brackets((w) => {
+      w.where('e.title ILIKE :like', { like }).orWhere('e.venueName ILIKE :like', { like }).orWhere('e.genre ILIKE :like', { like })
+        .orWhere(`EXISTS (SELECT 1 FROM event_artists ea JOIN artists a ON a.id = ea."artistId" WHERE ea."eventId" = e.id AND a.name ILIKE :like)`, { like });
+    })).take(30).getMany();
+    const artists = await this.artists.find({ where: { name: ILike(like) }, take: 10, order: { name: 'ASC' } });
+    return {
+      events: await this.cards(evs),
+      artists: artists.map((a) => ({ id: a.id, slug: a.slug, name: a.name, imageUrl: a.imageUrl, occupation: a.occupation })),
+    };
   }
 
   @Get('events/search')

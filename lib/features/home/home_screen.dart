@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
-import '../../core/constants.dart';
 import '../../data/models/models.dart';
 import '../../widgets/common.dart';
 import '../../widgets/event_card.dart';
@@ -13,6 +12,8 @@ import '../controllers/home_controller.dart';
 import 'search_screen.dart';
 import 'city_picker_screen.dart';
 import 'filter_screen.dart';
+import 'event_list_screen.dart';
+import '../artist/artist_screen.dart';
 import '../notifications/notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -44,18 +45,16 @@ class HomeScreen extends StatelessWidget {
             child: ListView(
               children: [
                 _topBar(c),
-                if (vis.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 80),
-                    child: StateView.empty('No events match your filters'),
-                  )
-                else ...[
-                  _banners(vis),
-                  const SectionHeader('Trending now'),
-                  _rail(vis),
-                  const SectionHeader('Recommended'),
-                  _rail(vis.reversed.toList()),
+                _banners(vis),
+                _categories(c),
+                SectionHeader('Trending now', action: _seeAll(c, 'Popular events', const EventFilter(sort: 'popular'))),
+                _rail([...vis]..sort((a, b) => b.viewCount.compareTo(a.viewCount))),
+                if (c.explore.value?.artists.isNotEmpty ?? false) ...[
+                  const SectionHeader('Artists'),
+                  _artists(c.explore.value!.artists),
                 ],
+                SectionHeader('Upcoming events', action: _seeAll(c, 'All events', const EventFilter())),
+                _rail(vis),
                 const SizedBox(height: AppSpacing.lg),
               ],
             ),
@@ -84,15 +83,12 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            if (AppConfig.phase2) IconButton(
-              icon: Icon(c.hasFilters ? Icons.tune : Icons.tune_outlined,
-                  color: c.hasFilters ? AppColors.primary : null),
+            IconButton(
+              tooltip: 'Filters',
+              icon: const Icon(Icons.tune_outlined),
               onPressed: () async {
-                final res = await Get.to<EventFilters>(() => FilterScreen(
-                      initial: EventFilters(
-                          genres: c.genres, maxPriceRs: c.maxPriceRs.value),
-                    ));
-                if (res != null) c.applyFilters(res.genres, res.maxPriceRs);
+                final f = await Get.to<EventFilter>(() => FilterScreen(initial: const EventFilter(), cityId: c.city.value?.id));
+                if (f != null) Get.to(() => EventListScreen(title: 'Events in ${c.cityName}', cityId: c.city.value?.id, filter: f));
               },
             ),
             IconButton(
@@ -112,6 +108,52 @@ class HomeScreen extends StatelessWidget {
                   },
                 )),
           ],
+        ),
+      );
+
+  Widget _seeAll(HomeController c, String title, EventFilter f) => TextButton(
+        onPressed: () => Get.to(() => EventListScreen(title: title, cityId: c.city.value?.id, filter: f)),
+        child: const Text('See all'),
+      );
+
+  Widget _categories(HomeController c) {
+    final cats = c.explore.value?.categories ?? const <FilterOption>[];
+    if (cats.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+      child: Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final cat in cats)
+          ActionChip(
+            avatar: const Icon(Icons.local_activity_outlined, size: 18),
+            label: Text('${cat.label}${cat.min != null ? ' (${cat.min})' : ''}'),
+            onPressed: () => Get.to(() => EventListScreen(title: cat.label, cityId: c.city.value?.id, filter: EventFilter(categories: {cat.key}))),
+          ),
+      ]),
+    );
+  }
+
+  Widget _artists(List<ArtistModel> artists) => SizedBox(
+        height: 116,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          itemCount: artists.length,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+          itemBuilder: (_, i) => InkWell(
+            onTap: () => Get.to(() => ArtistScreen(slug: artists[i].slug, name: artists[i].name)),
+            child: SizedBox(
+              width: 80,
+              child: Column(children: [
+                CircleAvatar(
+                  radius: 34,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  backgroundImage: artists[i].imageUrl.isEmpty ? null : CachedNetworkImageProvider(artists[i].imageUrl),
+                ),
+                const SizedBox(height: 4),
+                Text(artists[i].name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
         ),
       );
 

@@ -12,19 +12,19 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 1 | Onboarding slides — `IntroController.onboarding`, `api/onboarding` | ✅ (static slides) | — |
 | 2 | Phone OTP login — `LoginRepository.sendOtpApi/loginApi`, UI "Enter the 4-digit OTP" | ✅ (6-digit, stronger) | — |
 | 3 | First-run details: DOB, gender — `LoginController.onDOBEntered/onGenderSelected` | ✅ | — |
-| 4 | Profile edit: first/last name, email, DOB (DD-MM-YYYY), gender, **address** (house, street, locality, city, state, **PIN code**) — `ProfileController.isValidPinCode…`, `EditProfileBottomSheet` | 🟡 name/email/DOB/gender | B3 |
-| 5 | **Member ID** shown on profile ("Mates ID : #") — `user_data_response.matesId` | ⬜ | B3 |
-| 6 | Delete account **with a reason** ("Enter your reason") — `ProfileController.deleteAccount/isValidFeedback` | 🟡 no reason | B3 |
+| 4 | Profile edit: first/last name, email, DOB (DD-MM-YYYY), gender, **address** (house, street, locality, city, state, **PIN code**) — `ProfileController.isValidPinCode…`, `EditProfileBottomSheet` | ✅ | B3 |
+| 5 | **Member ID** shown on profile ("Mates ID : #") — `user_data_response.matesId` | ✅ | B3 |
+| 6 | Delete account **with a reason** ("Enter your reason") — `ProfileController.deleteAccount/isValidFeedback` | ✅ | B3 |
 | 7 | Device headers: `device-id`, `fcm-token`, `selected-city` — `common_values` | 🟡 | B5 |
 | **Location** ||||
-| 8 | GPS city detect with reverse geocode, "city not supported" fallback — `LocationController.getCityFromLocation/_resolveSupportedCityName` | ⬜ | B3 |
-| 9 | Top cities + city search — `getTopCitiesApi`, `searchCitiesListApi` | 🟡 search only | B3 |
+| 8 | GPS city detect with reverse geocode, "city not supported" fallback — `LocationController.getCityFromLocation/_resolveSupportedCityName` | ✅ | B3 |
+| 9 | Top cities + city search — `getTopCitiesApi`, `searchCitiesListApi` | ✅ | B3 |
 | **Discovery** ||||
-| 10 | Home highlights: banners (image **and video**), today's events, trending shows, upcoming, **dynamic sections**, promoted, unread count — `home_page_highlight_response` | 🟡 banners + rails | B3 |
-| 11 | Explore: top shows, **artists**, categories with gradients — `home_page_explore_response` | ⬜ | B3 |
-| 12 | Popular / list page with pagination and banners — `getListPageData`, `PopularEventsScreen` | ⬜ | B3 |
-| 13 | Search v1 grouped by city/event — `api/events/search/group-wise`, `SearchController.applyGenreFilter` | 🟡 flat search | B3 |
-| 14 | Filters: category, language, price, day — `api/events/filter-options`, `FilterScreen` | 🟡 genre/price (Phase 2) | B3 |
+| 10 | Home highlights: banners (image **and video**), today's events, trending shows, upcoming, **dynamic sections**, promoted, unread count — `home_page_highlight_response` | ✅ (video banners: link out) | B3 |
+| 11 | Explore: top shows, **artists**, categories with gradients — `home_page_explore_response` | ✅ | B3 |
+| 12 | Popular / list page with pagination and banners — `getListPageData`, `PopularEventsScreen` | ✅ | B3 |
+| 13 | Search v1 grouped by city/event — `api/events/search/group-wise`, `SearchController.applyGenreFilter` | ✅ | B3 |
+| 14 | Filters: category, language, price, day — `api/events/filter-options`, `FilterScreen` | ✅ | B3 |
 | **Event page** (`details_page_data_response_v2`) ||||
 | 15 | Lifecycle badges: open, **filling fast**, **opening soon** with "Tickets open in" countdown + **Notify Me**, sold out, sale ended/closed, **cancelled, postponed, rescheduled, finished, live now, draft** — `EventsController.getStatusBadge`, widget text | ✅ | B1 |
 | 16 | Gallery + full-screen viewer, video, highlights, about, **guide**, **FAQs**, **terms**, **prohibited items**, age, duration, language, tags | ✅ | B1 |
@@ -56,10 +56,10 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 40 | Post-event **survey** with redirect — `api/event-survey/form|submit` | ⬜ | B4 |
 | 41 | Payment (Easebuzz) → success animation ("Ticket Booked 🥳", confetti) | ✅ (Razorpay, verified) | — |
 | **My tickets** (`my_tickets_response`) ||||
-| 42 | Tabs **Booked / Received / Shared / History**, counts, pagination | 🟡 Upcoming/Past/Shared | B3 |
-| 43 | Ticket view: booking code, seats, **one QR per entry ("Admit #")**, entries used, fully/partially scanned, notes, **disclaimers**, terms, sponsors, map link, **Buy more** | 🟡 single QR | B3 |
-| 44 | **Screenshot blocking** on ticket screens — `MainActivity` channel `flutter/screenshot`, "secure mode" | ⬜ | B3 |
-| 45 | Split: by phone or **contact picker**, choose **specific seats**, split link, **split depth / remaining splits** limits, shared-with list, claim back, "cannot split with your own number" | ✅ (+ unlimited by owner's choice); contact picker + seat choice ⬜ | B3 |
+| 42 | Tabs **Booked / Received / Shared / History**, counts, pagination | ✅ | B3 |
+| 43 | Ticket view: booking code, seats, **one QR per entry ("Admit #")**, entries used, fully/partially scanned, notes, **disclaimers**, terms, sponsors, map link, **Buy more** | ✅ one QR per ticket with an entry count (intentional: group entries via the gate "entries" field or by splitting) | B3 |
+| 44 | **Screenshot blocking** on ticket screens — `MainActivity` channel `flutter/screenshot`, "secure mode" | ✅ | B3 |
+| 45 | Split: by phone or **contact picker**, choose **specific seats**, split link, **split depth / remaining splits** limits, shared-with list, claim back, "cannot split with your own number" | ✅ incl. system contact picker; seat tickets are one per seat so any seat can be passed on | B3 |
 | 46 | Invoice / payment receipt PDF download | ✅ | — |
 | 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | ⬜ | B4–B5 |
 | **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
@@ -67,7 +67,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | **Engagement** ||||
 | 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | 🟡 inbox | B5 |
 | 50 | **Push notifications** (FCM, local notifications, channel) | ⬜ | B5 |
-| 51 | **Force update** — `api/app-update` (min version, force flag, store URL), `AppUpdate` screen | ⬜ | B3 |
+| 51 | **Force update** — `api/app-update` (min version, force flag, store URL), `AppUpdate` screen | ✅ | B3 |
 | 52 | Deep links: event, explore city, my-tickets, share-tickets; unresolved → web view | 🟡 claim links | B5 |
 | 53 | Marketing attribution: UTM / fbclid / gclid capture, Meta events, affiliate click tracking — `meta_attribution_service`, `trackAffiliateClickApi` | ⬜ (analytics events ✅) | B5 |
 

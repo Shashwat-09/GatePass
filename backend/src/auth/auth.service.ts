@@ -16,6 +16,13 @@ const OTP_PER_PHONE = { limit: 3, windowSec: 600 };
 const OTP_PER_IP = { limit: 10, windowSec: 600 };
 
 export const JWT_ISSUER = 'gatepass-api';
+
+/** Short, stable member number shown on the profile ("Member ID #GP7KQ2M9X"). */
+export function memberId(userId: string) {
+  const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const b = createHash('sha256').update(userId).digest();
+  return 'GP' + Array.from(b.subarray(0, 7), (x) => a[x % a.length]).join('');
+}
 export const JWT_AUDIENCE = 'gatepass-app';
 
 function sha256(s: string) {
@@ -185,8 +192,9 @@ export class AuthService {
 
   publicUser(u: User) {
     return {
-      id: u.id, phone: u.phone, name: u.name, email: u.email, dob: u.dob, gender: u.gender,
+      id: u.id, memberId: memberId(u.id), phone: u.phone, name: u.name, email: u.email, dob: u.dob, gender: u.gender,
       cityId: u.cityId, acceptedTerms: u.acceptedTerms, role: u.role,
+      address: { house: u.house, street: u.street, locality: u.locality, city: u.addressCity, state: u.state, pincode: u.pincode },
     };
   }
 }

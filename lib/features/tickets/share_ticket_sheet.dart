@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme.dart';
@@ -40,6 +41,26 @@ class _ShareSheetState extends State<_ShareSheet> {
 
   int get _max => widget.ticket.transferableUnits;
   bool get _phoneOk => RegExp(r'^[6-9]\d{9}$').hasMatch(_phone.text.trim());
+
+  /// System contact picker (no contacts permission needed); keeps the last 10 digits.
+  Future<void> _pickContact() async {
+    try {
+      final c = await FlutterNativeContactPicker().selectPhoneNumber();
+      final raw = (c?.selectedPhoneNumber ?? (c?.phoneNumbers?.isNotEmpty == true ? c!.phoneNumbers!.first : '')).replaceAll(RegExp(r'\D'), '');
+      if (raw.isEmpty) return;
+      final ten = raw.length >= 10 ? raw.substring(raw.length - 10) : raw;
+      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(ten)) {
+        setState(() => _error = 'Selected contact does not have a valid 10-digit mobile number.');
+        return;
+      }
+      setState(() {
+        _phone.text = ten;
+        _error = null;
+      });
+    } catch (_) {
+      setState(() => _error = 'Unable to open contacts.');
+    }
+  }
 
   @override
   void dispose() {
@@ -114,7 +135,12 @@ class _ShareSheetState extends State<_ShareSheet> {
               maxLength: 10,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(prefixText: '+91 ', hintText: 'Friend’s mobile number', counterText: ''),
+              decoration: InputDecoration(
+                prefixText: '+91 ',
+                hintText: 'Friend’s mobile number',
+                counterText: '',
+                suffixIcon: IconButton(tooltip: 'Pick from contacts', icon: const Icon(Icons.contacts_outlined), onPressed: _pickContact),
+              ),
             ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.sm),
