@@ -7,7 +7,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
-import '../../core/constants.dart';
 import '../../core/di.dart';
 import '../../core/format.dart';
 import '../../data/models/models.dart';
@@ -111,8 +110,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
     final hint = Theme.of(context).hintColor;
     final dateStr = e.date == null ? 'Date TBA' : DateFormat('EEE, d MMM yyyy • h:mm a').format(e.date!);
-    final seatedLocked = e.hasSeatMap && !AppConfig.phase2;
-    final canBook = !_loading && _error == null && e.badge.isBookable && !seatedLocked && (e.hasSeatMap || e.tiers.isNotEmpty);
+    final canBook = !_loading && _error == null && e.badge.isBookable && (e.hasSeatMap || e.tiers.isNotEmpty);
     final images = e.images;
 
     return Scaffold(
@@ -237,17 +235,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
         ]),
       ),
-      bottomSheet: _bottomBar(context, e, canBook, seatedLocked),
+      bottomSheet: _bottomBar(context, e, canBook),
     );
   }
 
-  Widget _bottomBar(BuildContext context, EventModel e, bool canBook, bool seatedLocked) {
+  Widget _bottomBar(BuildContext context, EventModel e, bool canBook) {
     final soon = e.badge.key == 'opening_soon';
     final label = _loading
         ? 'Loading…'
-        : seatedLocked
-            ? 'Seat booking coming soon'
-            : soon
+        : soon
                 ? (e.notifyMe ? 'You’ll be notified' : 'Notify me')
                 : e.badge.isBookable
                     ? 'Book now'

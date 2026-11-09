@@ -97,6 +97,8 @@ export class EventEntity {
   @Column({ type: 'timestamptz', nullable: true }) endDate!: Date | null;
   @Column({ default: 0 }) priceFromPaise!: number;
   @Column({ default: false }) hasSeatMap!: boolean;
+  /** Where the stage is drawn on the seat map. */
+  @Column({ type: 'varchar', default: 'top' }) stagePosition!: 'top' | 'bottom' | 'none';
   @Column({ default: 6 }) maxPerUser!: number;
   @Column({ type: 'text', nullable: true }) terms!: string | null;
   // ── event page content ──
@@ -293,6 +295,21 @@ export class SeatSection {
   @Column() pricePaise!: number;
   @Column() rows!: number;
   @Column() cols!: number;
+  /** `seats` = reserved seating grid; `standing` = general-admission area sold by quantity. */
+  @Column({ type: 'varchar', default: 'seats' }) kind!: 'seats' | 'standing';
+  /** Standing areas: how many people fit. */
+  @Column({ default: 0 }) capacity!: number;
+  @Column({ type: 'varchar', nullable: true }) color!: string | null;
+  @Column({ default: 0 }) sortOrder!: number;
+  @Column({ type: 'varchar', default: '' }) description!: string;
+  /** Entry gate shown on the map and the ticket (e.g. "Gate 2"). */
+  @Column({ type: 'varchar', nullable: true }) gate!: string | null;
+  /** Row names top→bottom (default A, B, C…). */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) rowLabels!: string[];
+  /** Grid cells that are aisles/walkways, not seats ('row-col'). */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) gaps!: string[];
+  /** Wheelchair-accessible seats ('row-col'). */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) accessible!: string[];
 }
 
 /**
@@ -308,6 +325,9 @@ export class SeatReservation {
   @Column() sectionKey!: string;
   @Column() seatKey!: string; // 'row-col', 0-based
   @Index() @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  /** Seat hold before checkout (POST booking/seat-reserve): token + owner. */
+  @Index() @Column({ type: 'varchar', nullable: true }) holdToken!: string | null;
+  @Column({ type: 'uuid', nullable: true }) userId!: string | null;
   @Column({ type: 'varchar', default: 'held' }) status!: 'held' | 'sold';
   @Column({ type: 'timestamptz', nullable: true }) expiresAt!: Date | null;
 }
@@ -322,6 +342,12 @@ export interface BookingItem {
   sectionName?: string;
   row?: number;
   col?: number;
+  /** Standing-area places ('ga-N') or the seat ('row-col') held for this line. */
+  seatKeys?: string[];
+  standing?: boolean;
+  gate?: string | null;
+  /** Ticket seat label, e.g. "Gold · Row B Seat 4 · Gate 2". */
+  label?: string;
   unitPricePaise: number;
   phaseName?: string;
   offerDiscountPaise?: number;

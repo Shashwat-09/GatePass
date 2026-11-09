@@ -13,6 +13,7 @@ import 'package:gatepass/features/home/search_screen.dart';
 import 'package:gatepass/features/profile/edit_profile_screen.dart';
 import 'package:gatepass/features/auth/otp_screen.dart';
 import 'package:gatepass/features/booking/payment_screen.dart';
+import 'package:gatepass/features/booking/select_seat_screen.dart';
 import 'package:gatepass/features/booking/select_session_screen.dart';
 import 'package:gatepass/features/booking/select_ticket_screen.dart';
 import 'package:gatepass/features/booking/summary_screen.dart';
@@ -308,6 +309,98 @@ void main() {
     expect(find.textContaining('2026-12-12 → 2026-12-13 · 2 entries per day'), findsOneWidget);
   });
 
+  Map<String, dynamic> seatMapJson() => {
+        'stage': 'top',
+        'sections': [
+          {'id': 's-gold', 'name': 'Gold', 'kind': 'seats', 'pricePaise': 79900, 'rows': 2, 'cols': 4, 'color': '#F5B700', 'gate': 'Gate 1',
+           'rowLabels': ['A', 'B'], 'gaps': [], 'accessible': ['0-0'], 'booked': ['0-2'], 'capacity': 8, 'remaining': 7},
+          {'id': 's-silver', 'name': 'Silver', 'kind': 'seats', 'pricePaise': 49900, 'rows': 1, 'cols': 5,
+           'rowLabels': ['C'], 'gaps': ['0-2'], 'accessible': [], 'booked': [], 'capacity': 4, 'remaining': 4},
+          {'id': 'a-standing', 'name': 'Standing (back)', 'kind': 'standing', 'pricePaise': 29900, 'rows': 0, 'cols': 0,
+           'rowLabels': [], 'gaps': [], 'accessible': [], 'booked': [], 'capacity': 10, 'remaining': 3},
+        ],
+      };
+
+  testWidgets('Seat map: row letters, aisles, standing areas; Continue holds seats and checkout uses the token', (t) async {
+    t.view.physicalSize = const Size(1080, 3200);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final ev = EventModel.fromJson(eventJson(seated: true));
+    d.backend.json('GET', 'api/booking/seat-map', seatMapJson());
+    d.backend.json('GET', 'api/booking/seat-reserve/active', {'reservation': null});
+    d.backend.json('POST', 'api/booking/seat-reserve', {
+      'reservationToken': 'hold-token-1234567890',
+      'expiresAt': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String(),
+      'items': [], 'subtotalPaise': 79900 + 2 * 29900,
+    });
+    d.backend.json('POST', 'api/payment/quote', {
+      'basePaise': 139700, 'discountPaise': 0, 'feePaise': 0, 'taxPaise': 0, 'totalPaise': 139700, 'payablePaise': 139700,
+    });
+    d.backend.json('POST', 'api/payment/book-ticket', quoteJson());
+    await t.pumpWidget(app(SelectSeatScreen(event: ev)));
+    await t.pumpAndSettle();
+    for (final text in ['STAGE', 'Gate 1', 'A', 'B', 'C', 'Standing • 3 places left']) {
+      expect(find.text(text), findsWidgets, reason: text);
+    }
+    expect(find.byKey(const Key('seat-s-silver-0-2')), findsNothing); // aisle
+    expect(find.byIcon(Icons.accessible), findsWidgets);
+
+    await t.tap(find.byKey(const Key('seat-s-gold-0-1')));
+    await t.tap(find.byKey(const Key('seat-s-gold-0-2'))); // taken: ignored
+    for (var i = 0; i < 4; i++) {
+      await t.tap(find.byKey(const Key('standing-inc-a-standing')));
+    }
+    await t.pump();
+    await t.tap(find.byKey(const Key('standing-dec-a-standing')));
+    await t.pump();
+    final c = Get.find<BookingController>();
+    expect(c.totalQty, 3); // 1 seat + 2 standing (3 max available, one removed)
+    await t.tap(find.text('Continue'));
+    await t.pumpAndSettle();
+    final held = d.backend.callsTo('api/booking/seat-reserve').single.body['items'] as List;
+    expect(held, [
+      {'sectionId': 's-gold', 'row': 0, 'col': 1},
+      {'sectionId': 'a-standing', 'qty': 2},
+    ]);
+    expect(find.text('Gold • A2'), findsOneWidget);
+    expect(find.text('Standing (back) × 2'), findsOneWidget);
+    expect(find.textContaining('Seats held for'), findsOneWidget);
+
+    expect(await c.createOrder(), isTrue);
+    expect(d.backend.callsTo('api/payment/book-ticket').single.body['reservationToken'], 'hold-token-1234567890');
+    expect(c.hold.value, isNull); // now owned by the booking
+  });
+
+  testWidgets('Seat map resumes a live hold and releases it when the selection changes', (t) async {
+    t.view.physicalSize = const Size(1080, 3200);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final ev = EventModel.fromJson(eventJson(seated: true));
+    final map = seatMapJson();
+    ((map['sections'] as List)[0] as Map)['booked'] = ['0-2', '1-3'];
+    d.backend.json('GET', 'api/booking/seat-map', map);
+    d.backend.json('GET', 'api/booking/seat-reserve/active', {
+      'reservation': {
+        'reservationToken': 'hold-token-resume-123',
+        'expiresAt': DateTime.now().add(const Duration(minutes: 4)).toUtc().toIso8601String(),
+        'items': [{'sectionId': 's-gold', 'standing': false, 'row': 1, 'col': 3, 'qty': 1, 'label': 'Gold · Row B Seat 4', 'unitPricePaise': 79900}],
+        'subtotalPaise': 79900,
+      },
+    });
+    d.backend.json('DELETE', 'api/booking/seat-reserve/hold-token-resume-123', {'released': 1});
+    await t.pumpWidget(app(SelectSeatScreen(event: ev)));
+    await t.pumpAndSettle();
+    final c = Get.find<BookingController>();
+    expect(c.isSelected('s-gold', 1, 3), isTrue);
+    expect(find.text('We kept your seats — continue where you left off.'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^[34]:\d\d$')), findsOneWidget); // countdown pill
+    await t.tap(find.byKey(const Key('seat-s-gold-1-3'))); // own held seat is tappable
+    await t.pump();
+    expect(c.isSelected('s-gold', 1, 3), isFalse);
+    expect(c.hold.value, isNull);
+    expect(d.backend.callsTo('api/booking/seat-reserve/hold-token-resume-123').single.method, 'DELETE');
+  });
+
   testWidgets('Edit profile: address with state picker and PIN validation', (t) async {
     t.view.physicalSize = const Size(1080, 4000);
     t.view.devicePixelRatio = 2;
@@ -427,7 +520,7 @@ void main() {
     expect(find.textContaining('Demo'), findsNothing);
   });
 
-  testWidgets('Event details loads full details; seated events are locked for the MVP', (t) async {
+  testWidgets('Event details loads full details; seated events can be booked', (t) async {
     d.backend.json('GET', 'api/event', eventJson(seated: true));
     await t.pumpWidget(GetMaterialApp(
       initialRoute: '/start',
@@ -439,7 +532,10 @@ void main() {
     Get.toNamed(Routes.eventDetails, arguments: 'neon-nights');
     await t.pumpAndSettle();
     expect(find.text('Neon Nights'), findsOneWidget);
-    expect(find.text(AppConfig.phase2 ? 'Book now' : 'Seat booking coming soon'), findsOneWidget);
+    expect(find.text('Book now'), findsOneWidget);
+    await t.tap(find.text('Book now'));
+    await t.pumpAndSettle();
+    expect(find.byType(SelectSeatScreen), findsOneWidget);
     expect(d.backend.callsTo('api/event').single.path, 'api/event');
   });
 

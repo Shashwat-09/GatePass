@@ -178,7 +178,7 @@ describe('booking + payment (e2e)', () => {
       await book(b.token, { eventId: ev.id, items: [seat] }).expect(409);
       const t = (await pay(a.token, q).expect(200)).body.data.tickets;
       expect(t).toHaveLength(1);
-      expect(t[0].seatLabel).toBe('Silver · Row 2 Seat 2');
+      expect(t[0].seatLabel).toBe('Silver · Row F Seat 2 · Gate 2');
       const rows = await ctx.ds.getRepository(SeatReservation).findBy({ eventId: ev.id, sectionKey: 's-silver', seatKey: '1-1' });
       expect(rows).toEqual([expect.objectContaining({ status: 'sold', bookingId: q.bookingId })]);
     });

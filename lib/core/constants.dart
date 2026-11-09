@@ -75,6 +75,7 @@ class Endpoints {
 
   // booking
   static const seatMap = 'api/booking/seat-map';
+  static const seatReserve = 'api/booking/seat-reserve';
   static const sessions = 'api/booking/sessions';
   static const promocodes = 'api/promocodes';
   static const bookTicket = 'api/payment/book-ticket';

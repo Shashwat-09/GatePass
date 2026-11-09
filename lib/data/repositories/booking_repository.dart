@@ -90,6 +90,7 @@ class BookingRepository {
     required List<Map<String, dynamic>> items,
     String? promoCode,
     bool useCoins = false,
+    String? reservationToken,
   }) async {
     if (AppConfig.useMockData) {
       final base = _mockBase(event, items);
@@ -123,22 +124,35 @@ class BookingRepository {
     return ApiResult.ok(SessionTree.fromJson(r.data as Map<String, dynamic>));
   }
 
-  Future<ApiResult<List<SeatSectionModel>>> seatMap(String eventId) async {
-    if (AppConfig.useMockData) return ApiResult.ok(MockData.seatMaps[eventId] ?? const []);
+  Future<ApiResult<SeatMapModel>> seatMap(String eventId) async {
+    if (AppConfig.useMockData) return ApiResult.ok(SeatMapModel(sections: MockData.seatMaps[eventId] ?? const []));
     final r = await _api.request(Endpoints.seatMap, query: {'eventId': eventId});
     if (!r.isOk) return r.cast();
-    final sections = (r.data as Map<String, dynamic>)['sections'] as List? ?? const [];
-    return ApiResult.ok(sections.map((s) {
-      final m = s as Map<String, dynamic>;
-      return SeatSectionModel(
-        id: (m['id'] ?? '').toString(),
-        name: (m['name'] ?? '').toString(),
-        pricePaise: (m['pricePaise'] as num?)?.toInt() ?? 0,
-        rows: (m['rows'] as num?)?.toInt() ?? 0,
-        cols: (m['cols'] as num?)?.toInt() ?? 0,
-        booked: ((m['booked'] as List?) ?? const []).map((e) => e.toString()).toSet(),
-      );
-    }).toList());
+    return ApiResult.ok(SeatMapModel.fromJson(r.data as Map<String, dynamic>));
+  }
+
+  /// Holds seats / standing places on the server before checkout.
+  Future<ApiResult<SeatHold>> holdSeats(String eventId, List<Map<String, dynamic>> items) async {
+    if (AppConfig.useMockData) {
+      return ApiResult.ok(SeatHold(token: 'mock-hold-${DateTime.now().millisecondsSinceEpoch}', expiresAt: DateTime.now().add(const Duration(minutes: 10))));
+    }
+    final r = await _api.request(Endpoints.seatReserve, method: Method.post, body: {'eventId': eventId, 'items': items});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(SeatHold.fromJson(r.data as Map<String, dynamic>));
+  }
+
+  /// The user's live hold for this event, if any (resume after leaving).
+  Future<ApiResult<SeatHold?>> activeHold(String eventId) async {
+    if (AppConfig.useMockData) return const ApiResult.ok(null);
+    final r = await _api.request('${Endpoints.seatReserve}/active', query: {'eventId': eventId});
+    if (!r.isOk) return r.cast();
+    final h = (r.data as Map<String, dynamic>)['reservation'];
+    return ApiResult.ok(h == null ? null : SeatHold.fromJson(h as Map<String, dynamic>));
+  }
+
+  Future<void> releaseHold(String token) async {
+    if (AppConfig.useMockData) return;
+    await _api.request('${Endpoints.seatReserve}/$token', method: Method.delete);
   }
 
   /// Creates a pending booking. Only *what* to buy is sent; the server prices it.
@@ -148,6 +162,7 @@ class BookingRepository {
     required String idempotencyKey,
     String? promoCode,
     bool useCoins = false,
+    String? reservationToken,
   }) async {
     if (AppConfig.useMockData) {
       final base = _mockBase(event, items);
@@ -171,6 +186,7 @@ class BookingRepository {
       'items': items,
       if (promoCode != null) 'promoCode': promoCode,
       if (useCoins) 'useCoins': true,
+      if (reservationToken != null) 'reservationToken': reservationToken,
     });
     if (!r.isOk) return r.cast();
     return ApiResult.ok(BookingQuote.fromJson(r.data as Map<String, dynamic>));
@@ -182,7 +198,7 @@ class BookingRepository {
       final tier = e.tiers.where((t) => t.id == it['tierId']).toList();
       if (tier.isNotEmpty) base += tier.first.pricePaise * (it['qty'] as int);
       final sec = (MockData.seatMaps[e.id] ?? const []).where((s) => s.id == it['sectionId']).toList();
-      if (sec.isNotEmpty) base += sec.first.pricePaise;
+      if (sec.isNotEmpty) base += sec.first.pricePaise * ((it['qty'] as int?) ?? 1);
     }
     return base;
   }

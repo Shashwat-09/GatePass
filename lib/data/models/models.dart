@@ -857,6 +857,17 @@ class SeatSectionModel {
   final int rows;
   final int cols;
   final Set<String> booked;
+  /// `seats` (reserved grid) or `standing` (sold by quantity).
+  final String kind;
+  final String? color;
+  final String description;
+  final String? gate;
+  final List<String> rowLabels;
+  /// Aisle / walkway cells ('row-col') — drawn as gaps, not seats.
+  final Set<String> gaps;
+  final Set<String> accessible;
+  final int capacity;
+  final int remaining;
 
   SeatSectionModel({
     required this.id,
@@ -865,5 +876,99 @@ class SeatSectionModel {
     required this.rows,
     required this.cols,
     this.booked = const {},
+    this.kind = 'seats',
+    this.color,
+    this.description = '',
+    this.gate,
+    this.rowLabels = const [],
+    this.gaps = const {},
+    this.accessible = const {},
+    int? capacity,
+    int? remaining,
+  })  : capacity = capacity ?? rows * cols,
+        remaining = remaining ?? (rows * cols - booked.length);
+
+  bool get standing => kind == 'standing';
+  String rowLabel(int r) => r < rowLabels.length ? rowLabels[r] : '${r + 1}';
+
+  /// Seat number within the row; aisles are not counted.
+  int seatNumber(int r, int c) {
+    var n = 0;
+    for (var i = 0; i <= c; i++) {
+      if (!gaps.contains('$r-$i')) n++;
+    }
+    return n;
+  }
+
+  factory SeatSectionModel.fromJson(Map<String, dynamic> m) {
+    Set<String> set(Object? v) => ((v as List?) ?? const []).map((e) => e.toString()).toSet();
+    return SeatSectionModel(
+      id: (m['id'] ?? '').toString(),
+      name: (m['name'] ?? '').toString(),
+      pricePaise: (m['pricePaise'] as num?)?.toInt() ?? 0,
+      rows: (m['rows'] as num?)?.toInt() ?? 0,
+      cols: (m['cols'] as num?)?.toInt() ?? 0,
+      booked: set(m['booked']),
+      kind: (m['kind'] ?? 'seats').toString(),
+      color: m['color']?.toString(),
+      description: (m['description'] ?? '').toString(),
+      gate: m['gate']?.toString(),
+      rowLabels: ((m['rowLabels'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      gaps: set(m['gaps']),
+      accessible: set(m['accessible']),
+      capacity: (m['capacity'] as num?)?.toInt(),
+      remaining: (m['remaining'] as num?)?.toInt(),
+    );
+  }
+}
+
+/// Seat map: stage position (`top` / `bottom` / `none`) and sections in display order.
+class SeatMapModel {
+  final String stage;
+  final List<SeatSectionModel> sections;
+  const SeatMapModel({this.stage = 'top', this.sections = const []});
+  factory SeatMapModel.fromJson(Map<String, dynamic> j) => SeatMapModel(
+        stage: (j['stage'] ?? 'top').toString(),
+        sections: ((j['sections'] as List?) ?? const []).map((s) => SeatSectionModel.fromJson(s as Map<String, dynamic>)).toList(),
+      );
+}
+
+class SeatHoldItem {
+  final String sectionId;
+  final String sectionName;
+  final bool standing;
+  final int? row;
+  final int? col;
+  final int qty;
+  final String? label;
+  final int unitPricePaise;
+  const SeatHoldItem({
+    required this.sectionId, required this.sectionName, this.standing = false, this.row, this.col, this.qty = 1, this.label, this.unitPricePaise = 0,
   });
+  factory SeatHoldItem.fromJson(Map<String, dynamic> m) => SeatHoldItem(
+        sectionId: (m['sectionId'] ?? '').toString(),
+        sectionName: (m['sectionName'] ?? '').toString(),
+        standing: m['standing'] == true,
+        row: (m['row'] as num?)?.toInt(),
+        col: (m['col'] as num?)?.toInt(),
+        qty: (m['qty'] as num?)?.toInt() ?? 1,
+        label: m['label']?.toString(),
+        unitPricePaise: (m['unitPricePaise'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Seats held on the server before checkout (`POST booking/seat-reserve`).
+class SeatHold {
+  final String token;
+  final DateTime expiresAt;
+  final List<SeatHoldItem> items;
+  final int subtotalPaise;
+  const SeatHold({required this.token, required this.expiresAt, this.items = const [], this.subtotalPaise = 0});
+  bool get isLive => expiresAt.isAfter(DateTime.now());
+  factory SeatHold.fromJson(Map<String, dynamic> j) => SeatHold(
+        token: (j['reservationToken'] ?? '').toString(),
+        expiresAt: DateTime.parse(j['expiresAt'].toString()).toLocal(),
+        items: ((j['items'] as List?) ?? const []).map((e) => SeatHoldItem.fromJson(e as Map<String, dynamic>)).toList(),
+        subtotalPaise: (j['subtotalPaise'] as num?)?.toInt() ?? 0,
+      );
 }

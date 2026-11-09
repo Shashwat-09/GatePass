@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../app/theme.dart';
 import '../../core/format.dart';
+import '../../widgets/hold_timer.dart';
 import '../../widgets/common.dart';
 import '../../widgets/price_breakdown.dart';
 import '../controllers/booking_controller.dart';
@@ -38,8 +39,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
               child: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
                 Text(c.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 const SizedBox(height: AppSpacing.md),
+                if (c.hold.value != null) HoldTimer(expiresAt: c.hold.value!.expiresAt, onExpired: () => c.hold.value = null),
                 if (c.seated)
-                  ...c.seats.map((s) => _line('${s.sectionName} • seat ${s.label}', formatPaise(s.pricePaise)))
+                  ...c.seatedLines.map((l) => _line(l.$1, formatPaise(l.$2)))
                 else
                   ...c.event.tiers
                       .where((t) => c.qtyFor(t.id) > 0)

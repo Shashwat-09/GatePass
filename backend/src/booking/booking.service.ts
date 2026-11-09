@@ -19,6 +19,8 @@ export interface CheckoutOptions {
   useCoins?: boolean;
   /** Buyer's state for GST (defaults to the profile state). */
   billingState?: string;
+  /** Seat hold from POST booking/seat-reserve: the booking takes exactly those seats. */
+  reservationToken?: string;
 }
 
 export interface BookItemInput {
@@ -32,6 +34,33 @@ export interface BookItemInput {
 const PG_UNIQUE_VIOLATION = '23505';
 export { currentPrice };
 const INVOICE_LINK_TTL_SEC = 7 * 86400;
+
+/** Seat keys a booking line holds (older lines only have row/col). */
+function seatKeysOf(it: BookingItem): string[] {
+  return it.seatKeys ?? (it.sectionId && it.row != null ? [`${it.row}-${it.col}`] : []);
+}
+
+/** "Gold · Row B Seat 4 · Gate 2"; seat numbers skip aisles; standing: "Fan pit · Standing". */
+export function seatLabel(sec: SeatSection, row?: number, col?: number): string {
+  const gate = sec.gate ? ` · ${sec.gate}` : '';
+  if (row == null || col == null) return `${sec.name} · Standing${gate}`;
+  const rowName = sec.rowLabels?.[row] ?? String(row + 1);
+  let n = 0;
+  for (let c = 0; c <= col; c++) if (!sec.gaps?.includes(`${row}-${c}`)) n++;
+  return `${sec.name} · Row ${rowName} Seat ${n}${gate}`;
+}
+
+function holdView(token: string, expiresAt: Date, lines: BookingItem[]) {
+  return {
+    reservationToken: token,
+    expiresAt: expiresAt.toISOString(),
+    items: lines.map((l) => ({
+      sectionId: l.sectionId, sectionName: l.sectionName, standing: !!l.standing, row: l.row ?? null, col: l.col ?? null,
+      qty: l.qty ?? 1, seatKeys: l.seatKeys ?? [], label: l.label ?? null, unitPricePaise: l.unitPricePaise,
+    })),
+    subtotalPaise: lines.reduce((n, l) => n + l.unitPricePaise * (l.qty ?? 1), 0),
+  };
+}
 
 function bookingCode() {
   // 8 chars from an unambiguous alphabet (~40 bits) — unique index guards collisions.
@@ -94,9 +123,17 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
         const id = randomUUID();
         const expiresAt = new Date(Date.now() + holdMs);
-        const lines = event.hasSeatMap
-          ? await this.reserveSeats(m, event, items, expiresAt, id)
-          : await this.reserveTiers(m, event, items, userId);
+        if (opts.reservationToken && !event.hasSeatMap) {
+          throw new ApiError('VALIDATION_ERROR', 'This event has no seat map');
+        }
+        if (!opts.reservationToken && !items?.length) {
+          throw new ApiError('VALIDATION_ERROR', 'Choose your tickets', { items: 'At least one item is required' });
+        }
+        const lines = !event.hasSeatMap
+          ? await this.reserveTiers(m, event, items, userId)
+          : opts.reservationToken
+            ? await this.takeHold(m, event, userId, opts.reservationToken, id, expiresAt)
+            : await this.claimSeats(m, event.id, await this.seatLines(m, event, items), { bookingId: id, holdToken: null, userId, expiresAt });
         await this.checkEventLimit(m, event, userId, lines);
 
         const priced = await this.price(m, event, user, lines, opts, true);
@@ -157,7 +194,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     return this.ds.transaction(async (m) => {
       const event = await this.bookableEvent(m, eventId);
       const user = await m.findOneByOrFail(User, { id: userId });
-      const lines = event.hasSeatMap ? await this.priceSeats(m, event, items) : await this.priceTiers(m, event, items, userId, false);
+      const lines = event.hasSeatMap ? await this.seatLines(m, event, items) : await this.priceTiers(m, event, items, userId, false);
       await this.checkEventLimit(m, event, userId, lines);
       const priced = await this.price(m, event, user, lines, opts, false);
       return {
@@ -363,16 +400,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     return lines;
   }
 
-  /** Seat items priced from their sections (no holds) — used by the price preview. */
-  private async priceSeats(m: EntityManager, event: EventEntity, items: BookItemInput[]): Promise<BookingItem[]> {
-    const sections = await m.find(SeatSection, { where: { eventId: event.id } });
-    return items.map((it) => {
-      const sec = sections.find((s) => s.key === it.sectionId);
-      if (!sec) throw new ApiError('VALIDATION_ERROR', 'Choose seats from the seat map');
-      return { sectionId: sec.key, sectionName: sec.name, row: it.row, col: it.col, qty: 1, unitPricePaise: sec.pricePaise };
-    });
-  }
-
   /** Units of one ticket type the user holds (owned tickets + live pending bookings). */
   private async heldForTier(m: EntityManager, userId: string, tierId: string) {
     const t = await m.createQueryBuilder(Ticket, 't').select('COALESCE(SUM(t.quantity),0)', 'n')
@@ -384,40 +411,164 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     return Number(t?.n ?? 0) + p;
   }
 
-  /** Inserts `held` seat rows; the unique constraint rejects already-taken seats. */
-  private async reserveSeats(
-    m: EntityManager, event: EventEntity, items: BookItemInput[], expiresAt: Date, bookingId: string,
-  ): Promise<BookingItem[]> {
+  /**
+   * Validates seat / standing-area items against the map and prices them from
+   * their sections. Nothing is held (used by preview and before claiming).
+   */
+  private async seatLines(m: EntityManager, event: EventEntity, items: BookItemInput[]): Promise<BookingItem[]> {
     const sections = await m.find(SeatSection, { where: { eventId: event.id } });
     const seen = new Set<string>();
     const lines: BookingItem[] = [];
-    for (const it of items) {
+    for (const it of items ?? []) {
       const sec = sections.find((s) => s.key === it.sectionId);
       if (!sec) throw new ApiError('VALIDATION_ERROR', 'Choose seats from the seat map', { items: 'sectionId is required' });
+      if (sec.kind === 'standing') {
+        const qty = Number(it.qty ?? 0);
+        if (!Number.isInteger(qty) || qty < 1) throw new ApiError('VALIDATION_ERROR', `Choose how many places in ${sec.name}`);
+        if (seen.has(sec.key)) throw new ApiError('VALIDATION_ERROR', 'Duplicate area in request');
+        seen.add(sec.key);
+        lines.push({
+          sectionId: sec.key, sectionName: sec.name, qty, unitPricePaise: sec.pricePaise, standing: true, gate: sec.gate,
+          label: seatLabel(sec),
+        });
+        continue;
+      }
       const row = Number(it.row);
       const col = Number(it.col);
-      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0 || row >= sec.rows || col >= sec.cols) {
+      const key = `${row}-${col}`;
+      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0 || row >= sec.rows || col >= sec.cols || sec.gaps.includes(key)) {
         throw new ApiError('VALIDATION_ERROR', 'Invalid seat');
       }
-      const seatKey = `${row}-${col}`;
-      if (seen.has(`${sec.key}:${seatKey}`)) throw new ApiError('VALIDATION_ERROR', 'Duplicate seat in request');
-      seen.add(`${sec.key}:${seatKey}`);
-      lines.push({ sectionId: sec.key, sectionName: sec.name, row, col, qty: 1, unitPricePaise: sec.pricePaise });
-    }
-    // Free seats whose hold has lapsed, then claim. Concurrent claims serialize on
-    // the unique index; the loser gets a unique violation → SOLD_OUT.
-    for (const l of lines) {
-      const seatKey = `${l.row}-${l.col}`;
-      await m.delete(SeatReservation, {
-        eventId: event.id, sectionKey: l.sectionId, seatKey, status: 'held', expiresAt: LessThan(new Date()),
-      });
-      const taken = await m.findOne(SeatReservation, { where: { eventId: event.id, sectionKey: l.sectionId, seatKey } });
-      if (taken) throw new ApiError('SOLD_OUT', `Seat ${l.sectionName} ${l.row! + 1}-${l.col! + 1} is taken`);
-      await m.insert(SeatReservation, {
-        eventId: event.id, sectionKey: l.sectionId!, seatKey, bookingId, status: 'held', expiresAt,
+      if (seen.has(`${sec.key}:${key}`)) throw new ApiError('VALIDATION_ERROR', 'Duplicate seat in request');
+      seen.add(`${sec.key}:${key}`);
+      lines.push({
+        sectionId: sec.key, sectionName: sec.name, row, col, qty: 1, unitPricePaise: sec.pricePaise, seatKeys: [key], gate: sec.gate,
+        label: seatLabel(sec, row, col),
       });
     }
     return lines;
+  }
+
+  /**
+   * Inserts `held` rows for the lines (a booking's or a pre-checkout hold's).
+   * Seats: the unique index rejects a taken seat. Standing areas: the area row
+   * is locked, then the lowest free places (`ga-N`) are taken up to capacity.
+   */
+  private async claimSeats(
+    m: EntityManager, eventId: string, lines: BookingItem[],
+    owner: { bookingId: string | null; holdToken: string | null; userId: string; expiresAt: Date },
+  ): Promise<BookingItem[]> {
+    for (const l of lines) {
+      if (l.standing) {
+        const sec = await m.createQueryBuilder(SeatSection, 's').setLock('pessimistic_write')
+          .where('s."eventId" = :eventId AND s.key = :key', { eventId, key: l.sectionId }).getOneOrFail();
+        await m.delete(SeatReservation, { eventId, sectionKey: sec.key, status: 'held', expiresAt: LessThan(new Date()) });
+        const taken = new Set((await m.find(SeatReservation, { where: { eventId, sectionKey: sec.key }, select: ['seatKey'] })).map((r) => r.seatKey));
+        const free: string[] = [];
+        for (let i = 0; i < sec.capacity && free.length < l.qty!; i++) if (!taken.has(`ga-${i}`)) free.push(`ga-${i}`);
+        if (free.length < l.qty!) {
+          const left = Math.max(0, sec.capacity - taken.size);
+          throw new ApiError('SOLD_OUT', left ? `Only ${left} place${left === 1 ? '' : 's'} left in ${sec.name}` : `${sec.name} is sold out`);
+        }
+        l.seatKeys = free;
+      } else {
+        const seatKey = l.seatKeys![0];
+        await m.delete(SeatReservation, { eventId, sectionKey: l.sectionId, seatKey, status: 'held', expiresAt: LessThan(new Date()) });
+        const taken = await m.findOne(SeatReservation, { where: { eventId, sectionKey: l.sectionId, seatKey } });
+        if (taken) throw new ApiError('SOLD_OUT', `Seat ${l.label ?? seatKey} is taken`);
+      }
+      await m.insert(SeatReservation, l.seatKeys!.map((seatKey) => ({
+        eventId, sectionKey: l.sectionId!, seatKey, bookingId: owner.bookingId, holdToken: owner.holdToken, userId: owner.userId,
+        status: 'held' as const, expiresAt: owner.expiresAt,
+      })));
+    }
+    return lines;
+  }
+
+  /** Moves a live seat hold onto a new booking; returns the held lines. */
+  private async takeHold(m: EntityManager, event: EventEntity, userId: string, token: string, bookingId: string, expiresAt: Date) {
+    const rows = await m.createQueryBuilder(SeatReservation, 'r').setLock('pessimistic_write')
+      .where('r."holdToken" = :token AND r."userId" = :userId AND r."eventId" = :eventId AND r.status = :held', { token, userId, eventId: event.id, held: 'held' })
+      .getMany();
+    if (!rows.length || rows.some((r) => !r.expiresAt || r.expiresAt.getTime() <= Date.now())) {
+      throw new ApiError('HOLD_EXPIRED', 'Your seat hold has expired. Pick your seats again.');
+    }
+    const lines = await this.holdLines(m, event.id, rows);
+    await m.update(SeatReservation, { holdToken: token, userId }, { bookingId, holdToken: null, expiresAt });
+    return lines;
+  }
+
+  /** Rebuilds priced lines from reservation rows (one line per seat, one per standing area). */
+  private async holdLines(m: EntityManager, eventId: string, rows: SeatReservation[]): Promise<BookingItem[]> {
+    const sections = await m.find(SeatSection, { where: { eventId } });
+    const lines: BookingItem[] = [];
+    for (const sec of sections) {
+      const mine = rows.filter((r) => r.sectionKey === sec.key).map((r) => r.seatKey).sort();
+      if (!mine.length) continue;
+      if (sec.kind === 'standing') {
+        lines.push({
+          sectionId: sec.key, sectionName: sec.name, qty: mine.length, unitPricePaise: sec.pricePaise, standing: true,
+          seatKeys: mine, gate: sec.gate, label: seatLabel(sec),
+        });
+      } else {
+        for (const key of mine) {
+          const [row, col] = key.split('-').map(Number);
+          lines.push({
+            sectionId: sec.key, sectionName: sec.name, row, col, qty: 1, unitPricePaise: sec.pricePaise, seatKeys: [key],
+            gate: sec.gate, label: seatLabel(sec, row, col),
+          });
+        }
+      }
+    }
+    return lines;
+  }
+
+  // ───────────────────────────── seat holds (booking/seat-reserve) ─────────────────────────────
+
+  /** Holds seats / standing places before checkout; replaces the user's previous hold for the event. */
+  async holdSeats(userId: string, eventId: string, items: BookItemInput[]) {
+    if ((await this.kv.incr(`rl:hold:user:${userId}`, 60)) > 30) {
+      throw new ApiError('RATE_LIMITED', 'Too many seat changes. Wait a minute and try again.');
+    }
+    try {
+      return await this.ds.transaction(async (m) => {
+        const event = await this.bookableEvent(m, eventId);
+        if (!event.hasSeatMap) throw new ApiError('VALIDATION_ERROR', 'This event has no seat map');
+        await m.createQueryBuilder(User, 'u').setLock('pessimistic_write').where('u.id = :userId', { userId }).getOneOrFail();
+        await m.createQueryBuilder().delete().from(SeatReservation)
+          .where('"userId" = :userId AND "eventId" = :eventId AND "holdToken" IS NOT NULL', { userId, eventId }).execute();
+        const lines = await this.seatLines(m, event, items);
+        if (!lines.length) throw new ApiError('VALIDATION_ERROR', 'Choose your seats');
+        await this.checkEventLimit(m, event, userId, lines);
+        const token = randomBytes(18).toString('base64url');
+        const expiresAt = new Date(Date.now() + config().seatHoldSec * 1000);
+        await this.claimSeats(m, event.id, lines, { bookingId: null, holdToken: token, userId, expiresAt });
+        return holdView(token, expiresAt, lines);
+      });
+    } catch (err) {
+      const e = err as { code?: string; constraint?: string };
+      if (e?.code === PG_UNIQUE_VIOLATION && e.constraint === 'uq_seat_reservation') {
+        throw new ApiError('SOLD_OUT', 'One of those seats was just taken. Pick another.');
+      }
+      throw err;
+    }
+  }
+
+  /** The user's live hold for an event (to resume after leaving the screen). */
+  async activeHold(userId: string, eventId: string) {
+    const rows = await this.ds.getRepository(SeatReservation).createQueryBuilder('r')
+      .where('r."userId" = :userId AND r."eventId" = :eventId AND r."holdToken" IS NOT NULL AND r.status = :held AND r."expiresAt" > now()', { userId, eventId, held: 'held' })
+      .getMany();
+    if (!rows.length) return { reservation: null };
+    const token = rows[0].holdToken!;
+    const mine = rows.filter((r) => r.holdToken === token);
+    const lines = await this.holdLines(this.ds.manager, eventId, mine);
+    return { reservation: holdView(token, mine[0].expiresAt!, lines) };
+  }
+
+  async releaseHold(userId: string, token: string) {
+    const r = await this.ds.getRepository(SeatReservation).delete({ holdToken: token, userId, status: 'held' });
+    return { released: r.affected ?? 0 };
   }
 
   // ───────────────────────────── pay (process-order / webhook) ─────────────────────────────
@@ -527,7 +678,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     }
     if (b.items.some((i) => i.sectionId)) {
       const res = await m.update(SeatReservation, { bookingId: b.id, status: 'held' }, { status: 'sold', expiresAt: null });
-      if ((res.affected ?? 0) !== b.items.filter((i) => i.sectionId).length) return false;
+      const want = b.items.filter((i) => i.sectionId).reduce((n, i) => n + seatKeysOf(i).length, 0);
+      if ((res.affected ?? 0) !== want) return false;
     }
     return true;
   }
@@ -541,14 +693,15 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           .execute();
         if (!r.affected) return false;
       } else {
-        const seatKey = `${it.row}-${it.col}`;
-        await m.delete(SeatReservation, {
-          eventId: b.eventId, sectionKey: it.sectionId, seatKey, status: 'held', expiresAt: LessThan(new Date()),
-        });
-        const r = await m.createQueryBuilder().insert().into(SeatReservation)
-          .values({ eventId: b.eventId, sectionKey: it.sectionId!, seatKey, bookingId: b.id, status: 'sold', expiresAt: null })
-          .orIgnore().returning('id').execute();
-        if (!(r.raw as unknown[]).length) return false;
+        for (const seatKey of seatKeysOf(it)) {
+          await m.delete(SeatReservation, {
+            eventId: b.eventId, sectionKey: it.sectionId, seatKey, status: 'held', expiresAt: LessThan(new Date()),
+          });
+          const r = await m.createQueryBuilder().insert().into(SeatReservation)
+            .values({ eventId: b.eventId, sectionKey: it.sectionId!, seatKey, bookingId: b.id, status: 'sold', expiresAt: null })
+            .orIgnore().returning('id').execute();
+          if (!(r.raw as unknown[]).length) return false;
+        }
       }
     }
     return true;
@@ -572,7 +725,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         validFrom: season ? tier!.validFrom : null, validTo: season ? tier!.validTo : null,
         eventTitle: event.title, venueName: sess?.venueName ?? event.venueName, startDate: sess?.startsAt ?? event.startDate,
         tierName: it.tierName ?? it.sectionName ?? '',
-        seatLabel: it.sectionId ? `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}` : null,
+        seatLabel: it.label ?? (it.sectionId ? `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}` : null),
         qrToken: signTicketQr(id, event.id), status: 'active',
         quantity: qty, entriesUsed: 0, entriesTotal: qty * (tier?.entryPerTicket ?? 1) * days,
         entryPerTicket: tier?.entryPerTicket ?? 1,
@@ -638,6 +791,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       take: limit,
     });
     for (const s of stale) await this.fail(s.id, 'Payment window expired', 'expired');
+    await this.ds.createQueryBuilder().delete().from(SeatReservation)
+      .where('"holdToken" IS NOT NULL AND status = :held AND "expiresAt" < now()', { held: 'held' }).execute();
     if (stale.length) this.log.log(`Expired ${stale.length} unpaid booking(s)`);
     return stale.length;
   }

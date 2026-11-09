@@ -147,9 +147,21 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
       sponsor(neon.id, 'partner', 'City Care Hospital', 'Hospital Partner'),
     ]);
 
-    const sec = (key: string, name: string, pricePaise: number, rows: number, cols: number) =>
-      m.create(SeatSection, { eventId: standup.id, key, name, pricePaise, rows, cols });
-    await m.save([sec('s-gold', 'Gold', 79900, 4, 8), sec('s-silver', 'Silver', 49900, 5, 10)]);
+    const letters = (from: number, n: number) => Array.from({ length: n }, (_, i) => String.fromCharCode(65 + from + i));
+    await m.save([
+      m.create(SeatSection, {
+        eventId: standup.id, key: 's-gold', name: 'Gold', pricePaise: 79900, rows: 4, cols: 8, sortOrder: 0, color: '#F5B700',
+        gate: 'Gate 1', rowLabels: letters(0, 4), accessible: ['0-0', '0-7'], description: 'Closest to the stage',
+      }),
+      m.create(SeatSection, {
+        eventId: standup.id, key: 's-silver', name: 'Silver', pricePaise: 49900, rows: 5, cols: 10, sortOrder: 1, color: '#9AA5B1',
+        gate: 'Gate 2', rowLabels: letters(4, 5), gaps: Array.from({ length: 5 }, (_, r) => `${r}-5`), // centre aisle
+      }),
+      m.create(SeatSection, {
+        eventId: standup.id, key: 'a-standing', name: 'Standing (back)', kind: 'standing', pricePaise: 29900, rows: 0, cols: 0,
+        capacity: 40, sortOrder: 2, color: '#7C5CFF', gate: 'Gate 2', description: 'Standing area behind Silver',
+      }),
+    ]);
     const sold = (sectionKey: string, seatKey: string) =>
       m.create(SeatReservation, { eventId: standup.id, sectionKey, seatKey, bookingId: null, status: 'sold', expiresAt: null });
     await m.save([

@@ -75,7 +75,7 @@ Companion app for organizers: portal access + native **QR scanner** for gate ent
 | US-03 | View event details | ✅ |
 | US-04 | Book a general-admission ticket and pay | ✅ |
 | US-05 | See my ticket with a QR | ✅ |
-| US-06 | Pick seats on a map with a hold timer | ⬜ Phase 2 |
+| US-06 | Pick seats on a map with a hold timer | ✅ v0.7 (seat map v2 + server holds) |
 | US-07 | Apply a promo code | ⬜ Phase 2 |
 | US-08 | Split a ticket to a friend | ⬜ Phase 2 |
 | US-09 | Receive push for my booking | ⬜ Phase 2 |

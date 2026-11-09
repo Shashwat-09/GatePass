@@ -402,16 +402,28 @@ export class EventsController {
 
   @Get('booking/seat-map')
   async seatMap(@Query('eventId', new ParseUUIDPipe()) eventId: string) {
-    const sections = await this.sections.find({ where: { eventId }, order: { pricePaise: 'DESC' } });
+    const event = await this.events.findOne({ where: { id: eventId }, select: ['id', 'stagePosition'] });
+    if (!event) throw new ApiError('NOT_FOUND', 'Event not found');
+    const sections = await this.sections.find({ where: { eventId }, order: { sortOrder: 'ASC', pricePaise: 'DESC' } });
     const taken = await this.seats.createQueryBuilder('s')
       .where('s."eventId" = :eventId', { eventId })
       .andWhere(`(s.status = 'sold' OR s."expiresAt" > now())`)
       .getMany();
     return {
-      sections: sections.map((s) => ({
-        id: s.key, name: s.name, pricePaise: s.pricePaise, rows: s.rows, cols: s.cols,
-        booked: taken.filter((r) => r.sectionKey === s.key).map((r) => r.seatKey),
-      })),
+      stage: event.stagePosition,
+      sections: sections.map((s) => {
+        const booked = taken.filter((r) => r.sectionKey === s.key).map((r) => r.seatKey);
+        const standing = s.kind === 'standing';
+        return {
+          id: s.key, name: s.name, kind: s.kind, pricePaise: s.pricePaise, color: s.color, description: s.description, gate: s.gate,
+          rows: standing ? 0 : s.rows, cols: standing ? 0 : s.cols,
+          rowLabels: standing ? [] : Array.from({ length: s.rows }, (_, i) => s.rowLabels[i] ?? String(i + 1)),
+          gaps: s.gaps, accessible: s.accessible,
+          booked: standing ? [] : booked,
+          capacity: standing ? s.capacity : s.rows * s.cols - s.gaps.length,
+          remaining: standing ? Math.max(0, s.capacity - booked.length) : s.rows * s.cols - s.gaps.length - booked.length,
+        };
+      }),
     };
   }
 }

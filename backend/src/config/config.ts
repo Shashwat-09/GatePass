@@ -58,6 +58,8 @@ export interface AppConfig {
     coinsCashbackPct: number;
   };
   bookingHoldSec: number;
+  /** Pre-checkout seat hold (POST booking/seat-reserve). */
+  seatHoldSec: number;
   sweeperEnabled: boolean;
   rateLimit: { mutatingPerMin: number; readPerMin: number };
   invoice: { sellerName: string; sellerAddress: string; gstin: string };
@@ -185,6 +187,7 @@ export function loadConfig(): AppConfig {
       coinsCashbackPct: num('COINS_CASHBACK_PCT', 0),
     },
     bookingHoldSec: num('BOOKING_HOLD_SECONDS', 600),
+    seatHoldSec: num('SEAT_HOLD_SECONDS', 600),
     sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test'),
     rateLimit: {
       mutatingPerMin: num('RATE_LIMIT_MUTATING_PER_MIN', 60),

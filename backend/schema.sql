@@ -1,6 +1,7 @@
 -- GatePass PostgreSQL schema (generated from backend/src/db/migrations; do not edit by hand).
 -- Regenerate: run migrations on an empty DB, then pg_dump --schema-only --no-owner --no-privileges.
 
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
@@ -158,7 +159,8 @@ CREATE TABLE public.events (
     "feeType" character varying,
     "feeValue" integer,
     "organizerState" character varying,
-    "ticketNotes" text
+    "ticketNotes" text,
+    "stagePosition" character varying DEFAULT 'top'::character varying NOT NULL
 );
 
 CREATE TABLE public.migrations (
@@ -242,7 +244,9 @@ CREATE TABLE public.seat_reservations (
     "seatKey" character varying NOT NULL,
     "bookingId" uuid,
     status character varying DEFAULT 'held'::character varying NOT NULL,
-    "expiresAt" timestamp with time zone
+    "expiresAt" timestamp with time zone,
+    "holdToken" character varying,
+    "userId" uuid
 );
 
 CREATE TABLE public.seat_sections (
@@ -252,7 +256,16 @@ CREATE TABLE public.seat_sections (
     name character varying NOT NULL,
     "pricePaise" integer NOT NULL,
     rows integer NOT NULL,
-    cols integer NOT NULL
+    cols integer NOT NULL,
+    kind character varying DEFAULT 'seats'::character varying NOT NULL,
+    capacity integer DEFAULT 0 NOT NULL,
+    color character varying,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    description character varying DEFAULT ''::character varying NOT NULL,
+    gate character varying,
+    "rowLabels" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    gaps jsonb DEFAULT '[]'::jsonb NOT NULL,
+    accessible jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 CREATE TABLE public.ticket_tiers (
@@ -534,6 +547,8 @@ CREATE UNIQUE INDEX "IDX_d8698856b9f9735db747084136" ON public.artists USING btr
 CREATE INDEX "IDX_de916bd3328a758012a6f72c8e" ON public.ticket_transfers USING btree ("eventId");
 
 CREATE INDEX "IDX_ea811029f9d388932b70fa0123" ON public.seat_sections USING btree ("eventId");
+
+CREATE INDEX "IDX_f48328147cdd16eaa6eec4c627" ON public.seat_reservations USING btree ("holdToken");
 
 CREATE INDEX "IDX_f95d476ef16fad91a50544b60c" ON public.bookings USING btree ("eventId");
 

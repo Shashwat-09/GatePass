@@ -8,15 +8,17 @@ import '../../data/repositories/ticket_repository.dart';
 import '../../services/analytics/analytics.dart';
 import '../../services/payments/payment_launcher.dart';
 
-/// A chosen seat within a section (Phase 2).
+/// A chosen seat within a section.
 class SelectedSeat {
   final String sectionId;
   final String sectionName;
   final int row;
   final int col;
   final int pricePaise;
-  SelectedSeat(this.sectionId, this.sectionName, this.row, this.col, this.pricePaise);
-  String get label => '${sectionName[0]}${row + 1}-${col + 1}';
+  /// Row + seat number, e.g. "B4".
+  final String label;
+  SelectedSeat(this.sectionId, this.sectionName, this.row, this.col, this.pricePaise, {String? label})
+      : label = label ?? '${row + 1}-${col + 1}';
 }
 
 enum PayState { idle, paying, verifying, done }
@@ -33,6 +35,11 @@ class BookingController extends GetxController {
 
   final qtyByTier = <String, int>{}.obs;
   final seats = <SelectedSeat>[].obs;
+  /// Standing-area places by section id.
+  final standingQty = <String, int>{}.obs;
+  final _standingSections = <String, SeatSectionModel>{};
+  /// Server hold for the current seat selection (cleared when the selection changes).
+  final hold = Rxn<SeatHold>();
   /// Applied promo code (validated and priced by the server).
   final promoCode = RxnString();
   final promoError = RxnString();
@@ -53,6 +60,9 @@ class BookingController extends GetxController {
     event = e;
     qtyByTier.clear();
     seats.clear();
+    standingQty.clear();
+    _standingSections.clear();
+    hold.value = null;
     promoCode.value = null;
     promoError.value = null;
     useCoins.value = false;
@@ -95,30 +105,112 @@ class BookingController extends GetxController {
     _invalidateQuote();
   }
 
-  // ── Seated (Phase 2) ──
+  // ── Seated ──
   bool isSelected(String sectionId, int r, int c) => seats.any((s) => s.sectionId == sectionId && s.row == r && s.col == c);
+  int standingFor(String sectionId) => standingQty[sectionId] ?? 0;
+  int get standingTotal => standingQty.values.fold(0, (a, b) => a + b);
 
   void toggleSeat(SeatSectionModel sec, int r, int c) {
     if (isSelected(sec.id, r, c)) {
       seats.removeWhere((s) => s.sectionId == sec.id && s.row == r && s.col == c);
-    } else if (seats.length < event.maxPerUser) {
-      seats.add(SelectedSeat(sec.id, sec.name, r, c, sec.pricePaise));
+    } else if (totalQty < event.maxPerUser) {
+      seats.add(SelectedSeat(sec.id, sec.name, r, c, sec.pricePaise, label: '${sec.rowLabel(r)}${sec.seatNumber(r, c)}'));
+    } else {
+      return;
     }
+    _selectionChanged();
+  }
+
+  /// [available] = places the user may still take in this area.
+  void incStanding(SeatSectionModel sec, {required int available}) {
+    if (totalQty >= event.maxPerUser || standingFor(sec.id) >= available) return;
+    _standingSections[sec.id] = sec;
+    standingQty[sec.id] = standingFor(sec.id) + 1;
+    _selectionChanged();
+  }
+
+  void decStanding(SeatSectionModel sec) {
+    final cur = standingFor(sec.id);
+    if (cur <= 0) return;
+    if (cur == 1) {
+      standingQty.remove(sec.id);
+    } else {
+      standingQty[sec.id] = cur - 1;
+    }
+    _selectionChanged();
+  }
+
+  void _selectionChanged() {
+    releaseHold();
     _invalidateQuote();
   }
 
+  /// Holds the selected seats on the server (no-op while a live hold exists).
+  Future<bool> holdSelection() async {
+    if (hold.value?.isLive ?? false) return true;
+    loading.value = true;
+    error.value = null;
+    errorCode.value = null;
+    final r = await _repo.holdSeats(event.id, _items());
+    loading.value = false;
+    if (!r.isOk) {
+      error.value = r.error;
+      errorCode.value = r.code;
+      return false;
+    }
+    hold.value = r.data;
+    return true;
+  }
+
+  /// Restores a hold found on the server (user came back to the seat map).
+  void resumeHold(SeatHold h, SeatMapModel map) {
+    seats.clear();
+    standingQty.clear();
+    for (final it in h.items) {
+      final sec = map.sections.where((s) => s.id == it.sectionId).firstOrNull;
+      if (sec == null) continue;
+      if (it.standing) {
+        _standingSections[sec.id] = sec;
+        standingQty[sec.id] = it.qty;
+      } else if (it.row != null && it.col != null) {
+        seats.add(SelectedSeat(sec.id, sec.name, it.row!, it.col!, sec.pricePaise, label: '${sec.rowLabel(it.row!)}${sec.seatNumber(it.row!, it.col!)}'));
+      }
+    }
+    hold.value = h;
+  }
+
+  /// Gives held seats back (selection changed or the user left the seat map).
+  void releaseHold() {
+    final h = hold.value;
+    if (h == null) return;
+    hold.value = null;
+    _repo.releaseHold(h.token);
+  }
+
   // ── Shared ──
-  int get totalQty => seated ? seats.length : tierQty;
+  int get totalQty => seated ? seats.length + standingTotal : tierQty;
 
   /// Display-only estimate before the server quote exists.
   int get subtotalPaise {
-    if (seated) return seats.fold(0, (a, b) => a + b.pricePaise);
+    if (seated) {
+      return seats.fold(0, (a, b) => a + b.pricePaise) +
+          standingQty.entries.fold(0, (a, e) => a + (_standingSections[e.key]?.pricePaise ?? 0) * e.value);
+    }
     var s = 0;
     for (final t in event.tiers) {
       s += t.pricePaise * qtyFor(t.id);
     }
     return s;
   }
+
+  /// Summary lines for a seated order.
+  List<(String, int)> get seatedLines => [
+        ...seats.map((s) => ('${s.sectionName} • ${s.label}', s.pricePaise)),
+        ...standingQty.entries.map((e) {
+          final sec = _standingSections[e.key];
+          return ('${sec?.name ?? 'Standing'} × ${e.value}', (sec?.pricePaise ?? 0) * e.value);
+        }),
+      ];
 
   /// Re-prices the order on the server (summary screen). Returns false if the
   /// promo code was rejected (the code is then removed and [promoError] set).
@@ -177,7 +269,10 @@ class BookingController extends GetxController {
   }
 
   List<Map<String, dynamic>> _items() => seated
-      ? seats.map((s) => {'sectionId': s.sectionId, 'row': s.row, 'col': s.col}).toList()
+      ? [
+          ...seats.map((s) => {'sectionId': s.sectionId, 'row': s.row, 'col': s.col}),
+          ...standingQty.entries.where((e) => e.value > 0).map((e) => {'sectionId': e.key, 'qty': e.value}),
+        ]
       : qtyByTier.entries.where((e) => e.value > 0).map((e) => {'tierId': e.key, 'qty': e.value}).toList();
 
   /// Creates the pending booking + gateway order and stores the server quote.
@@ -187,15 +282,20 @@ class BookingController extends GetxController {
     loading.value = true;
     error.value = null;
     errorCode.value = null;
+    final h = seated && (hold.value?.isLive ?? false) ? hold.value : null;
     final r = await _repo.bookTicket(event,
-        items: _items(), idempotencyKey: _idempotencyKey, promoCode: promoCode.value, useCoins: useCoins.value);
+        items: _items(), idempotencyKey: _idempotencyKey, promoCode: promoCode.value, useCoins: useCoins.value,
+        reservationToken: h?.token);
     loading.value = false;
     if (!r.isOk) {
       error.value = r.error;
       errorCode.value = r.code;
+      if (r.code == 'HOLD_EXPIRED') hold.value = null;
       _idempotencyKey = BookingRepository.newIdempotencyKey();
       return false;
     }
+    // The hold now belongs to the booking (its own payment window applies).
+    if (h != null) hold.value = null;
     quote.value = r.data;
     _analytics.beginCheckout(event.id, totalQty, r.data!.totalPaise);
     // Free / fully paid with coins: the server already confirmed it.

@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, Logger, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Logger, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateNested,
@@ -23,11 +23,18 @@ class ItemDto {
 class BookDto {
   @IsUUID() eventId!: string;
   @IsOptional() @IsUUID() eventDateId?: string;
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ItemDto)
+  /** Optional only when `reservationToken` is given (the hold defines the seats). */
+  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ItemDto)
   items!: ItemDto[];
   @IsOptional() @IsString() @Matches(/^[A-Za-z0-9_-]{2,40}$/, { message: 'Invalid promo code' }) promoCode?: string;
+  @IsOptional() @IsString() @Matches(/^[\w-]{16,64}$/) reservationToken?: string;
   @IsOptional() @IsBoolean() useCoins?: boolean;
   @IsOptional() @IsString() @Length(2, 40) billingState?: string;
+}
+class HoldDto {
+  @IsUUID() eventId!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ItemDto)
+  items!: ItemDto[];
 }
 class ProcessDto {
   @IsUUID() bookingId!: string;
@@ -55,7 +62,9 @@ export class BookingController {
     if (idem !== undefined && !/^[\w-]{8,64}$/.test(idem)) {
       throw new ApiError('VALIDATION_ERROR', 'Invalid Idempotency-Key header');
     }
-    return this.booking.book(req.userId!, dto.eventId, dto.items, { promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState }, idem);
+    return this.booking.book(req.userId!, dto.eventId, dto.items, {
+      promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState, reservationToken: dto.reservationToken,
+    }, idem);
   }
 
   /** Price preview (summary screen): same rules as book-ticket, nothing is held. */
@@ -63,6 +72,7 @@ export class BookingController {
   @Post('quote')
   @HttpCode(200)
   quote(@Req() req: AuthedRequest, @Body() dto: BookDto) {
+    if (!dto.items?.length) throw new ApiError('VALIDATION_ERROR', 'Choose your tickets', { items: 'At least one item is required' });
     return this.booking.preview(req.userId!, dto.eventId, dto.items, { promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState });
   }
 
@@ -110,3 +120,30 @@ export class BookingController {
     return { received: true };
   }
 }
+
+/** Seat holds before checkout (legacy `api/booking/seat-reserve`). */
+@Controller('booking/seat-reserve')
+@UseGuards(JwtAuthGuard)
+export class SeatHoldController {
+  constructor(private readonly booking: BookingService) {}
+
+  /** Holds the chosen seats / standing places; returns a reservation token for book-ticket. */
+  @Post()
+  @HttpCode(200)
+  hold(@Req() req: AuthedRequest, @Body() dto: HoldDto) {
+    return this.booking.holdSeats(req.userId!, dto.eventId, dto.items);
+  }
+
+  /** The caller's live hold for the event, to resume it. */
+  @Get('active')
+  active(@Req() req: AuthedRequest, @Query('eventId', new ParseUUIDPipe()) eventId: string) {
+    return this.booking.activeHold(req.userId!, eventId);
+  }
+
+  @Delete(':token')
+  release(@Req() req: AuthedRequest, @Param('token') token: string) {
+    if (!/^[\w-]{16,64}$/.test(token)) throw new ApiError('VALIDATION_ERROR', 'Invalid reservation token');
+    return this.booking.releaseHold(req.userId!, token);
+  }
+}
+
