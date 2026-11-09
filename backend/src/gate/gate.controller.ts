@@ -8,7 +8,8 @@ import { DataSource, MoreThanOrEqual, Not } from 'typeorm';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { verifyTicketQr } from '../common/signing';
 import { config } from '../config/config';
-import { CheckIn, EventEntity, Ticket } from '../db/entities';
+import { istDate, istDayRange } from '../common/ist';
+import { CheckIn, EventEntity, EventSession, Ticket } from '../db/entities';
 import { RateLimit } from '../infra/rate-limit.guard';
 
 class ScanDto {
@@ -77,6 +78,13 @@ export class GateController {
   async manifest(@Param('id', new ParseUUIDPipe()) id: string) {
     const event = await this.ds.getRepository(EventEntity).findOneByOrFail({ id });
     const tickets = await this.ds.getRepository(Ticket).find({ where: { eventId: id, status: Not('transferred') } });
+    const today = istDate(new Date());
+    const [ts, te] = istDayRange(today);
+    const usedToday = new Map((await this.ds.getRepository(CheckIn).createQueryBuilder('c')
+      .select('c."ticketId"', 'id').addSelect('SUM(c.entries)', 'n')
+      .where('c."eventId" = :id AND c.result = :r AND COALESCE(c."scannedAt", c."createdAt") >= :ts AND COALESCE(c."scannedAt", c."createdAt") < :te', { id, r: 'admitted', ts, te })
+      .groupBy('c."ticketId"').getRawMany<{ id: string; n: string }>()).map((r) => [r.id, Number(r.n)]));
+    const sessionDates = new Map((await this.ds.getRepository(EventSession).findBy({ eventId: id })).map((x) => [x.id, istDate(x.startsAt)]));
     return {
       eventId: id,
       title: event.title,
@@ -85,6 +93,11 @@ export class GateController {
       tickets: tickets.map((t) => ({
         id: t.id, h: tokenHash(t.qrToken), used: t.entriesUsed, total: t.entriesTotal, status: t.status,
         label: t.seatLabel ?? t.tierName,
+        // Scan rules the device applies offline:
+        date: t.sessionId ? sessionDates.get(t.sessionId) ?? null : null, // only valid on this IST day
+        season: t.passType === 'season'
+          ? { from: t.validFrom, to: t.validTo, perDay: t.quantity, usedToday: usedToday.get(t.id) ?? 0, day: today }
+          : null,
       })),
     };
   }
@@ -157,6 +170,36 @@ export class GateController {
       return respond('invalid', t, t.status === 'transferred' ? 'These tickets were passed on to someone else' : 'Old QR — ask for the latest one in the app');
     }
     if (t.status !== 'active') return respond('not_active', t, `Ticket is ${t.status}`);
+
+    const when = offline?.scannedAt ?? new Date();
+    const day = istDate(when);
+    if (t.sessionId) {
+      const sess = await this.ds.getRepository(EventSession).findOneBy({ id: t.sessionId });
+      if (sess && istDate(sess.startsAt) !== day) {
+        return respond('wrong_event', t, `This ticket is for ${istDate(sess.startsAt)} at ${sess.venueName}`);
+      }
+    }
+    if (t.passType === 'season') {
+      if ((t.validFrom && day < t.validFrom) || (t.validTo && day > t.validTo)) {
+        return respond('not_active', t, `Pass valid ${t.validFrom} to ${t.validTo}`);
+      }
+      // Per-day limit (quantity entries each day), checked under a row lock.
+      const res = await this.ds.transaction(async (m) => {
+        const locked = await m.createQueryBuilder(Ticket, 't').setLock('pessimistic_write').where('t.id = :id', { id: t.id }).getOneOrFail();
+        const [ds, de] = istDayRange(day);
+        const today = await m.createQueryBuilder(CheckIn, 'c').select('COALESCE(SUM(c.entries),0)', 'n')
+          .where('c."ticketId" = :id AND c.result = :r AND COALESCE(c."scannedAt", c."createdAt") >= :ds AND COALESCE(c."scannedAt", c."createdAt") < :de',
+            { id: t.id, r: 'admitted', ds, de })
+          .getRawOne<{ n: string }>();
+        const used = Number(today?.n ?? 0);
+        if (used + n > locked.quantity) return { ok: false as const, left: Math.max(0, locked.quantity - used), t: locked };
+        locked.entriesUsed += n;
+        await m.save(locked);
+        return { ok: true as const, left: locked.quantity - used - n, t: locked };
+      });
+      if (!res.ok) return respond('already_used', res.t, res.left > 0 ? `Only ${res.left} more today` : 'Already used today');
+      return respond('admitted', res.t, res.left > 0 ? `Admit ${n}. ${res.left} more today.` : `Admit ${n}`);
+    }
 
     // Atomic: only succeeds if enough entries remain (no double admission).
     const upd = await repo.createQueryBuilder().update(Ticket)

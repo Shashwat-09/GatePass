@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { Artist, City, EventArtist, EventEntity, EventSponsor, PromoCode, SeatReservation, SeatSection, Tier } from './entities';
+import { Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, PromoCode, SeatReservation, SeatSection, Tier } from './entities';
 
 /**
  * Inserts demo reference data (cities, 3 events, tiers, seat sections) if the
@@ -12,7 +12,7 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
   await ds.transaction(async (m) => {
     const mk = (name: string, state: string, lat: number, lng: number, isTop = true) =>
       m.create(City, { name, state, iconUrl: '', isActive: true, isTop, lat, lng });
-    const [pune, mumbai, delhi] = await m.save([
+    const [pune, mumbai, delhi, blr] = await m.save([
       mk('Pune', 'Maharashtra', 18.5204, 73.8567), mk('Mumbai', 'Maharashtra', 19.076, 72.8777), mk('Delhi', 'Delhi', 28.6139, 77.209),
       mk('Bengaluru', 'Karnataka', 12.9716, 77.5946), mk('Hyderabad', 'Telangana', 17.385, 78.4867),
     ]);
@@ -81,6 +81,29 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
       tier(citadel.id, 'Floor', 'ga', 299900, 100, 30),
       tier(folk.id, 'General', 'ga', 59900, 200, 0),
     ]);
+    // Multi-show event: two venues, three shows, plus a weekend season pass.
+    const fest = await ev({
+      slug: 'comedy-weekend', title: 'Comedy Weekend Bengaluru',
+      description: 'Three shows across two venues. Pick a show or grab the weekend pass.',
+      cardImageUrl: 'https://picsum.photos/seed/cweek/800/600', bannerUrl: 'https://picsum.photos/seed/cweek/1200/600',
+      genre: 'Comedy', cityId: blr.id, venueName: 'Multiple venues', venueAddress: 'Bengaluru',
+      startDate: inDays(10), endDate: new Date(inDays(11).getTime() + 3 * 3600_000), priceFromPaise: 59900, hasSeatMap: false,
+    });
+    const at = (d: number, h: number) => { const x = inDays(d); x.setUTCHours(h - 5, 30, 0, 0); return x; }; // h:00 IST
+    const [s1, s2, s3] = await m.save([
+      m.create(EventSession, { eventId: fest.id, venueName: 'Indiranagar Social', venueAddress: '100 Ft Rd', label: 'Evening show', startsAt: at(10, 19), endsAt: at(10, 21) }),
+      m.create(EventSession, { eventId: fest.id, venueName: 'Indiranagar Social', venueAddress: '100 Ft Rd', label: 'Late show', startsAt: at(10, 22), endsAt: at(10, 23) }),
+      m.create(EventSession, { eventId: fest.id, venueName: 'Koramangala Hall', venueAddress: '80 Ft Rd', label: 'Evening show', startsAt: at(11, 19), endsAt: at(11, 21) }),
+    ]);
+    const st = (sessionId: string, name: string, price: number, qty: number) =>
+      m.create(Tier, { eventId: fest.id, name, type: 'ga', pricePaise: price, quantity: qty, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1, sessionId });
+    await m.save([st(s1.id, 'General', 59900, 100), st(s2.id, 'General', 59900, 80), st(s3.id, 'General', 69900, 120)]);
+    const to = new Date(s3.startsAt.getTime() + 330 * 60_000).toISOString().slice(0, 10);
+    await m.save(m.create(Tier, {
+      eventId: fest.id, name: 'Weekend pass', type: 'ga', pricePaise: 149900, quantity: 50, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1,
+      passType: 'season', validFrom: new Date(s1.startsAt.getTime() + 330 * 60_000).toISOString().slice(0, 10), validTo: to,
+    }));
+
     // Pricing demo: offer on Neon General, phases on Citadel Standing, VIP per-user cap.
     await m.update(Tier, { eventId: neon.id, name: 'General' }, {
       category: 'Standing', offer: { type: 'bxgy', buyQuantity: 3, getFreeQuantity: 1 },

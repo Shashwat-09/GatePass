@@ -88,6 +88,10 @@ class TierModel {
   final String? phaseName;
   final String? offerLabel;
   final int? maxPerUser;
+  final String? sessionId;
+  final String passType; // single | season
+  final String? validFrom;
+  final String? validTo;
 
   TierModel({
     required this.id,
@@ -103,6 +107,10 @@ class TierModel {
     this.phaseName,
     this.offerLabel,
     this.maxPerUser,
+    this.sessionId,
+    this.passType = 'single',
+    this.validFrom,
+    this.validTo,
   });
 
   factory TierModel.fromJson(Map<String, dynamic> j) => TierModel(
@@ -119,6 +127,10 @@ class TierModel {
         phaseName: j['phaseName']?.toString(),
         offerLabel: (j['offer'] is Map) ? (j['offer']['label'])?.toString() : null,
         maxPerUser: (j['maxPerUser'] as num?)?.toInt(),
+        sessionId: j['sessionId']?.toString(),
+        passType: (j['passType'] ?? 'single').toString(),
+        validFrom: j['validFrom']?.toString(),
+        validTo: j['validTo']?.toString(),
       );
 }
 
@@ -220,6 +232,70 @@ class AppConfigInfo {
         message: (j['updateMessage'] ?? '').toString(),
         maintenance: (j['maintenance'] as Map?)?['on'] == true,
         maintenanceMessage: ((j['maintenance'] as Map?)?['message'] ?? '').toString(),
+      );
+}
+
+/// One show of an event (venue + date + time slot).
+class EventSession {
+  final String id;
+  final String venueName;
+  final String venueAddress;
+  final String? mapLink;
+  final String? label;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  EventSession({required this.id, required this.venueName, this.venueAddress = '', this.mapLink, this.label, required this.startsAt, this.endsAt});
+  factory EventSession.fromJson(Map<String, dynamic> j) => EventSession(
+        id: (j['id'] ?? j['sessionId'] ?? '').toString(),
+        venueName: (j['venueName'] ?? '').toString(),
+        venueAddress: (j['venueAddress'] ?? '').toString(),
+        mapLink: j['mapLink']?.toString(),
+        label: j['label']?.toString(),
+        startsAt: DateTime.parse(j['startsAt'].toString()).toLocal(),
+        endsAt: DateTime.tryParse((j['endsAt'] ?? '').toString())?.toLocal(),
+      );
+}
+
+/// Booking steps for multi-show events: venues → dates → slots, plus season passes.
+class SessionTree {
+  final List<({String name, String address, List<({String date, bool soldOut, List<({String sessionId, String? label, DateTime startsAt, bool soldOut})> slots})> dates})> venues;
+  final List<({String tierId, String name, int pricePaise, String? validFrom, String? validTo, int remaining})> seasonPasses;
+  SessionTree(this.venues, this.seasonPasses);
+  factory SessionTree.fromJson(Map<String, dynamic> j) => SessionTree(
+        ((j['venues'] as List?) ?? const []).map((v) {
+          final m = v as Map<String, dynamic>;
+          return (
+            name: (m['name'] ?? '').toString(),
+            address: (m['address'] ?? '').toString(),
+            dates: ((m['dates'] as List?) ?? const []).map((d) {
+              final dm = d as Map<String, dynamic>;
+              return (
+                date: dm['date'].toString(),
+                soldOut: dm['soldOut'] == true,
+                slots: ((dm['slots'] as List?) ?? const []).map((x) {
+                  final sm = x as Map<String, dynamic>;
+                  return (
+                    sessionId: sm['sessionId'].toString(),
+                    label: sm['label']?.toString(),
+                    startsAt: DateTime.parse(sm['startsAt'].toString()).toLocal(),
+                    soldOut: sm['soldOut'] == true,
+                  );
+                }).toList(),
+              );
+            }).toList(),
+          );
+        }).toList(),
+        ((j['seasonPasses'] as List?) ?? const []).map((p) {
+          final m = p as Map<String, dynamic>;
+          return (
+            tierId: m['tierId'].toString(),
+            name: (m['name'] ?? '').toString(),
+            pricePaise: (m['pricePaise'] as num?)?.toInt() ?? 0,
+            validFrom: m['validFrom']?.toString(),
+            validTo: m['validTo']?.toString(),
+            remaining: (m['remaining'] as num?)?.toInt() ?? 0,
+          );
+        }).toList(),
       );
 }
 
@@ -343,6 +419,8 @@ class EventModel {
   final List<EventModel> otherEvents;
   final String? shareUrl;
   final bool notifyMe;
+  final List<EventSession> sessions;
+  final bool isMultiSession;
 
   EventModel({
     required this.id,
@@ -380,6 +458,8 @@ class EventModel {
     this.otherEvents = const [],
     this.shareUrl,
     this.notifyMe = false,
+    this.sessions = const [],
+    this.isMultiSession = false,
   });
 
   /// Images for the gallery: banner/card first, then the gallery.
@@ -429,6 +509,8 @@ class EventModel {
       otherEvents: _events(j['otherEvents']),
       shareUrl: j['shareUrl']?.toString(),
       notifyMe: j['notifyMe'] == true,
+      sessions: ((j['sessions'] as List?) ?? const []).map((e) => EventSession.fromJson(e as Map<String, dynamic>)).toList(),
+      isMultiSession: j['isMultiSession'] == true,
     );
   }
 }
@@ -454,6 +536,10 @@ class TicketModel {
   final String? eventSlug;
   final String? notes;
   final String? mapLink;
+  final String passType;
+  final String? validFrom;
+  final String? validTo;
+  bool get isSeason => passType == 'season';
 
   TicketModel({
     required this.id,
@@ -474,6 +560,9 @@ class TicketModel {
     this.eventSlug,
     this.notes,
     this.mapLink,
+    this.passType = 'single',
+    this.validFrom,
+    this.validTo,
   }) : entryTotal = entryTotal ?? quantity;
 
   int get entriesLeft => (entryTotal - entryUsed).clamp(0, 1 << 30);
@@ -497,6 +586,9 @@ class TicketModel {
         eventSlug: j['eventSlug']?.toString(),
         notes: j['notes']?.toString(),
         mapLink: j['mapLink']?.toString(),
+        passType: (j['passType'] ?? 'single').toString(),
+        validFrom: j['validFrom']?.toString(),
+        validTo: j['validTo']?.toString(),
       );
 
   /// For the offline cache (QR must render without network, MVP T4.2).
@@ -520,6 +612,9 @@ class TicketModel {
         'eventSlug': eventSlug,
         'notes': notes,
         'mapLink': mapLink,
+        'passType': passType,
+        'validFrom': validFrom,
+        'validTo': validTo,
       };
 }
 

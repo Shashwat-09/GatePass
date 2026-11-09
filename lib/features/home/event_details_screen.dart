@@ -20,6 +20,7 @@ import '../../widgets/event_badge.dart';
 import '../../widgets/event_card.dart';
 import '../artist/artist_screen.dart';
 import '../booking/select_seat_screen.dart';
+import '../booking/select_session_screen.dart';
 import '../booking/select_ticket_screen.dart';
 import 'gallery_viewer.dart';
 
@@ -272,7 +273,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               onPressed: soon
                   ? () => _toggleNotify(e)
                   : canBook
-                      ? () => Get.to(() => e.hasSeatMap ? SelectSeatScreen(event: e) : SelectTicketScreen(event: e))
+                      ? () => Get.to(() => e.hasSeatMap
+                          ? SelectSeatScreen(event: e)
+                          : e.isMultiSession
+                              ? SelectSessionScreen(event: e)
+                              : SelectTicketScreen(event: e))
                       : null,
             ),
           ),

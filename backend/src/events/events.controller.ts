@@ -9,9 +9,10 @@ import { AuthedRequest, JwtAuthGuard, optionalUserId } from '../common/jwt-auth.
 import { paged, parsePage } from '../common/pagination';
 import { config } from '../config/config';
 import {
-  Artist, City, EventArtist, EventEntity, EventSponsor, EventWatcher, SeatReservation, SeatSection, Tier,
+  Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, EventWatcher, SeatReservation, SeatSection, Tier,
 } from '../db/entities';
 import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
+import { istDate } from '../common/ist';
 import { currentPrice, offerActive, offerLabel } from '../pricing/pricing';
 import { eventBadge, eventEnd, LISTED_STATUSES } from './event-status';
 import { EventsService } from './events.service';
@@ -41,6 +42,7 @@ export class EventsController {
     @InjectRepository(EventArtist) private readonly eventArtists: Repository<EventArtist>,
     @InjectRepository(EventSponsor) private readonly sponsors: Repository<EventSponsor>,
     @InjectRepository(EventWatcher) private readonly watchers: Repository<EventWatcher>,
+    @InjectRepository(EventSession) private readonly sessionsRepo: Repository<EventSession>,
     private readonly svc: EventsService,
   ) {}
 
@@ -244,6 +246,7 @@ export class EventsController {
     await this.events.increment({ id: e.id }, 'viewCount', 1);
     const city = await this.cities.findOne({ where: { id: e.cityId } });
     const tiers = await this.tiers.find({ where: { eventId: e.id, isActive: true }, order: { sortOrder: 'ASC', pricePaise: 'ASC' } });
+    const sessions = await this.upcomingSessions(e.id);
     const stock = (await this.svc.stock([e.id])).get(e.id);
     const links = await this.eventArtists.find({ where: { eventId: e.id }, order: { isHeadliner: 'DESC', priority: 'ASC' } });
     const artists = links.length ? await this.artists.findBy({ id: In(links.map((l) => l.artistId)) }) : [];
@@ -276,10 +279,13 @@ export class EventsController {
       otherEvents: await this.cards(others),
       shareUrl: eventShareUrl(e.slug),
       notifyMe: watching,
+      sessions: sessions.map((x) => this.sessionView(x)),
+      isMultiSession: sessions.length > 1 || tiers.some((t) => t.passType === 'season'),
       tiers: tiers.map((t) => {
         const p = currentPrice(t);
         return {
           id: t.id, name: t.name, type: t.type, category: t.category, description: t.description,
+          sessionId: t.sessionId, passType: t.passType, validFrom: t.validFrom, validTo: t.validTo,
           pricePaise: p.pricePaise, strikePricePaise: p.strikePricePaise, phaseName: p.phaseName, phaseEndsAt: p.phaseEndsAt,
           nextPhase: p.nextPhase,
           offer: offerActive(t.offer) ? { ...t.offer, label: offerLabel(t.offer) } : null,
@@ -287,6 +293,50 @@ export class EventsController {
           maxPerUser: t.maxPerUser,
         };
       }),
+    };
+  }
+
+  private sessionView(x: EventSession) {
+    return {
+      id: x.id, venueName: x.venueName, venueAddress: x.venueAddress, mapLink: x.mapLink, label: x.label,
+      startsAt: x.startsAt.toISOString(), endsAt: x.endsAt ? x.endsAt.toISOString() : null, date: istDate(x.startsAt),
+    };
+  }
+
+  private async upcomingSessions(eventId: string) {
+    return (await this.sessionsRepo.find({ where: { eventId, isActive: true }, order: { startsAt: 'ASC' } }))
+      .filter((x) => (x.endsAt ?? new Date(x.startsAt.getTime() + 6 * 3600_000)).getTime() >= Date.now());
+  }
+
+  /**
+   * Booking steps for multi-show events (legacy venues → dates → time slots):
+   * venues[{name, address, dates[{date, slots[{sessionId, label, startsAt, soldOut}]}]}]
+   * plus season passes valid across days.
+   */
+  @Get('booking/sessions')
+  async sessionsTree(@Query('eventId', new ParseUUIDPipe()) eventId: string) {
+    const sessions = await this.upcomingSessions(eventId);
+    const tiers = await this.tiers.find({ where: { eventId, isActive: true } });
+    const remaining = (sid: string) => tiers.filter((t) => t.sessionId === sid).reduce((n, t) => n + Math.max(0, t.quantity - t.sold - t.reserved), 0);
+    const venues = new Map<string, { name: string; address: string; mapLink: string | null; dates: Map<string, unknown[]> }>();
+    for (const x of sessions) {
+      const v = venues.get(x.venueName) ?? { name: x.venueName, address: x.venueAddress, mapLink: x.mapLink, dates: new Map() };
+      const d = istDate(x.startsAt);
+      const slots = v.dates.get(d) ?? [];
+      slots.push({ sessionId: x.id, label: x.label, startsAt: x.startsAt.toISOString(), endsAt: x.endsAt?.toISOString() ?? null, soldOut: remaining(x.id) <= 0 });
+      v.dates.set(d, slots);
+      venues.set(x.venueName, v);
+    }
+    const passes = tiers.filter((t) => t.passType === 'season' && (!t.validTo || t.validTo >= istDate(new Date())));
+    return {
+      venues: [...venues.values()].map((v) => ({
+        name: v.name, address: v.address, mapLink: v.mapLink,
+        dates: [...v.dates.entries()].map(([date, slots]) => ({ date, slots, soldOut: (slots as { soldOut: boolean }[]).every((s) => s.soldOut) })),
+      })),
+      seasonPasses: passes.map((t) => ({
+        tierId: t.id, name: t.name, pricePaise: currentPrice(t).pricePaise, validFrom: t.validFrom, validTo: t.validTo,
+        remaining: Math.max(0, t.quantity - t.sold - t.reserved),
+      })),
     };
   }
 

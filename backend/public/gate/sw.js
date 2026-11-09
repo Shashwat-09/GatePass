@@ -1,6 +1,6 @@
 'use strict';
 // Caches the scanner app shell so /gate opens with no network at the venue.
-const CACHE = 'gatepass-gate-v2';
+const CACHE = 'gatepass-gate-v3';
 const SHELL = ['/gate/', '/gate/index.html', '/gate/gate.js', '/gate/gate.css', '/gate/manifest.webmanifest', '/gate/icon-192.png'];
 
 self.addEventListener('install', (e) => {

@@ -26,8 +26,13 @@ export function maskPhone(p: string | null) {
 }
 
 /** Units that can still leave a ticket (entries already used can't). */
+/** Entries carried by one unit of a ticket (entries per person × days for season passes). */
+export function entriesPerUnit(t: Ticket) {
+  return Math.max(1, Math.round(t.entriesTotal / Math.max(1, t.quantity)));
+}
+
 export function transferableUnits(t: Ticket) {
-  const per = Math.max(1, t.entryPerTicket || 1);
+  const per = entriesPerUnit(t);
   return Math.max(0, t.quantity - Math.ceil(t.entriesUsed / per));
 }
 
@@ -80,8 +85,7 @@ export class TransfersService {
         recipient = await m.findOne(User, { where: { phone, deletedAt: IsNull() } });
       }
 
-      const per = Math.max(1, t.entryPerTicket || 1);
-      const entries = quantity * per;
+      const entries = quantity * entriesPerUnit(t);
       t.quantity -= quantity;
       t.entriesTotal -= entries;
       t.transfersOut += 1;
@@ -155,6 +159,7 @@ export class TransfersService {
     const id = randomUUID();
     await m.insert(Ticket, {
       id, bookingId: src.bookingId, ownerUserId: userId, eventId: src.eventId, tierId: src.tierId,
+      sessionId: src.sessionId, passType: src.passType, validFrom: src.validFrom, validTo: src.validTo,
       eventTitle: src.eventTitle, venueName: src.venueName, startDate: src.startDate,
       tierName: src.tierName, seatLabel: src.seatLabel,
       qrToken: signTicketQr(id, src.eventId), status: 'active',

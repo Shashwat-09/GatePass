@@ -1,7 +1,6 @@
 -- GatePass PostgreSQL schema (generated from backend/src/db/migrations; do not edit by hand).
 -- Regenerate: run migrations on an empty DB, then pg_dump --schema-only --no-owner --no-privileges.
 
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
@@ -85,6 +84,18 @@ CREATE TABLE public.event_artists (
     "artistId" uuid NOT NULL,
     "isHeadliner" boolean DEFAULT false NOT NULL,
     priority integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE public.event_sessions (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    "venueName" character varying NOT NULL,
+    "venueAddress" character varying DEFAULT ''::character varying NOT NULL,
+    "mapLink" character varying,
+    label character varying,
+    "startsAt" timestamp with time zone NOT NULL,
+    "endsAt" timestamp with time zone,
+    "isActive" boolean DEFAULT true NOT NULL
 );
 
 CREATE TABLE public.event_sponsors (
@@ -261,7 +272,11 @@ CREATE TABLE public.ticket_tiers (
     "isActive" boolean DEFAULT true NOT NULL,
     "maxPerUser" integer,
     phases jsonb DEFAULT '[]'::jsonb NOT NULL,
-    offer jsonb
+    offer jsonb,
+    "sessionId" uuid,
+    "passType" character varying DEFAULT 'single'::character varying NOT NULL,
+    "validFrom" date,
+    "validTo" date
 );
 
 CREATE TABLE public.ticket_transfers (
@@ -301,7 +316,11 @@ CREATE TABLE public.tickets (
     "parentTicketId" uuid,
     "receivedFromUserId" uuid,
     "transfersOut" integer DEFAULT 0 NOT NULL,
-    "tierId" uuid
+    "tierId" uuid,
+    "sessionId" uuid,
+    "passType" character varying DEFAULT 'single'::character varying NOT NULL,
+    "validFrom" date,
+    "validTo" date
 );
 
 CREATE TABLE public.users (
@@ -402,6 +421,9 @@ ALTER TABLE ONLY public.bookings
 ALTER TABLE ONLY public.promo_codes
     ADD CONSTRAINT "PK_c7b4f01710fda5afa056a2b4a35" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.event_sessions
+    ADD CONSTRAINT "PK_dbe18de390df26f2dffc4ef3356" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.check_ins
     ADD CONSTRAINT "PK_fac7f27bc829a454ad477c13f62" PRIMARY KEY (id);
 
@@ -452,6 +474,10 @@ CREATE INDEX "IDX_40e9a8b923a1b3fb4429a5c624" ON public.refresh_tokens USING btr
 CREATE INDEX "IDX_433a24f525b6bb37e20ebc529d" ON public.ticket_transfers USING btree ("toUserId");
 
 CREATE INDEX "IDX_48b267d894e32a25ebde4b207a" ON public.bookings USING btree (status);
+
+CREATE INDEX "IDX_499f672f9ab635111c6988727c" ON public.ticket_tiers USING btree ("sessionId");
+
+CREATE INDEX "IDX_51ed83c9a1acb790e7d51f1358" ON public.event_sessions USING btree ("eventId");
 
 CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
 

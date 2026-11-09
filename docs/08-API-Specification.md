@@ -272,3 +272,10 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `GET api/home/explore` → `topShows, artists, categories[{key,label,totalEvents}]`; `GET api/search?q=` → `{events, artists}`.
 - `GET api/app-config?platform=&version=` → `{latestVersion, minVersion, storeUrl, update: force|optional|none, updateMessage, maintenance{on,message}}` (env `APP_*`, `MAINTENANCE_*`).
 - Tickets add `eventSlug` ("Buy more"), `notes` (event `ticketNotes`), `mapLink`, `terms`; `my-tickets?source=booked|received`.
+
+## 8.15 As built (v0.7) — shows (venue/date/time) and season passes (legacy B4a)
+- An event may have **sessions** (`event_sessions`: venue name/address/map link, label, `startsAt/endsAt`). Event detail adds `sessions[]` and `isMultiSession` (more than one session); each tier adds `sessionId` (ticket type for one show), `passType: single|season`, `validFrom/validTo` (`YYYY-MM-DD`, IST).
+- `GET api/booking/sessions?eventId=` → `{venues:[{name,address,mapLink,dates:[{date,soldOut,slots:[{sessionId,label,startsAt,endsAt,soldOut}]}]}], seasonPasses:[{tierId,name,pricePaise,validFrom,validTo,remaining}]}`. The app shows venue → date → time (steps with one choice are skipped) and then only that show's ticket types.
+- Booking a session tier checks the session is active and not over; the ticket takes the session's venue and start time. Tickets add `sessionId`, `passType`, `validFrom`, `validTo`.
+- Gate: a session ticket is accepted only on its show's IST day (`wrong_event`, "This ticket is for <date> at <venue>"). A season pass is accepted on any day in its window, up to `quantity` entries per day (row-locked; the offline manifest carries `date` and `season{from,to,perDay,usedToday,day}` and the PWA applies the same rules).
+

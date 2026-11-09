@@ -13,6 +13,7 @@ import 'package:gatepass/features/home/search_screen.dart';
 import 'package:gatepass/features/profile/edit_profile_screen.dart';
 import 'package:gatepass/features/auth/otp_screen.dart';
 import 'package:gatepass/features/booking/payment_screen.dart';
+import 'package:gatepass/features/booking/select_session_screen.dart';
 import 'package:gatepass/features/booking/select_ticket_screen.dart';
 import 'package:gatepass/features/booking/summary_screen.dart';
 import 'package:gatepass/features/controllers/auth_controller.dart';
@@ -248,6 +249,63 @@ void main() {
     c.inc(vip);
     c.inc(vip);
     expect(c.qtyFor(vip.id), 2); // per-person cap
+  });
+
+  testWidgets('Multi-show event: venue → date → time, then only that show\'s ticket types; season passes', (t) async {
+    t.view.physicalSize = const Size(1080, 3200);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final ev = EventModel.fromJson({
+      ...eventJson(),
+      'isMultiSession': true,
+      'sessions': [
+        {'id': 's1', 'venueName': 'Hall A', 'venueAddress': 'MG Road', 'startsAt': '2026-12-12T14:30:00Z'},
+        {'id': 's2', 'venueName': 'Hall B', 'venueAddress': 'Ring Road', 'startsAt': '2026-12-13T14:30:00Z'},
+      ],
+      'tiers': [
+        {'id': 'a', 'name': 'Show A seat', 'pricePaise': 49900, 'remaining': 10, 'sessionId': 's1'},
+        {'id': 'b', 'name': 'Show B seat', 'pricePaise': 59900, 'remaining': 10, 'sessionId': 's2'},
+        {'id': 'p', 'name': 'Weekend pass', 'pricePaise': 99900, 'remaining': 5, 'passType': 'season', 'validFrom': '2026-12-12', 'validTo': '2026-12-13'},
+      ],
+    });
+    d.backend.json('GET', 'api/booking/sessions', {
+      'venues': [
+        {'name': 'Hall A', 'address': 'MG Road', 'dates': [
+          {'date': '2026-12-12', 'soldOut': false, 'slots': [{'sessionId': 's1', 'label': 'Evening', 'startsAt': '2026-12-12T14:30:00Z', 'soldOut': false}]},
+        ]},
+        {'name': 'Hall B', 'address': 'Ring Road', 'dates': [
+          {'date': '2026-12-13', 'soldOut': true, 'slots': [{'sessionId': 's2', 'label': 'Late', 'startsAt': '2026-12-13T14:30:00Z', 'soldOut': true}]},
+        ]},
+      ],
+      'seasonPasses': [{'tierId': 'p', 'name': 'Weekend pass', 'pricePaise': 99900, 'validFrom': '2026-12-12', 'validTo': '2026-12-13', 'remaining': 5}],
+    });
+    await t.pumpWidget(app(SelectSessionScreen(event: ev)));
+    await t.pumpAndSettle();
+    expect(d.backend.callsTo('api/booking/sessions').single, isNotNull);
+    expect(find.text('Weekend pass'), findsOneWidget);
+    expect(find.text('Hall A'), findsOneWidget);
+    expect(find.text('MG Road'), findsOneWidget);
+    await t.tap(find.text('Hall B'));
+    await t.pumpAndSettle();
+    expect(find.text('Sold out'), findsOneWidget);
+    await t.tap(find.text('Hall A'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Evening'));
+    await t.pumpAndSettle();
+    expect(find.byType(SelectTicketScreen), findsOneWidget);
+    expect(find.text('Show A seat'), findsWidgets);
+    expect(find.text('Show B seat'), findsNothing);
+    expect(find.text('Weekend pass'), findsNothing);
+  });
+
+  testWidgets('Season pass ticket shows its validity and per-day entries', (t) async {
+    t.view.physicalSize = const Size(1080, 3600);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final tk = TicketModel.fromJson({...ticketJson('t1'), 'quantity': 2, 'passType': 'season', 'validFrom': '2026-12-12', 'validTo': '2026-12-13'});
+    await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
+    await t.pumpAndSettle();
+    expect(find.textContaining('2026-12-12 → 2026-12-13 · 2 entries per day'), findsOneWidget);
   });
 
   testWidgets('Edit profile: address with state picker and PIN validation', (t) async {

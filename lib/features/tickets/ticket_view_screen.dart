@@ -94,7 +94,10 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                     Chip(avatar: const Icon(Icons.card_giftcard, size: 18), label: Text('From ${t.receivedFrom}')),
                   ],
                   const SizedBox(height: AppSpacing.lg),
-                  _row('Date', dateStr),
+                  if (t.isSeason && t.validFrom != null)
+                    _row('Valid', '${t.validFrom} → ${t.validTo} · ${t.quantity} entr${t.quantity == 1 ? 'y' : 'ies'} per day')
+                  else
+                    _row('Date', dateStr),
                   if (t.tierName.isNotEmpty) _row('Ticket', t.tierName),
                   if (t.seatLabel != null) _row('Seat', t.seatLabel!),
                   _row('Admits', '${t.entryTotal}'),

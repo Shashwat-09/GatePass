@@ -116,6 +116,13 @@ class BookingRepository {
     return ApiResult.ok(((r.data as Map<String, dynamic>)['balancePaise'] as num?)?.toInt() ?? 0);
   }
 
+  Future<ApiResult<SessionTree>> sessions(String eventId) async {
+    if (AppConfig.useMockData) return ApiResult.ok(SessionTree(const [], const []));
+    final r = await _api.request(Endpoints.sessions, query: {'eventId': eventId});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(SessionTree.fromJson(r.data as Map<String, dynamic>));
+  }
+
   Future<ApiResult<List<SeatSectionModel>>> seatMap(String eventId) async {
     if (AppConfig.useMockData) return ApiResult.ok(MockData.seatMaps[eventId] ?? const []);
     final r = await _api.request(Endpoints.seatMap, query: {'eventId': eventId});

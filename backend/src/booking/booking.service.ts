@@ -5,11 +5,12 @@ import { ApiError } from '../common/api-error';
 import { signPath, signTicketQr } from '../common/signing';
 import { config } from '../config/config';
 import {
-  Booking, BookingItem, EventEntity, PromoCode, PromoRedemption, SeatReservation, SeatSection, Ticket, Tier, User, WalletEntry,
+  Booking, BookingItem, EventEntity, EventSession, PromoCode, PromoRedemption, SeatReservation, SeatSection, Ticket, Tier, User, WalletEntry,
 } from '../db/entities';
 import { currentPrice, FeeConfig, PromoError, quote, Quote, sameState } from '../pricing/pricing';
 import { KvStore } from '../infra/kv.service';
 import { eventBadge } from '../events/event-status';
+import { istDate } from '../common/ist';
 import { notify } from '../notifications/notify';
 import { PaymentGateway } from '../payments/gateway';
 
@@ -343,8 +344,21 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
             : 'You\'ve reached the maximum booking limit for this ticket.', { qty: `You can buy ${left} more` });
         }
       }
+      if (tier.sessionId) {
+        const sess = await m.findOneBy(EventSession, { id: tier.sessionId });
+        const end = sess ? (sess.endsAt ?? new Date(sess.startsAt.getTime() + 6 * 3600_000)) : null;
+        if (!sess || !sess.isActive || !end || end.getTime() < Date.now()) {
+          throw new ApiError('VALIDATION_ERROR', 'This show is no longer available. Please pick another date.');
+        }
+      }
+      if (tier.passType === 'season' && tier.validTo && tier.validTo < istDate(new Date())) {
+        throw new ApiError('VALIDATION_ERROR', 'This pass is no longer available.');
+      }
       const p = currentPrice(tier);
-      lines.push({ tierId: tier.id, tierName: tier.name, qty, unitPricePaise: p.pricePaise, phaseName: p.phaseName ?? undefined });
+      lines.push({
+        tierId: tier.id, tierName: tier.name, qty, unitPricePaise: p.pricePaise, phaseName: p.phaseName ?? undefined,
+        sessionId: tier.sessionId,
+      });
     }
     return lines;
   }
@@ -542,17 +556,25 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
   private async issueTickets(m: EntityManager, b: Booking, event: EventEntity) {
     const tiers = await m.find(Tier, { where: { id: In(b.items.filter((i) => i.tierId).map((i) => i.tierId!)) } });
+    const sessIds = tiers.map((t) => t.sessionId).filter((x): x is string => !!x);
+    const sessions = sessIds.length ? await m.findBy(EventSession, { id: In(sessIds) }) : [];
     for (const it of b.items) {
       const id = randomUUID();
       const qty = it.qty ?? 1;
       const tier = tiers.find((t) => t.id === it.tierId);
+      const sess = sessions.find((x) => x.id === tier?.sessionId);
+      const season = tier?.passType === 'season';
+      const days = season && tier!.validFrom && tier!.validTo
+        ? Math.round((Date.parse(tier!.validTo) - Date.parse(tier!.validFrom)) / 86400_000) + 1 : 1;
       await m.insert(Ticket, {
         id, bookingId: b.id, ownerUserId: b.userId, eventId: event.id, tierId: it.tierId ?? null,
-        eventTitle: event.title, venueName: event.venueName, startDate: event.startDate,
+        sessionId: sess?.id ?? null, passType: season ? 'season' : 'single',
+        validFrom: season ? tier!.validFrom : null, validTo: season ? tier!.validTo : null,
+        eventTitle: event.title, venueName: sess?.venueName ?? event.venueName, startDate: sess?.startsAt ?? event.startDate,
         tierName: it.tierName ?? it.sectionName ?? '',
         seatLabel: it.sectionId ? `${it.sectionName} · Row ${it.row! + 1} Seat ${it.col! + 1}` : null,
         qrToken: signTicketQr(id, event.id), status: 'active',
-        quantity: qty, entriesUsed: 0, entriesTotal: qty * (tier?.entryPerTicket ?? 1),
+        quantity: qty, entriesUsed: 0, entriesTotal: qty * (tier?.entryPerTicket ?? 1) * days,
         entryPerTicket: tier?.entryPerTicket ?? 1,
       });
     }

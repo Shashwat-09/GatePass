@@ -193,6 +193,21 @@
     if (t) {
       if ((await sha256(token)) !== t.h) return { result: 'invalid', message: 'Old or passed-on QR — ask for the latest one in the app' };
       if (t.status !== 'active') return { result: 'not_active', message: 'Ticket is ' + t.status };
+      const today = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10); // IST day
+      if (t.date && t.date !== today) return { result: 'wrong_event', message: 'This ticket is for ' + t.date };
+      if (t.season) {
+        if ((t.season.from && today < t.season.from) || (t.season.to && today > t.season.to)) {
+          return { result: 'not_active', message: `Pass valid ${t.season.from} to ${t.season.to}` };
+        }
+        const key = ticketId + '|' + today;
+        const d = (await idb.get('local', key)) || { key, used: 0 };
+        const base = t.season.day === today ? t.season.usedToday : 0;
+        const leftToday = t.season.perDay - base - d.used;
+        if (leftToday < n) return { result: 'already_used', message: leftToday > 0 ? `Only ${leftToday} more today` : 'Already used today' };
+        d.used += n;
+        await idb.put('local', d);
+        return { result: 'admitted', message: `Admit ${n}`, label: t.label };
+      }
       const left = t.total - t.used - local.used;
       if (left < n) return { result: 'already_used', message: left > 0 ? `Only ${left} left` : 'Already checked in' };
       local.used += n;

@@ -183,6 +183,24 @@ export class EventWatcher {
 }
 
 /**
+ * One performance of an event: a venue + date + time slot. Events with no
+ * sessions use the event's own venue/dates (single show).
+ */
+@Entity('event_sessions')
+export class EventSession {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column() venueName!: string;
+  @Column({ default: '' }) venueAddress!: string;
+  @Column({ type: 'varchar', nullable: true }) mapLink!: string | null;
+  /** e.g. "Evening show", "Night 2". */
+  @Column({ type: 'varchar', nullable: true }) label!: string | null;
+  @Column({ type: 'timestamptz' }) startsAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true }) endsAt!: Date | null;
+  @Column({ default: true }) isActive!: boolean;
+}
+
+/**
  * `sold` counts confirmed tickets; `reserved` counts stock held by pending
  * (unpaid, unexpired) bookings. Available = quantity - sold - reserved.
  */
@@ -209,6 +227,12 @@ export class Tier {
   @Column({ type: 'jsonb', default: () => "'[]'" }) phases!: PricePhase[];
   /** Offer: buy-X-get-Y or bulk discount (see pricing.ts). */
   @Column({ type: 'jsonb', nullable: true }) offer!: TierOffer | null;
+  /** Session this ticket type is for (null = single-show event, or a season pass). */
+  @Index() @Column({ type: 'uuid', nullable: true }) sessionId!: string | null;
+  /** 'single' = one show; 'season' = valid every day from validFrom to validTo, quantity entries per day. */
+  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season';
+  @Column({ type: 'date', nullable: true }) validFrom!: string | null;
+  @Column({ type: 'date', nullable: true }) validTo!: string | null;
 }
 
 export type PromoType = 'percentage' | 'fixed';
@@ -301,6 +325,7 @@ export interface BookingItem {
   unitPricePaise: number;
   phaseName?: string;
   offerDiscountPaise?: number;
+  sessionId?: string | null;
 }
 
 @Entity('bookings')
@@ -346,6 +371,10 @@ export class Ticket {
   @Index() @Column({ type: 'uuid' }) ownerUserId!: string;
   @Index() @Column({ type: 'uuid' }) eventId!: string;
   @Index() @Column({ type: 'uuid', nullable: true }) tierId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) sessionId!: string | null;
+  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season';
+  @Column({ type: 'date', nullable: true }) validFrom!: string | null;
+  @Column({ type: 'date', nullable: true }) validTo!: string | null;
   @Column() eventTitle!: string;
   @Column() venueName!: string;
   @Column({ default: '' }) tierName!: string;
@@ -432,6 +461,6 @@ export class PaymentEvent {
 }
 
 export const ENTITIES = [
-  City, AccountDeletion, User, RefreshToken, EventEntity, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
+  City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
 ];

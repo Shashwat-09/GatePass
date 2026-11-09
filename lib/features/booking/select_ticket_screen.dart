@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../core/format.dart';
@@ -9,8 +10,20 @@ import '../controllers/booking_controller.dart';
 import 'summary_screen.dart';
 
 class SelectTicketScreen extends StatelessWidget {
-  const SelectTicketScreen({super.key, required this.event});
+  const SelectTicketScreen({super.key, required this.event, this.sessionId, this.seasonOnly = false});
   final EventModel event;
+  /// Multi-show events: only ticket types for this show.
+  final String? sessionId;
+  /// Show only season passes.
+  final bool seasonOnly;
+
+  List<TierModel> get _tiers => event.tiers.where((t) {
+        if (seasonOnly) return t.passType == 'season';
+        if (sessionId != null) return t.sessionId == sessionId;
+        return true;
+      }).toList();
+
+  EventSession? get _session => sessionId == null ? null : event.sessions.where((s) => s.id == sessionId).firstOrNull;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +35,9 @@ class SelectTicketScreen extends StatelessWidget {
         children: [
           Text(event.title,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          if (_session != null)
+            Text('${_session!.venueName} · ${DateFormat('EEE, d MMM • h:mm a').format(_session!.startsAt)}',
+                style: const TextStyle(color: AppColors.subtleLight)),
           const SizedBox(height: AppSpacing.md),
           ..._grouped(c),
           const SizedBox(height: 8),
@@ -64,7 +80,7 @@ class SelectTicketScreen extends StatelessWidget {
   /// Tiers grouped under their category heading (Standing, VIP Lounge…).
   List<Widget> _grouped(BookingController c) {
     final groups = <String, List<TierModel>>{};
-    for (final t in event.tiers) {
+    for (final t in _tiers) {
       groups.putIfAbsent(t.category ?? '', () => []).add(t);
     }
     return [

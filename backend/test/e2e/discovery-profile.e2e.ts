@@ -43,7 +43,7 @@ describe('profile, discovery, location, app config (e2e)', () => {
     expect(opts.categories.map((c: { label: string }) => c.label)).toEqual(expect.arrayContaining(['Music', 'Comedy']));
     expect(opts.days.map((d: { key: string }) => d.key)).toEqual(['today', 'tomorrow', 'weekend']);
     const comedy = (await ctx.http.get('/api/events?category=comedy')).body.data.items;
-    expect(comedy.map((e: { slug: string }) => e.slug)).toEqual(['standup-central']);
+    expect(comedy.map((e: { slug: string }) => e.slug).sort()).toEqual(['comedy-weekend', 'standup-central']);
     const cheap = (await ctx.http.get('/api/events?priceMax=60000')).body.data.items.map((e: { slug: string }) => e.slug);
     expect(cheap).toEqual(expect.arrayContaining(['standup-central', 'indie-folk-evening']));
     expect(cheap).not.toContain('citadel-arena-tour');

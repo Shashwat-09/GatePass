@@ -38,7 +38,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | **Artists** ||||
 | 24 | Artist page: about, occupation, image, Spotify/YouTube, upcoming + past events — `ArtistDetailsScreen`, `api/event/artists` | ✅ | B1 |
 | **Booking** (`TicketController`, `SeatController`, 3.8 MB of screens) ||||
-| 25 | **Multi-venue** → **date** → **time slot** steps; single-venue/date skips steps — `api/booking/venues`, `api/booking/dates-times`, `singleVenueDateSelection` | ⬜ | B4 |
+| 25 | **Multi-venue** → **date** → **time slot** steps; single-venue/date skips steps — `api/booking/venues`, `api/booking/dates-times`, `singleVenueDateSelection` | ✅ `GET api/booking/sessions`; single-show events skip the step | B4 |
 | 26 | Ticket list grouped by **category/group**, min quantity, entries per ticket — `get_tickets_response_v2` | ✅ | B2 |
 | 27 | **Price phases** (early bird…): phase name/order/start/end, auto-live by phase, **strike price** — `phaseStartDate…, displayStrikePrice` | ✅ | B2 |
 | 28 | **Offers**: bulk discount and **buy X get Y free** (bxgy), percentage / fixed total / fixed per ticket, offer window and labels; "Savings Corner", "Offers on selected tickets / total order" — `ticket_offer_calculator.dart` | ✅ | B2 |
@@ -47,7 +47,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 31 | **Fees**: per-event config `feeType` (percentage / fixed per ticket), `feeValue`, `gstPercentage`, **`isGstIncluded`** — `commision_model`, `api/commissions/customer` | ✅ | B2 |
 | 32 | **GST split**: CGST + SGST when billing state = organiser state, else IGST — `isIntraState`, "Central GST (CGST) @", `billingDetails.state` | ✅ | B2 |
 | 33 | **MatesCoin wallet**: balance on profile, "MatesCoin Balance: ₹", use coins at checkout (`toggleUseCoin`, `matescoinUsed`) | ✅ | B2 |
-| 34 | **Season pass**: valid days, season start/end, one entry per date — `seasonPass, validityType, validDaysCount` | ⬜ | B4 |
+| 34 | **Season pass**: valid days, season start/end, one entry per date — `seasonPass, validityType, validDaysCount` | ✅ `passType: season`, valid from/to (IST days), N entries per day at the gate (online + offline) | B4 |
 | 35 | **Seat map**: canvas with sections, rows, aisles, walkways, gates, stage position, accessible seats, colours, **standing areas mixed with seats**, per-section pricing — `get_seat_map_response`, `seat_map_painter.dart` | 🟡 grid sections (Phase 2) | B4 |
 | 36 | **Seat hold** with reservation token, countdown, resume active reservation, release — `api/booking/seat-reserve`, `checkActiveReservation` | 🟡 server holds; no token API | B4 |
 | 37 | **Registration forms**: text, textarea, select, radio, checkbox, date, time, **file upload**, regex, min/max length, **conditional fields**, per attendee, versioned — `registration_form_model`, `api/forms/fetch` | ⬜ | B4 |
