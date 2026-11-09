@@ -315,3 +315,10 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `route` (also on inbox items from `GET api/notifications`): `tickets` · `requests` · `vouchers` · `voucher/<id>` · `event/<slug>` · `notifications`. The app opens that screen on tap.
 - Config: `FCM_SERVICE_ACCOUNT` (the Firebase service-account JSON, raw or base64) turns push on (`PUSH_DRIVER=fcm`); without it push is off and the inbox still works. `PUSH_INTERVAL_MS` (default 5000).
 
+## 8.20 As built (v0.8) — attribution, web-only events, deep links (legacy B5c)
+- `POST api/attribution/click {source?, medium?, campaign?, term?, content?, fbclid?, gclid?, ref?, landingUrl?, eventSlug?}` (no auth needed; signed-in callers are linked; `device-id` header stored; ≤30/min per IP) → `{recorded}`. The app sends it when a link with `utm_*`, `fbclid`, `gclid` or `ref` opens it.
+- `book-ticket` accepts `attribution {source, medium, campaign, term, content, fbclid, gclid, ref}` (the app keeps the last touch for 7 days); stored on the booking (`bookings.attribution`). Unknown keys are dropped.
+- `GET api/admin/events/:id/attribution` → `{rows:[{source ('(direct)' when none), medium, campaign, ref, clicks, bookings, tickets, revenuePaise}]}` for confirmed bookings.
+- Events add `isWebOnly` and `externalUrl` (cards + detail). Web-only events can't be booked in the app (`400` "Tickets for this event are sold on the organiser's website."); the app opens `externalUrl` in an in-app web view.
+- App links: `gatepass://event/<slug>` and `https://<api>/e/<slug>` (event), `gatepass://claim?code=` and `/t/<code>` (claim), `gatepass://tickets` (My tickets), `gatepass://explore?city=<id>&title=` (events in a city). Any other http(s) link that opens the app goes to the in-app web view.
+

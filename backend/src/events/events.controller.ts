@@ -60,6 +60,7 @@ export class EventsController {
       id: e.id, slug: e.slug, title: e.title, cardImageUrl: e.cardImageUrl,
       venueName: e.venueName, cityName: name.get(e.cityId) ?? '', startDate: this.iso(e.startDate),
       priceFromPaise: e.priceFromPaise, genre: e.genre, status: e.status, hasSeatMap: e.hasSeatMap,
+      isWebOnly: e.isWebOnly, externalUrl: e.isWebOnly ? e.externalUrl : null,
       viewCount: e.viewCount, badge: eventBadge(e, stock.get(e.id)),
     }));
   }
@@ -269,7 +270,8 @@ export class EventsController {
       },
       organizer: e.organizerName,
       startDate: this.iso(e.startDate), endDate: this.iso(eventEnd(e)),
-      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap, maxPerUser: e.maxPerUser, maxSeatsPerBooking: e.maxPerUser,
+      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap, maxPerUser: e.maxPerUser,
+      isWebOnly: e.isWebOnly, externalUrl: e.isWebOnly ? e.externalUrl : null, maxSeatsPerBooking: e.maxPerUser,
       terms: e.terms, faqs: e.faqs, viewCount: e.viewCount + 1,
       artists: links.map((l) => {
         const a = artists.find((x) => x.id === l.artistId)!;

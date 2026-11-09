@@ -172,5 +172,8 @@ All data screens implement loading / loaded / empty / error-retry.
 - A push that arrives while the app is open shows as a snackbar with **View**.
 - Android 13+ asks for notification permission the first time Home opens after sign-in.
 
+### Web view (v0.8)
+- **Web view** (`WebViewScreen`) — for web-only events ("Book on organiser's site") and web links the app can't open itself: progress bar, reload, error-retry; only http/https pages load.
+
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
 Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.

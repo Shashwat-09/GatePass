@@ -25,6 +25,8 @@ export interface CheckoutOptions {
   reservationToken?: string;
   /** Registration form answers (see FormsService.check). */
   formResponses?: FormResponseInput[];
+  /** Marketing source (utm_*, click ids, affiliate ref). */
+  attribution?: Record<string, string> | null;
 }
 
 export interface BookItemInput {
@@ -155,6 +157,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           gateway: priced.q.payablePaise === 0 ? 'none' : this.gateway.name, orderRef: '', txnId: null,
           idempotencyKey: idempotencyKey ?? null, failureReason: null,
           items: lines.map((l, i) => ({ ...l, offerDiscountPaise: priced.q.lineOfferDiscounts[i] })),
+          attribution: opts.attribution ?? null,
           expiresAt, confirmedAt: null,
         }));
         if (priced.promo) {
@@ -224,6 +227,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   private async bookableEvent(m: EntityManager, eventId: string) {
     const event = await m.findOne(EventEntity, { where: { id: eventId } });
     if (!event) throw new ApiError('NOT_FOUND', 'Event not found');
+    if (event.isWebOnly) throw new ApiError('VALIDATION_ERROR', 'Tickets for this event are sold on the organiser\'s website.');
     const badge = eventBadge(event);
     if (!badge.isBookable) {
       const why: Record<string, string> = {

@@ -11,6 +11,7 @@ import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { PaymentEvent } from '../db/entities';
 import { SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 import { PaymentGateway } from '../payments/gateway';
+import { AttributionDto, cleanAttribution } from '../attribution/attribution.controller';
 import { BookingService } from './booking.service';
 
 class ItemDto {
@@ -37,6 +38,8 @@ class BookDto {
   @IsOptional() @IsString() @Matches(/^[\w-]{16,64}$/) reservationToken?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => FormResponseDto)
   formResponses?: FormResponseDto[];
+  /** Marketing source captured by the app from the link that brought the buyer in. */
+  @IsOptional() @ValidateNested() @Type(() => AttributionDto) attribution?: AttributionDto;
   @IsOptional() @IsBoolean() useCoins?: boolean;
   @IsOptional() @IsString() @Length(2, 40) billingState?: string;
 }
@@ -73,7 +76,7 @@ export class BookingController {
     }
     return this.booking.book(req.userId!, dto.eventId, dto.items, {
       promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState, reservationToken: dto.reservationToken,
-      formResponses: dto.formResponses,
+      formResponses: dto.formResponses, attribution: cleanAttribution(dto.attribution),
     }, idem);
   }
 

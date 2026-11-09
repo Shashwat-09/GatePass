@@ -34,7 +34,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 20 | View count, organiser, "Events you may like" (other events) | ✅ | B1 |
 | 21 | **Share via short URL** — `short_url_response`, `api/deep-link/fetch` | ✅ | B1 |
 | 22 | **Add to calendar** — `READ/WRITE_CALENDAR` permissions | ✅ | B1 |
-| 23 | Web-only events open in an in-app web view — "is web-only - opening it in the WebView" | ⬜ | B5 |
+| 23 | Web-only events open in an in-app web view — "is web-only - opening it in the WebView" | ✅ `isWebOnly` + `externalUrl`; "Book on organiser's site" opens an in-app web view (http/https only); server refuses in-app booking | B5 |
 | **Artists** ||||
 | 24 | Artist page: about, occupation, image, Spotify/YouTube, upcoming + past events — `ArtistDetailsScreen`, `api/event/artists` | ✅ | B1 |
 | **Booking** (`TicketController`, `SeatController`, 3.8 MB of screens) ||||
@@ -68,8 +68,8 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 49 | Notification inbox + mark read + **tap routing by type** (event, my tickets, popular…) | ✅ server-computed `route` (tickets, requests, vouchers, voucher, event, inbox) used by inbox and push taps | B5 |
 | 50 | **Push notifications** (FCM, local notifications, channel) | ✅ FCM HTTP v1 from a transactional outbox, `gatepass_default` channel, Android 13 permission, foreground banner; on once Firebase config + `FCM_SERVICE_ACCOUNT` exist | B5 |
 | 51 | **Force update** — `api/app-update` (min version, force flag, store URL), `AppUpdate` screen | ✅ | B3 |
-| 52 | Deep links: event, explore city, my-tickets, share-tickets; unresolved → web view | 🟡 claim links | B5 |
-| 53 | Marketing attribution: UTM / fbclid / gclid capture, Meta events, affiliate click tracking — `meta_attribution_service`, `trackAffiliateClickApi` | ⬜ (analytics events ✅) | B5 |
+| 52 | Deep links: event, explore city, my-tickets, share-tickets; unresolved → web view | ✅ `gatepass://event/<slug>`, `/e/<slug>`, `gatepass://claim`, `/t/<code>`, `gatepass://tickets`, `gatepass://explore?city=<id>`; other web links → in-app web view | B5 |
+| 53 | Marketing attribution: UTM / fbclid / gclid capture, Meta events, affiliate click tracking — `meta_attribution_service`, `trackAffiliateClickApi` | ✅ utm_*/fbclid/gclid/`ref` captured from links → `POST api/attribution/click`, last touch (7 days) stored on bookings, organiser report by source/campaign/affiliate; Firebase `campaign_details`. Meta SDK not added (no advertising id by policy) | B5 |
 
 ## Seller app (`package:showmates_organizer`, 7 files)
 

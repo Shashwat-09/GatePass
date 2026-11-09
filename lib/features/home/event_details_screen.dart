@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../web/web_view_screen.dart';
 import '../../app/routes.dart';
 import '../../app/theme.dart';
 import '../../core/di.dart';
@@ -240,10 +241,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _bottomBar(BuildContext context, EventModel e, bool canBook) {
-    final soon = e.badge.key == 'opening_soon';
+    final soon = e.badge.key == 'opening_soon' && !e.isWebOnly;
+    final web = e.isWebOnly && e.externalUrl != null && WebViewScreen.isAllowed(e.externalUrl!);
     final label = _loading
         ? 'Loading…'
-        : soon
+        : web
+            ? 'Book on organiser\'s site'
+            : soon
                 ? (e.notifyMe ? 'You’ll be notified' : 'Notify me')
                 : e.badge.isBookable
                     ? 'Book now'
@@ -266,9 +270,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             child: PrimaryButton(
               label: label,
               loading: _notifyBusy,
-              onPressed: soon
-                  ? () => _toggleNotify(e)
-                  : canBook
+              onPressed: web
+                  ? () => Get.to(() => WebViewScreen(url: e.externalUrl!, title: e.title))
+                  : soon
+                      ? () => _toggleNotify(e)
+                      : canBook && !e.isWebOnly
                       ? () => Get.to(() => e.hasSeatMap
                           ? SelectSeatScreen(event: e)
                           : e.isMultiSession

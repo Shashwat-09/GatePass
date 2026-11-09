@@ -39,6 +39,23 @@ CREATE TABLE public.artists (
     "instagramUrl" character varying
 );
 
+CREATE TABLE public.attribution_clicks (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid,
+    "deviceId" character varying,
+    "eventId" uuid,
+    source character varying,
+    medium character varying,
+    campaign character varying,
+    term character varying,
+    content character varying,
+    fbclid character varying,
+    gclid character varying,
+    ref character varying,
+    "landingUrl" character varying,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.bookings (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     code character varying NOT NULL,
@@ -65,7 +82,8 @@ CREATE TABLE public.bookings (
     gst jsonb,
     "billingState" character varying,
     "coinsPaise" integer DEFAULT 0 NOT NULL,
-    "payablePaise" integer DEFAULT 0 NOT NULL
+    "payablePaise" integer DEFAULT 0 NOT NULL,
+    attribution jsonb
 );
 
 CREATE TABLE public.check_ins (
@@ -201,7 +219,9 @@ CREATE TABLE public.events (
     "feeValue" integer,
     "organizerState" character varying,
     "ticketNotes" text,
-    "stagePosition" character varying DEFAULT 'top'::character varying NOT NULL
+    "stagePosition" character varying DEFAULT 'top'::character varying NOT NULL,
+    "isWebOnly" boolean DEFAULT false NOT NULL,
+    "externalUrl" character varying
 );
 
 CREATE TABLE public.form_responses (
@@ -533,6 +553,9 @@ ALTER TABLE ONLY public.voucher_shares
 ALTER TABLE ONLY public.seat_sections
     ADD CONSTRAINT "PK_3068932c5ab156abbc2eb387655" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.attribution_clicks
+    ADD CONSTRAINT "PK_32f7c73749287801d4164f56b5b" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.tickets
     ADD CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY (id);
 
@@ -654,6 +677,8 @@ CREATE INDEX "IDX_0d857612f2cb20b710f4612b7d" ON public.vouchers USING btree ("o
 
 CREATE UNIQUE INDEX "IDX_1c77cbb3c49baf2feeed3241f1" ON public.tickets USING btree ("qrToken");
 
+CREATE INDEX "IDX_2142a14ef4bd5876a698dfce26" ON public.bookings USING btree (attribution);
+
 CREATE INDEX "IDX_2332057da6b96737f522d2d595" ON public.event_artists USING btree ("artistId");
 
 CREATE UNIQUE INDEX "IDX_237d6970907b5fbb299364fa74" ON public.promo_redemptions USING btree ("bookingId");
@@ -684,13 +709,13 @@ CREATE INDEX "IDX_511957e3e8443429dc3fb00120" ON public.device_tokens USING btre
 
 CREATE INDEX "IDX_51ed83c9a1acb790e7d51f1358" ON public.event_sessions USING btree ("eventId");
 
+CREATE INDEX "IDX_53fdbb859cf858bf1b5f2daa4a" ON public.attribution_clicks USING btree ("eventId");
+
 CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
 
 CREATE INDEX "IDX_5aab221bf16e6fb2e22689f4f8" ON public.vouchers USING btree ("campaignId");
 
 CREATE INDEX "IDX_5e98fb1c2391cb25396cdf4bdc" ON public.voucher_shares USING btree ("voucherId");
-
-CREATE INDEX "IDX_5f63cbb95a5f457f258f055c58" ON public.bookings USING btree ("expiresAt");
 
 CREATE INDEX "IDX_610102b60fea1455310ccd299d" ON public.refresh_tokens USING btree ("userId");
 
@@ -738,6 +763,8 @@ CREATE INDEX "IDX_a2cd7a0d725ad9514c9a90aa02" ON public.wallet_entries USING btr
 
 CREATE INDEX "IDX_a58947aa4999755168d6d351ba" ON public.check_ins USING btree ("ticketId");
 
+CREATE INDEX "IDX_a5e5d62940d8cf4fe1d684d58f" ON public.attribution_clicks USING btree (ref);
+
 CREATE INDEX "IDX_a9059a9111a2206081a347d3b6" ON public.ticket_tiers USING btree ("eventId");
 
 CREATE INDEX "IDX_b4b6eedd8891e7cf45c500081a" ON public.ticket_transfers USING btree ("toPhone");
@@ -767,6 +794,8 @@ CREATE INDEX "IDX_de916bd3328a758012a6f72c8e" ON public.ticket_transfers USING b
 CREATE INDEX "IDX_ea811029f9d388932b70fa0123" ON public.seat_sections USING btree ("eventId");
 
 CREATE INDEX "IDX_f48328147cdd16eaa6eec4c627" ON public.seat_reservations USING btree ("holdToken");
+
+CREATE INDEX "IDX_f779f646431f765016aa5f7a62" ON public.attribution_clicks USING btree ("createdAt");
 
 CREATE INDEX "IDX_f95d476ef16fad91a50544b60c" ON public.bookings USING btree ("eventId");
 

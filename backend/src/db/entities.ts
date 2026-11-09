@@ -101,6 +101,9 @@ export class EventEntity {
   /** Where the stage is drawn on the seat map. */
   @Column({ type: 'varchar', default: 'top' }) stagePosition!: 'top' | 'bottom' | 'none';
   @Column({ default: 6 }) maxPerUser!: number;
+  /** Sold on another website: the app opens `externalUrl` in a web view instead of booking. */
+  @Column({ default: false }) isWebOnly!: boolean;
+  @Column({ type: 'varchar', nullable: true }) externalUrl!: string | null;
   @Column({ type: 'text', nullable: true }) terms!: string | null;
   // ── event page content ──
   @Column({ type: 'jsonb', default: () => "'[]'" }) highlights!: string[];
@@ -395,7 +398,9 @@ export class Booking {
   @Column({ type: 'varchar', nullable: true }) idempotencyKey!: string | null;
   @Column({ type: 'varchar', nullable: true }) failureReason!: string | null;
   @Column({ type: 'jsonb', default: () => "'[]'" }) items!: BookingItem[];
-  @Index() @Column({ type: 'timestamptz' }) expiresAt!: Date;
+  @Index() /** Marketing source of the purchase (last touch within 7 days): utm_*, fbclid, gclid, affiliate ref. */
+  @Column({ type: 'jsonb', nullable: true }) attribution!: Record<string, string> | null;
+  @Column({ type: 'timestamptz' }) expiresAt!: Date;
   @Column({ type: 'timestamptz', nullable: true }) confirmedAt!: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
@@ -711,9 +716,28 @@ export class VoucherRedemption {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/** Landing from a marketing / affiliate link (legacy `trackAffiliateClickApi`, UTM capture). */
+@Entity('attribution_clicks')
+export class AttributionClick {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ type: 'uuid', nullable: true }) userId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) deviceId!: string | null;
+  @Index() @Column({ type: 'uuid', nullable: true }) eventId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) source!: string | null;
+  @Column({ type: 'varchar', nullable: true }) medium!: string | null;
+  @Column({ type: 'varchar', nullable: true }) campaign!: string | null;
+  @Column({ type: 'varchar', nullable: true }) term!: string | null;
+  @Column({ type: 'varchar', nullable: true }) content!: string | null;
+  @Column({ type: 'varchar', nullable: true }) fbclid!: string | null;
+  @Column({ type: 'varchar', nullable: true }) gclid!: string | null;
+  @Index() @Column({ type: 'varchar', nullable: true }) ref!: string | null;
+  @Column({ type: 'varchar', nullable: true }) landingUrl!: string | null;
+  @Index() @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
-  VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken,
+  VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
 ];

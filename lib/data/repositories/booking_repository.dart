@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../core/constants.dart';
+import '../../services/attribution.dart';
 import '../../services/network/api_service.dart';
 import '../mock_data.dart';
 import '../models/models.dart';
@@ -188,6 +189,7 @@ class BookingRepository {
       if (useCoins) 'useCoins': true,
       if (reservationToken != null) 'reservationToken': reservationToken,
       if (formResponses.isNotEmpty) 'formResponses': formResponses.map((f) => f.toJson()).toList(),
+      if (Attribution.current() != null) 'attribution': Attribution.current(),
     });
     if (!r.isOk) return r.cast();
     return ApiResult.ok(BookingQuote.fromJson(r.data as Map<String, dynamic>));

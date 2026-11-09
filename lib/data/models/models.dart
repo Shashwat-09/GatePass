@@ -453,6 +453,9 @@ class EventModel {
   final bool hasSeatMap;
   final int maxPerUser;
   final List<TierModel> tiers;
+  /// Sold on another site: open [externalUrl] in a web view instead of booking.
+  final bool isWebOnly;
+  final String? externalUrl;
   // event page content
   final EventBadge badge;
   final String? bannerUrl;
@@ -491,6 +494,8 @@ class EventModel {
     this.genre,
     this.gallery = const [],
     this.hasSeatMap = false,
+    this.isWebOnly = false,
+    this.externalUrl,
     this.maxPerUser = 6,
     this.tiers = const [],
     this.badge = const EventBadge(),
@@ -540,6 +545,8 @@ class EventModel {
       genre: (j['genre'] as String?)?.isEmpty ?? true ? null : j['genre'] as String,
       gallery: _strings(j['gallery']),
       hasSeatMap: (j['hasSeatMap'] ?? false) == true,
+      isWebOnly: j['isWebOnly'] == true,
+      externalUrl: j['externalUrl']?.toString(),
       maxPerUser: (j['maxPerUser'] as num?)?.toInt() ?? 6,
       tiers: (j['tiers'] as List?)?.map((e) => TierModel.fromJson(e as Map<String, dynamic>)).toList() ?? const [],
       badge: EventBadge.fromJson(j['badge'] as Map<String, dynamic>?),

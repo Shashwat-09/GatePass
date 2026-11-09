@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../app/routes.dart';
 import '../core/constants.dart';
 import '../core/di.dart';
 import '../data/repositories/auth_repository.dart';
+import '../features/home/event_list_screen.dart';
 import '../features/tickets/claim_screen.dart';
+import '../features/web/web_view_screen.dart';
+import 'attribution.dart';
 import 'storage/local_storage.dart';
 
 /// Event slug from `gatepass://event/<slug>` or `https://<api>/e/<slug>`.
@@ -40,17 +44,37 @@ class DeepLinks {
     _sub ??= links.uriLinkStream.listen(_handle, onError: (_) {});
   }
 
+  @visibleForTesting
+  static Future<void> handle(Uri uri) => _handle(uri);
+
   static Future<void> _handle(Uri uri) async {
     final slug = eventSlugFrom(uri);
+    await Attribution.capture(uri, eventSlug: slug);
     if (slug != null && slug.isNotEmpty) {
       await sl<LocalStorage>().setString(StorageKeys.pendingEvent, slug);
       consumePending();
       return;
     }
     final code = claimCodeFrom(uri);
-    if (code == null || code.isEmpty) return;
-    await sl<LocalStorage>().setString(StorageKeys.pendingClaim, code);
-    consumePending();
+    if (code != null && code.isNotEmpty) {
+      await sl<LocalStorage>().setString(StorageKeys.pendingClaim, code);
+      consumePending();
+      return;
+    }
+    // gatepass://tickets → My tickets; gatepass://explore?city=<id> → that city's events.
+    if (uri.scheme == 'gatepass' && uri.host == 'tickets') {
+      if (sl<AuthRepository>().isLoggedIn) Get.offAllNamed(Routes.home, arguments: {'tab': 1});
+      return;
+    }
+    if (uri.scheme == 'gatepass' && uri.host == 'explore') {
+      final city = uri.queryParameters['city'];
+      Get.to(() => EventListScreen(title: uri.queryParameters['title'] ?? 'Explore', cityId: city));
+      return;
+    }
+    // Any other web link that reached the app opens in the in-app browser.
+    if ((uri.scheme == 'https' || uri.scheme == 'http') && uri.pathSegments.isNotEmpty) {
+      Get.to(() => WebViewScreen(url: uri.toString()));
+    }
   }
 
   /// Opens a pending claim once the user is signed in and on the home screen.
