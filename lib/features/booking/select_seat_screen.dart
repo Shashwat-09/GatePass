@@ -165,14 +165,14 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Color _color(SeatSectionModel s) {
     final hex = s.color;
     if (hex != null && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(hex)) return Color(int.parse('FF${hex.substring(1)}', radix: 16));
-    return AppColors.primary;
+    return context.colors.tint;
   }
 
   Widget _stage() => Container(
         margin: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
+          color: context.colors.tint.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: const Center(child: Text('STAGE', style: TextStyle(letterSpacing: 4, fontSize: 12))),
@@ -275,7 +275,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
       final bg = booked
           ? Theme.of(context).disabledColor.withValues(alpha: 0.25)
           : selected
-              ? AppColors.primary
+              ? context.colors.tint
               : color.withValues(alpha: 0.18);
       return Semantics(
         label: '${sec.name} row ${sec.rowLabel(r)} seat ${sec.seatNumber(r, col)}${booked ? ', taken' : ''}${accessible ? ', accessible' : ''}',
@@ -304,8 +304,8 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         spacing: AppSpacing.md,
         runSpacing: AppSpacing.sm,
         children: [
-          _legendItem(AppColors.primary.withValues(alpha: 0.18), 'Available'),
-          _legendItem(AppColors.primary, 'Selected'),
+          _legendItem(context.colors.tint.withValues(alpha: 0.18), 'Available'),
+          _legendItem(context.colors.tint, 'Selected'),
           _legendItem(Theme.of(context).disabledColor.withValues(alpha: 0.25), 'Taken'),
           const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.accessible, size: 16), SizedBox(width: 6), Text('Accessible', style: TextStyle(fontSize: 12))]),
         ],

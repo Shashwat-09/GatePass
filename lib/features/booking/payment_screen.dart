@@ -82,7 +82,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const SizedBox(height: AppSpacing.md),
                 if (q.expiresAt != null)
                   Row(children: [
-                    Icon(Icons.timer_outlined, size: 18, color: _expired ? Colors.red : AppColors.warning),
+                    Icon(Icons.timer_outlined, size: 18, color: _expired ? context.colors.danger : context.colors.warning),
                     const SizedBox(width: 6),
                     Text(_expired ? 'Hold expired — tickets may no longer be available' : 'Tickets held for $mm:$ss'),
                   ]),
@@ -123,7 +123,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
-            color: AppColors.warning.withValues(alpha: 0.12),
+            color: context.colors.warning.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           child: const Text('TEST MODE — the server has no payment gateway configured. No money moves.'),

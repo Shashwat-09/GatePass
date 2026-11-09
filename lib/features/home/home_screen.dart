@@ -33,7 +33,7 @@ class HomeScreen extends StatelessWidget {
             return RefreshIndicator(
               onRefresh: c.load,
               child: ListView(children: [
-                _topBar(c),
+                _topBar(context, c),
                 const SizedBox(height: 120),
                 StateView.empty('No events in ${c.cityName} yet.\nTry another city.'),
               ]),
@@ -44,14 +44,14 @@ class HomeScreen extends StatelessWidget {
             onRefresh: c.load,
             child: ListView(
               children: [
-                _topBar(c),
+                _topBar(context, c),
                 _banners(vis),
                 _categories(c),
                 SectionHeader('Trending now', action: _seeAll(c, 'Popular events', const EventFilter(sort: 'popular'))),
                 _rail([...vis]..sort((a, b) => b.viewCount.compareTo(a.viewCount))),
                 if (c.explore.value?.artists.isNotEmpty ?? false) ...[
                   const SectionHeader('Artists'),
-                  _artists(c.explore.value!.artists),
+                  _artists(context, c.explore.value!.artists),
                 ],
                 SectionHeader('Upcoming events', action: _seeAll(c, 'All events', const EventFilter())),
                 _rail(vis),
@@ -64,7 +64,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _topBar(HomeController c) => Padding(
+  Widget _topBar(BuildContext context, HomeController c) => Padding(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
         child: Row(
@@ -73,7 +73,7 @@ class HomeScreen extends StatelessWidget {
               onTap: () => Get.to(() => const CityPickerScreen()),
               child: Row(
                 children: [
-                  const Icon(Icons.location_on, color: AppColors.primary, size: 20),
+                  Icon(Icons.location_on, color: context.colors.tint, size: 20),
                   const SizedBox(width: 4),
                   Obx(() => Text(c.cityName,
                       style: const TextStyle(
@@ -132,7 +132,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _artists(List<ArtistModel> artists) => SizedBox(
+  Widget _artists(BuildContext context, List<ArtistModel> artists) => SizedBox(
         height: 116,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
@@ -146,7 +146,7 @@ class HomeScreen extends StatelessWidget {
               child: Column(children: [
                 CircleAvatar(
                   radius: 34,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  backgroundColor: context.colors.tint.withValues(alpha: 0.1),
                   backgroundImage: artists[i].imageUrl.isEmpty ? null : CachedNetworkImageProvider(artists[i].imageUrl),
                 ),
                 const SizedBox(height: 4),

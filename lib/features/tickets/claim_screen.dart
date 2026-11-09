@@ -111,7 +111,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
                 if (p.status != 'pending') ...[
                   const SizedBox(height: AppSpacing.sm),
                   Text(p.status == 'claimed' ? 'Already claimed' : 'No longer available',
-                      style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
+                      style: TextStyle(color: context.colors.warning, fontWeight: FontWeight.w700)),
                 ],
               ]),
             ),

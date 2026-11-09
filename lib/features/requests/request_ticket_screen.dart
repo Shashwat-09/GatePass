@@ -83,7 +83,7 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
               const SizedBox(height: AppSpacing.md),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(AppRadius.md)),
+                decoration: BoxDecoration(color: context.colors.tint.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(AppRadius.md)),
                 child: Text(t.pricePaise == 0
                     ? 'This ticket needs the organiser\'s approval. If approved, it appears in My tickets.'
                     : 'This ticket needs the organiser\'s approval. Once approved, you can complete the booking from My requests.'),

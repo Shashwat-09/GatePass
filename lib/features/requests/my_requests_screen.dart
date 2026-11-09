@@ -80,9 +80,9 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
   }
 
   Color _color(String status) => switch (status) {
-        'approved' || 'booked' => AppColors.success,
-        'rejected' => Colors.red,
-        'pending_review' => AppColors.warning,
+        'approved' || 'booked' => context.colors.success,
+        'rejected' => context.colors.danger,
+        'pending_review' => context.colors.warning,
         _ => Theme.of(context).hintColor,
       };
 

@@ -122,7 +122,7 @@ class StateView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: AppColors.primary),
+            Icon(icon, size: 48, color: context.colors.tint),
             const SizedBox(height: AppSpacing.md),
             Text(message ?? 'Nothing here',
                 textAlign: TextAlign.center,

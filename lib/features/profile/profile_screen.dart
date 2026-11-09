@@ -49,8 +49,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-              child: const Icon(Icons.person, size: 44, color: AppColors.primary),
+              backgroundColor: context.colors.tint.withValues(alpha: 0.12),
+              child: Icon(Icons.person, size: 44, color: context.colors.tint),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(user?.name ?? 'Guest', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -62,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: AppSpacing.lg),
         if (_coins != null)
           ListTile(
-            leading: const Icon(Icons.toll_outlined, color: AppColors.warning),
+            leading: Icon(Icons.toll_outlined, color: context.colors.warning),
             title: const Text('Coins balance'),
             trailing: Text(formatPaise(_coins!), style: const TextStyle(fontWeight: FontWeight.w800)),
           ),
@@ -79,15 +79,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _item(Icons.description_outlined, 'Terms & conditions', openTerms),
         _item(Icons.help_outline, 'Help & support', emailSupport),
         const Divider(),
-        _item(Icons.logout, 'Log out', _logout, color: Colors.red),
-        _item(Icons.delete_outline, 'Delete account', _confirmDelete, color: Colors.red),
+        _item(Icons.logout, 'Log out', _logout, color: context.colors.danger),
+        _item(Icons.delete_outline, 'Delete account', _confirmDelete, color: context.colors.danger),
         const SizedBox(height: AppSpacing.lg),
       ]),
     );
   }
 
   Widget _item(IconData icon, String label, VoidCallback onTap, {Color? color}) => ListTile(
-        leading: Icon(icon, color: color ?? AppColors.primary),
+        leading: Icon(icon, color: color ?? context.colors.tint),
         title: Text(label, style: TextStyle(color: color)),
         trailing: const Icon(Icons.chevron_right, size: 20),
         onTap: onTap,
@@ -119,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               if (error.value != null) ...[
                 const SizedBox(height: 8),
-                Text(error.value!, style: const TextStyle(color: Colors.red)),
+                Text(error.value!, style: TextStyle(color: context.colors.danger)),
               ],
             ]),
             actions: [
@@ -143,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                 child: deleting.value
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Delete', style: TextStyle(color: Colors.red)),
+                    : Text('Delete', style: TextStyle(color: context.colors.danger)),
               ),
             ],
           )),

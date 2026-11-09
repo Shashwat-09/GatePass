@@ -116,7 +116,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   Widget _thanks(SurveyDone d, {bool already = false}) => Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Icon(Icons.favorite, size: 56, color: AppColors.primary),
+          Icon(Icons.favorite, size: 56, color: context.colors.tint),
           const SizedBox(height: AppSpacing.md),
           Text(already ? 'You\'ve already shared your feedback' : d.title,
               textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),

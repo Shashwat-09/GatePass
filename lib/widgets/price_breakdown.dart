@@ -17,8 +17,8 @@ class PriceBreakdownView extends StatelessWidget {
     final inc = g.included ? ' (incl. in fee)' : '';
     return Column(children: [
       _line(context, 'Base price', formatPaise(p.basePaise)),
-      if (p.offerDiscountPaise > 0) _line(context, 'Offer savings', '- ${formatPaise(p.offerDiscountPaise)}', color: AppColors.success),
-      if (p.promoDiscountPaise > 0) _line(context, 'Coupon savings', '- ${formatPaise(p.promoDiscountPaise)}', color: AppColors.success),
+      if (p.offerDiscountPaise > 0) _line(context, 'Offer savings', '- ${formatPaise(p.offerDiscountPaise)}', color: context.colors.success),
+      if (p.promoDiscountPaise > 0) _line(context, 'Coupon savings', '- ${formatPaise(p.promoDiscountPaise)}', color: context.colors.success),
       _line(context, 'Booking fee', formatPaise(p.feePaise)),
       if (g.isSplit) ...[
         _line(context, 'Central GST (CGST) @ ${_pct(g.ratePct / 2)}%$inc', formatPaise(g.cgstPaise), sub: true),
@@ -28,7 +28,7 @@ class PriceBreakdownView extends StatelessWidget {
       const Divider(height: AppSpacing.lg),
       _line(context, 'Total', formatPaise(p.totalPaise), bold: p.coinsPaise == 0),
       if (p.coinsPaise > 0) ...[
-        _line(context, 'Coins applied', '- ${formatPaise(p.coinsPaise)}', color: AppColors.success),
+        _line(context, 'Coins applied', '- ${formatPaise(p.coinsPaise)}', color: context.colors.success),
         _line(context, 'Payable amount', formatPaise(p.payablePaise), bold: true),
       ],
       if (p.savingsPaise > 0)
@@ -36,9 +36,9 @@ class PriceBreakdownView extends StatelessWidget {
           margin: const EdgeInsets.only(top: AppSpacing.sm),
           padding: const EdgeInsets.all(AppSpacing.sm),
           width: double.infinity,
-          decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.sm)),
+          decoration: BoxDecoration(color: context.colors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.sm)),
           child: Text('You save ${formatPaise(p.savingsPaise)} on this order 🎉',
-              style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: context.colors.success, fontWeight: FontWeight.w700)),
         ),
     ]);
   }

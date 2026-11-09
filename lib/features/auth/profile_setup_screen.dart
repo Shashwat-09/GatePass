@@ -138,13 +138,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 const TextSpan(text: 'I agree to the '),
                 TextSpan(
                   text: 'Terms',
-                  style: const TextStyle(color: AppColors.primary, decoration: TextDecoration.underline),
+                  style: TextStyle(color: context.colors.tint, decoration: TextDecoration.underline),
                   recognizer: TapGestureRecognizer()..onTap = openTerms,
                 ),
                 const TextSpan(text: ' and '),
                 TextSpan(
                   text: 'Privacy Policy',
-                  style: const TextStyle(color: AppColors.primary, decoration: TextDecoration.underline),
+                  style: TextStyle(color: context.colors.tint, decoration: TextDecoration.underline),
                   recognizer: TapGestureRecognizer()..onTap = openPrivacy,
                 ),
               ])),
@@ -165,6 +165,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         label: Text(label),
         selected: _gender == value,
         onSelected: (_) => setState(() => _gender = value),
-        selectedColor: AppColors.primary.withValues(alpha: 0.15),
+        selectedColor: context.colors.tint.withValues(alpha: 0.15),
       );
 }

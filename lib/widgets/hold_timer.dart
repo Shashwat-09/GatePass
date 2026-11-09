@@ -58,14 +58,14 @@ class _HoldTimerState extends State<HoldTimer> {
     final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.15),
+        color: context.colors.warning.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.timer_outlined, size: 16, color: AppColors.warning),
+        Icon(Icons.timer_outlined, size: 16, color: context.colors.warning),
         const SizedBox(width: 4),
         Text(widget.compact ? time : 'Seats held for $time',
-            style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: context.colors.warning, fontWeight: FontWeight.w700)),
       ]),
     );
     if (widget.compact) return pill;

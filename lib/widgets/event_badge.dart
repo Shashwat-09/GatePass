@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import '../app/theme.dart';
 import '../data/models/models.dart';
 
-Color badgeColor(String key) => switch (key) {
-      'open' || 'rescheduled' => AppColors.success,
-      'filling_fast' || 'opening_soon' || 'live_now' => AppColors.warning,
-      'sold_out' || 'cancelled' || 'sale_ended' => Colors.red,
-      _ => Colors.grey,
+Color badgeColor(BuildContext context, String key) => switch (key) {
+      'open' || 'rescheduled' => context.colors.success,
+      'filling_fast' || 'opening_soon' || 'live_now' => context.colors.warning,
+      'sold_out' || 'cancelled' || 'sale_ended' => context.colors.danger,
+      _ => context.colors.secondaryLabel,
     };
 
 /// Small status pill (Filling fast, Sold out, Tickets open soon…).
@@ -22,7 +22,7 @@ class EventBadgeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (hideOpen && badge.key == 'open') return const SizedBox.shrink();
-    final c = badgeColor(badge.key);
+    final c = badgeColor(context, badge.key);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 3 : 4),
       decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(AppRadius.pill)),
@@ -68,6 +68,6 @@ class _CountdownState extends State<Countdown> {
     if (d.isNegative) return const Text('Tickets are on sale now', style: TextStyle(fontWeight: FontWeight.w700));
     String two(int n) => n.toString().padLeft(2, '0');
     final text = '${d.inDays > 0 ? '${d.inDays}d ' : ''}${two(d.inHours % 24)}h ${two(d.inMinutes % 60)}m ${two(d.inSeconds % 60)}s';
-    return Text('${widget.prefix}$text', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.warning));
+    return Text('${widget.prefix}$text', style: TextStyle(fontWeight: FontWeight.w700, color: context.colors.warning));
   }
 }

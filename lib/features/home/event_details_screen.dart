@@ -130,7 +130,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               background: GestureDetector(
                 onTap: images.isEmpty ? null : () => Get.to(() => GalleryViewer(images: images)),
                 child: images.isEmpty
-                    ? Container(color: AppColors.primary)
+                    ? Container(color: context.colors.tint)
                     : CachedNetworkImage(imageUrl: images.first, fit: BoxFit.cover, memCacheWidth: 1080),
               ),
             ),
@@ -193,7 +193,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ]),
                 if (e.prohibited.isNotEmpty) ...[
                   _header('Not allowed'),
-                  ...e.prohibited.map((p) => _bullet(Icons.block, p, color: Colors.red)),
+                  ...e.prohibited.map((p) => _bullet(Icons.block, p, color: context.colors.danger)),
                 ],
                 if (e.faqs.isNotEmpty) ...[
                   _header('FAQs'),
@@ -291,7 +291,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _openingSoon(EventModel e) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.md)),
+        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.md)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Countdown(target: e.badge.opensAt!, onDone: _load),
           const SizedBox(height: 4),
@@ -332,13 +332,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 child: Column(children: [
                   CircleAvatar(
                     radius: 36,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    backgroundColor: context.colors.tint.withValues(alpha: 0.1),
                     backgroundImage: a.imageUrl.isEmpty ? null : CachedNetworkImageProvider(a.imageUrl),
                   ),
                   const SizedBox(height: 4),
                   Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                   if (a.isHeadliner)
-                    const Text('HEADLINER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent)),
+                    Text('HEADLINER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.colors.tint)),
                 ]),
               ),
             );
@@ -423,12 +423,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _pill(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.pill)),
-        child: Text(text, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12)),
+        decoration: BoxDecoration(color: context.colors.tint.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.pill)),
+        child: Text(text, style: TextStyle(color: context.colors.tint, fontWeight: FontWeight.w600, fontSize: 12)),
       );
 
   Widget _row(IconData icon, String text) => Row(children: [
-        Icon(icon, size: 18, color: AppColors.primary),
+        Icon(icon, size: 18, color: context.colors.tint),
         const SizedBox(width: 8),
         Expanded(child: Text(text)),
       ]);
@@ -436,7 +436,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _bullet(IconData icon, String text, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, size: 16, color: color ?? AppColors.primary),
+          Icon(icon, size: 16, color: color ?? context.colors.tint),
           const SizedBox(width: 8),
           Expanded(child: Text(text)),
         ]),
@@ -444,7 +444,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _notice(IconData icon, String text) => Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
+        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
         child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 8), Expanded(child: Text(text))]),
       );
 }

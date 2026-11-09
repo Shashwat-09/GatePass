@@ -35,9 +35,9 @@ class EventCard extends StatelessWidget {
                   imageUrl: event.imageUrl,
                   fit: BoxFit.cover,
                   placeholder: (_, __) =>
-                      Container(color: AppColors.primary.withValues(alpha: 0.08)),
+                      Container(color: context.colors.tint.withValues(alpha: 0.08)),
                   errorWidget: (_, __, ___) => Container(
-                    color: AppColors.primary.withValues(alpha: 0.08),
+                    color: context.colors.tint.withValues(alpha: 0.08),
                     child: const Icon(Icons.image_not_supported_outlined),
                   ),
                 ),
@@ -64,8 +64,8 @@ class EventCard extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).hintColor, fontSize: 12.5)),
             const SizedBox(height: 2),
             Text(event.priceFrom > 0 ? 'From ${formatPaise(event.priceFrom.toInt())}' : 'Free',
-                style: const TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                style: TextStyle(
+                    color: context.colors.tint, fontWeight: FontWeight.w700, fontSize: 13)),
           ],
         ),
       ),

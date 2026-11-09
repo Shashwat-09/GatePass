@@ -98,11 +98,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.06),
+          color: context.colors.tint.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: Row(children: [
-          Icon(applied != null ? Icons.check_circle : Icons.local_offer_outlined, color: AppColors.primary, size: 20),
+          Icon(applied != null ? Icons.check_circle : Icons.local_offer_outlined, color: context.colors.tint, size: 20),
           const SizedBox(width: 8),
           Expanded(child: Text(applied != null ? '$applied applied' : 'Apply promo code')),
           if (applied != null)
@@ -120,7 +120,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         onChanged: c.toggleCoins,
         title: const Text('Use coins'),
         subtitle: Text('Balance: ${formatPaise(balance)}'),
-        secondary: const Icon(Icons.toll_outlined, color: AppColors.warning),
+        secondary: Icon(Icons.toll_outlined, color: context.colors.warning),
       );
 
   Widget _line(String label, String amount) => Padding(

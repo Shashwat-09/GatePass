@@ -42,7 +42,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
               const SizedBox(height: AppSpacing.sm),
               Text('Enter the 6-digit code sent to +91 ••••• ••$masked',
-                  style: const TextStyle(color: AppColors.subtleLight)),
+                  style: TextStyle(color: context.colors.secondaryLabel)),
               const SizedBox(height: AppSpacing.lg),
               PinCodeTextField(
                 appContext: context,
@@ -59,19 +59,19 @@ class _OtpScreenState extends State<OtpScreen> {
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   fieldHeight: 54,
                   fieldWidth: 46,
-                  activeColor: AppColors.primary,
-                  selectedColor: AppColors.primary,
-                  inactiveColor: AppColors.subtleLight.withValues(alpha: 0.4),
+                  activeColor: context.colors.tint,
+                  selectedColor: context.colors.tint,
+                  inactiveColor: context.colors.secondaryLabel.withValues(alpha: 0.4),
                 ),
               ),
               Obx(() => _auth.error.value == null
                   ? const SizedBox.shrink()
                   : Text(_auth.error.value!,
-                      style: const TextStyle(color: Colors.red))),
+                      style: TextStyle(color: context.colors.danger))),
               const SizedBox(height: AppSpacing.sm),
               Obx(() => _auth.resendIn.value > 0
                   ? Text('Resend in ${_auth.resendIn.value}s',
-                      style: const TextStyle(color: AppColors.subtleLight))
+                      style: TextStyle(color: context.colors.secondaryLabel))
                   : TextButton(
                       onPressed: () => _auth.sendOtp(_auth.phone.value),
                       child: const Text('Resend code'),

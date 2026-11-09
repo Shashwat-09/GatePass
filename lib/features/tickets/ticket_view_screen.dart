@@ -110,7 +110,7 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(AppSpacing.sm),
                       margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                      decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
+                      decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
                       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         const Icon(Icons.info_outline, size: 18),
                         const SizedBox(width: 8),

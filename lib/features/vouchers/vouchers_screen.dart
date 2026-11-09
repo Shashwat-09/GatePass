@@ -12,7 +12,7 @@ import 'voucher_detail_screen.dart';
 
 Color voucherColor(BuildContext context, String? hex) {
   if (hex != null && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(hex)) return Color(int.parse('FF${hex.substring(1)}', radix: 16));
-  return AppColors.primary;
+  return context.colors.tint;
 }
 
 /// My vouchers: Active / Used / Expired tabs with counts.
@@ -156,7 +156,7 @@ class _VoucherTabState extends State<_VoucherTab> with AutomaticKeepAliveClientM
                     Container(
                       margin: const EdgeInsets.only(right: AppSpacing.md),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(AppRadius.pill)),
+                      decoration: BoxDecoration(color: context.colors.tint, borderRadius: BorderRadius.circular(AppRadius.pill)),
                       child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
                     ),
                 ]),

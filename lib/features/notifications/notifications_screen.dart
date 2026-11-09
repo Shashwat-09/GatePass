@@ -56,21 +56,21 @@ class NotificationsScreen extends StatelessWidget {
           child: ListView.separated(
             itemCount: c.items.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) => _tile(c.items[i]),
+            itemBuilder: (_, i) => _tile(context, c.items[i]),
           ),
         );
       }),
     );
   }
 
-  Widget _tile(NotificationModel n) {
+  Widget _tile(BuildContext context, NotificationModel n) {
     final when = n.createdAt == null
         ? ''
         : DateFormat('d MMM, h:mm a').format(n.createdAt!);
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-        child: Icon(_iconFor(n.type), color: AppColors.primary, size: 20),
+        backgroundColor: context.colors.tint.withValues(alpha: 0.12),
+        child: Icon(_iconFor(n.type), color: context.colors.tint, size: 20),
       ),
       title: Text(n.title,
           style: TextStyle(

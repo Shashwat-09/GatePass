@@ -58,7 +58,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   Center(
                     child: CircleAvatar(
                       radius: 64,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      backgroundColor: context.colors.tint.withValues(alpha: 0.1),
                       backgroundImage: a.imageUrl.isEmpty ? null : CachedNetworkImageProvider(a.imageUrl),
                     ),
                   ),

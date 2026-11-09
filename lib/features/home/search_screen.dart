@@ -92,7 +92,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             const SectionHeader('Artists'),
                             ..._artists.map((a) => ListTile(
                                   leading: CircleAvatar(
-                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    backgroundColor: context.colors.tint.withValues(alpha: 0.1),
                                     backgroundImage: a.imageUrl.isEmpty ? null : CachedNetworkImageProvider(a.imageUrl),
                                   ),
                                   title: Text(a.name),
@@ -106,7 +106,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   leading: ClipRRect(
                                     borderRadius: BorderRadius.circular(AppRadius.sm),
                                     child: e.imageUrl.isEmpty
-                                        ? Container(width: 56, height: 56, color: AppColors.primary.withValues(alpha: 0.1))
+                                        ? Container(width: 56, height: 56, color: context.colors.tint.withValues(alpha: 0.1))
                                         : CachedNetworkImage(imageUrl: e.imageUrl, width: 56, height: 56, fit: BoxFit.cover, memCacheWidth: 200),
                                   ),
                                   title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),

@@ -53,7 +53,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     ...t.bundles.map((b) => Card(
                           child: ListTile(
-                            leading: const Icon(Icons.nights_stay_outlined, color: AppColors.primary),
+                            leading: Icon(Icons.nights_stay_outlined, color: context.colors.tint),
                             title: Text(b.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text('Pick ${b.nights} night${b.nights == 1 ? '' : 's'} · one show each'),
                             trailing: Text(formatPaise(b.pricePaise), style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -63,7 +63,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                         )),
                     ...t.seasonPasses.map((p) => Card(
                           child: ListTile(
-                            leading: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary),
+                            leading: Icon(Icons.confirmation_number_outlined, color: context.colors.tint),
                             title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text([
                               if (p.validFrom != null && p.validTo != null) 'Valid ${_day(p.validFrom!)} – ${_day(p.validTo!)}',
@@ -106,7 +106,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                             title: Text(DateFormat('h:mm a').format(s.startsAt), style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: s.label == null ? null : Text(s.label!),
                             trailing: s.soldOut
-                                ? const Text('Sold out', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700))
+                                ? Text('Sold out', style: TextStyle(color: context.colors.danger, fontWeight: FontWeight.w700))
                                 : const Icon(Icons.chevron_right),
                             enabled: !s.soldOut,
                             onTap: () => Get.to(() => SelectTicketScreen(event: widget.event, sessionId: s.sessionId)),

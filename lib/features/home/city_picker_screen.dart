@@ -115,7 +115,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
         ListTile(
           leading: _locating
               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.my_location, color: AppColors.primary),
+              : Icon(Icons.my_location, color: context.colors.tint),
           title: const Text('Use my current location'),
           onTap: _locating ? null : _useLocation,
         ),

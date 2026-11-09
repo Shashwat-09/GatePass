@@ -61,8 +61,8 @@ class _IntroScreenState extends State<IntroScreen> {
             SmoothPageIndicator(
               controller: _pc,
               count: _slides.length,
-              effect: const ExpandingDotsEffect(
-                  activeDotColor: AppColors.primary, dotHeight: 8, dotWidth: 8),
+              effect: ExpandingDotsEffect(
+                  activeDotColor: context.colors.tint, dotHeight: 8, dotWidth: 8),
             ),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -100,15 +100,15 @@ class _Slide extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 64,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-            child: Icon(icon, size: 64, color: AppColors.primary),
+            backgroundColor: context.colors.tint.withValues(alpha: 0.12),
+            child: Icon(icon, size: 64, color: context.colors.tint),
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
           const SizedBox(height: AppSpacing.sm),
           Text(body,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, color: AppColors.subtleLight)),
+              style: TextStyle(fontSize: 15, color: context.colors.secondaryLabel)),
         ],
       ),
     );

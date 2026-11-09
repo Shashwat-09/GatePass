@@ -39,12 +39,12 @@ class SelectTicketScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           if (_session != null)
             Text('${_session!.venueName} · ${DateFormat('EEE, d MMM • h:mm a').format(_session!.startsAt)}',
-                style: const TextStyle(color: AppColors.subtleLight)),
+                style: TextStyle(color: context.colors.secondaryLabel)),
           const SizedBox(height: AppSpacing.md),
-          ..._grouped(c),
+          ..._grouped(context, c),
           const SizedBox(height: 8),
           Text('Max ${event.maxPerUser} tickets per user.',
-              style: const TextStyle(fontSize: 12, color: AppColors.subtleLight)),
+              style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -56,8 +56,8 @@ class SelectTicketScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Subtotal',
-                          style: TextStyle(fontSize: 12, color: AppColors.subtleLight)),
+                      Text('Subtotal',
+                          style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
                       Text(formatPaise(c.subtotalPaise),
                           style: const TextStyle(
                               fontSize: 18, fontWeight: FontWeight.w800)),
@@ -80,7 +80,7 @@ class SelectTicketScreen extends StatelessWidget {
   }
 
   /// Tiers grouped under their category heading (Standing, VIP Lounge…).
-  List<Widget> _grouped(BookingController c) {
+  List<Widget> _grouped(BuildContext context, BookingController c) {
     final groups = <String, List<TierModel>>{};
     for (final t in _tiers) {
       groups.putIfAbsent(t.category ?? '', () => []).add(t);
@@ -92,12 +92,12 @@ class SelectTicketScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 4),
             child: Text(g.key, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           ),
-        ...g.value.map((t) => _tierRow(c, t)),
+        ...g.value.map((t) => _tierRow(context, c, t)),
       ],
     ];
   }
 
-  Widget _tierRow(BookingController c, TierModel t) {
+  Widget _tierRow(BuildContext context, BookingController c, TierModel t) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -109,34 +109,34 @@ class SelectTicketScreen extends StatelessWidget {
                 children: [
                   Text(t.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                   if (t.phaseName != null)
-                    Text(t.phaseName!, style: const TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w700)),
+                    Text(t.phaseName!, style: TextStyle(fontSize: 12, color: context.colors.tint, fontWeight: FontWeight.w700)),
                   if ((t.description ?? '').isNotEmpty)
-                    Text(t.description!, style: const TextStyle(fontSize: 12, color: AppColors.subtleLight)),
+                    Text(t.description!, style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
                   const SizedBox(height: 2),
                   Row(children: [
                     Text(t.pricePaise == 0 ? 'Free' : formatPaise(t.pricePaise),
-                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                        style: TextStyle(color: context.colors.tint, fontWeight: FontWeight.w700)),
                     if (t.strikePricePaise != null) ...[
                       const SizedBox(width: 6),
                       Text(formatPaise(t.strikePricePaise!),
-                          style: const TextStyle(decoration: TextDecoration.lineThrough, color: AppColors.subtleLight, fontSize: 12)),
+                          style: TextStyle(decoration: TextDecoration.lineThrough, color: context.colors.secondaryLabel, fontSize: 12)),
                     ],
                   ]),
                   if (t.offerLabel != null)
                     Container(
                       margin: const EdgeInsets.only(top: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.pill)),
-                      child: Text(t.offerLabel!, style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
+                      decoration: BoxDecoration(color: context.colors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.pill)),
+                      child: Text(t.offerLabel!, style: TextStyle(color: context.colors.success, fontSize: 11, fontWeight: FontWeight.w700)),
                     ),
                   if (t.remaining <= 0)
-                    const Text('Sold out', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w700))
+                    Text('Sold out', style: TextStyle(color: context.colors.danger, fontSize: 12, fontWeight: FontWeight.w700))
                   else if (t.remaining <= 10)
-                    Text('Only ${t.remaining} left', style: const TextStyle(color: AppColors.warning, fontSize: 12)),
+                    Text('Only ${t.remaining} left', style: TextStyle(color: context.colors.warning, fontSize: 12)),
                   if (t.maxPerUser != null)
-                    Text('Max ${t.maxPerUser} per person', style: const TextStyle(color: AppColors.subtleLight, fontSize: 11)),
+                    Text('Max ${t.maxPerUser} per person', style: TextStyle(color: context.colors.secondaryLabel, fontSize: 11)),
                   if (t.minQty > 1)
-                    Text('Min ${t.minQty} per booking', style: const TextStyle(color: AppColors.subtleLight, fontSize: 11)),
+                    Text('Min ${t.minQty} per booking', style: TextStyle(color: context.colors.secondaryLabel, fontSize: 11)),
                 ],
               ),
             ),

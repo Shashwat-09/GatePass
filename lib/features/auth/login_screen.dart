@@ -39,14 +39,14 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.xl),
-              const Icon(Icons.local_activity_rounded,
-                  size: 48, color: AppColors.primary),
+              Icon(Icons.local_activity_rounded,
+                  size: 48, color: context.colors.tint),
               const SizedBox(height: AppSpacing.lg),
               const Text('Enter your number',
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
               const SizedBox(height: AppSpacing.sm),
-              const Text('We will send you a verification code.',
-                  style: TextStyle(color: AppColors.subtleLight)),
+              Text('We will send you a verification code.',
+                  style: TextStyle(color: context.colors.secondaryLabel)),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(
                 controller: _ctrl,
@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   : Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(_auth.error.value!,
-                          style: const TextStyle(color: Colors.red)),
+                          style: TextStyle(color: context.colors.danger)),
                     )),
               const Spacer(),
               Obx(() => PrimaryButton(
@@ -77,10 +77,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _valid.value ? _submit : null,
                   )),
               const SizedBox(height: AppSpacing.sm),
-              const Text(
+              Text(
                 'By continuing you agree to our Terms & Privacy Policy.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.subtleLight),
+                style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel),
               ),
             ],
           ),

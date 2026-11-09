@@ -26,10 +26,10 @@ class ConfirmationScreen extends StatelessWidget {
                 duration: const Duration(milliseconds: 500),
                 curve: Curves.elasticOut,
                 builder: (_, s, child) => Transform.scale(scale: s, child: child),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   radius: 48,
-                  backgroundColor: AppColors.success,
-                  child: Icon(Icons.check_rounded, color: Colors.white, size: 56),
+                  backgroundColor: context.colors.success,
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 56),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

@@ -52,7 +52,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       appBar: AppBar(
         title: Text(widget.title ?? Uri.tryParse(widget.url)?.host ?? ''),
         bottom: _progress > 0 && _progress < 100
-            ? PreferredSize(preferredSize: const Size.fromHeight(2), child: LinearProgressIndicator(value: _progress / 100, color: AppColors.primary))
+            ? PreferredSize(preferredSize: const Size.fromHeight(2), child: LinearProgressIndicator(value: _progress / 100, color: context.colors.tint))
             : null,
         actions: [if (c != null) IconButton(tooltip: 'Reload', icon: const Icon(Icons.refresh), onPressed: c.reload)],
       ),

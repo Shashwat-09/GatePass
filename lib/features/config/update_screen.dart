@@ -21,7 +21,7 @@ class UpdateScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(storeUrl != null ? Icons.system_update : Icons.build_circle_outlined, size: 72, color: AppColors.primary),
+              Icon(storeUrl != null ? Icons.system_update : Icons.build_circle_outlined, size: 72, color: context.colors.tint),
               const SizedBox(height: AppSpacing.lg),
               Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
               const SizedBox(height: AppSpacing.sm),
