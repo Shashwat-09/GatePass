@@ -1,5 +1,6 @@
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -123,15 +124,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             pinned: true,
             actions: [
               if (e.date != null)
-                IconButton(tooltip: 'Add to calendar', icon: const Icon(Icons.event_available_outlined), onPressed: () => _addToCalendar(e)),
-              if (e.shareUrl != null) IconButton(tooltip: 'Share', icon: const Icon(Icons.share_outlined), onPressed: () => _share(e)),
+                IconButton(tooltip: 'Add to calendar', icon: const Icon(CupertinoIcons.calendar_badge_plus), onPressed: () => _addToCalendar(e)),
+              if (e.shareUrl != null) IconButton(tooltip: 'Share', icon: const Icon(CupertinoIcons.square_arrow_up), onPressed: () => _share(e)),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: GestureDetector(
                 onTap: images.isEmpty ? null : () => Get.to(() => GalleryViewer(images: images)),
-                child: images.isEmpty
-                    ? Container(color: context.colors.tint)
-                    : CachedNetworkImage(imageUrl: images.first, fit: BoxFit.cover, memCacheWidth: 1080),
+                child: EventArt(images.isEmpty ? '' : images.first, radius: 0, memCacheWidth: 1080),
               ),
             ),
           ),
@@ -143,18 +142,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   EventBadgeChip(e.badge),
                   if (e.genre != null) _pill(e.genre!),
                   ...e.tags.take(3).map(_pill),
-                  if (e.viewCount > 0) Text('${NumberFormat.compact().format(e.viewCount)} views', style: TextStyle(color: hint, fontSize: 12)),
+                  if (e.viewCount > 0) Text('${NumberFormat.compact().format(e.viewCount)} views', style: context.text.bodySmall),
                 ]),
                 const SizedBox(height: AppSpacing.sm),
-                Text(e.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                if (e.organizer != null) Text('By ${e.organizer}', style: TextStyle(color: hint)),
+                Text(e.title, style: context.text.headlineMedium),
+                if (e.organizer != null) Text('By ${e.organizer}', style: context.text.bodyMedium!.copyWith(color: hint)),
                 const SizedBox(height: AppSpacing.md),
-                _row(Icons.calendar_today_outlined, dateStr),
+                _row(CupertinoIcons.calendar, dateStr),
                 const SizedBox(height: 6),
-                _row(Icons.location_on_outlined, [e.venueName, e.city].where((s) => s.isNotEmpty).join(', ')),
+                _row(CupertinoIcons.location, [e.venueName, e.city].where((s) => s.isNotEmpty).join(', ')),
                 if (e.badge.note != null) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  _notice(Icons.info_outline, e.badge.note!),
+                  _notice(CupertinoIcons.info_circle, e.badge.note!),
                 ],
                 if (e.badge.key == 'opening_soon' && e.badge.opensAt != null) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -163,70 +162,72 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 if (_error != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  TextButton(onPressed: _load, child: const Text('Retry')),
+                  TextButton(onPressed: _load, child: const Text('Try Again')),
                 ],
-                if (e.guide.isNotEmpty) ...[_header('Event guide'), _guide(e.guide)],
-                if (e.artists.isNotEmpty) ...[_header('Artist lineup'), _artists(e.artists)],
+                if (e.guide.isNotEmpty) ...[_header('Event Guide'), _guide(e.guide)],
+                if (e.artists.isNotEmpty) ...[_header('Lineup'), _artists(e.artists)],
                 _header('About'),
                 ReadMore(text: e.description),
                 if (e.highlights.isNotEmpty) ...[
                   _header('Highlights'),
-                  ...e.highlights.map((h) => _bullet(Icons.star_rounded, h)),
+                  ...e.highlights.map((h) => _bullet(CupertinoIcons.star_fill, h)),
                 ],
                 if (e.videoUrl != null) ...[
                   const SizedBox(height: AppSpacing.md),
-                  OutlinedButton.icon(onPressed: () => openLink(e.videoUrl!), icon: const Icon(Icons.play_circle_outline), label: const Text('Watch video')),
+                  OutlinedButton.icon(onPressed: () => openLink(e.videoUrl!), icon: const Icon(CupertinoIcons.play_circle), label: const Text('Watch Video')),
                 ],
                 if (e.gallery.isNotEmpty) ...[_header('Gallery'), _gallery(e)],
                 _header('Venue'),
-                Text(e.venueName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                if ((e.venueAddress ?? '').isNotEmpty) Text(e.venueAddress!, style: TextStyle(color: hint)),
+                Text(e.venueName, style: context.text.titleMedium),
+                if ((e.venueAddress ?? '').isNotEmpty) Text(e.venueAddress!, style: context.text.bodyMedium!.copyWith(color: hint)),
                 Wrap(spacing: 8, children: [
                   if (e.mapLink != null)
-                    TextButton.icon(onPressed: () => openLink(e.mapLink!), icon: const Icon(Icons.map_outlined), label: const Text('View in map')),
+                    TextButton.icon(onPressed: () => openLink(e.mapLink!), icon: const Icon(CupertinoIcons.map), label: const Text('Directions')),
                   if (e.layoutImageUrl != null)
                     TextButton.icon(
                       onPressed: () => Get.to(() => GalleryViewer(images: [e.layoutImageUrl!], caption: 'Seating / ground layout (for reference only)')),
-                      icon: const Icon(Icons.grid_view_outlined),
-                      label: const Text('Venue layout'),
+                      icon: const Icon(CupertinoIcons.square_grid_2x2),
+                      label: const Text('Venue Layout'),
                     ),
                 ]),
                 if (e.prohibited.isNotEmpty) ...[
-                  _header('Not allowed'),
-                  ...e.prohibited.map((p) => _bullet(Icons.block, p, color: context.colors.danger)),
+                  _header('Not Allowed'),
+                  ...e.prohibited.map((p) => _bullet(CupertinoIcons.nosign, p, color: context.colors.danger)),
                 ],
                 if (e.faqs.isNotEmpty) ...[
                   _header('FAQs'),
                   ...e.faqs.map((f) => ExpansionTile(
                         tilePadding: EdgeInsets.zero,
-                        title: Text(f.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(f.label, style: context.text.titleSmall),
                         childrenPadding: const EdgeInsets.only(bottom: 12),
                         expandedAlignment: Alignment.centerLeft,
-                        children: [Text(f.value, style: TextStyle(color: hint))],
+                        children: [Text(f.value, style: context.text.bodyMedium!.copyWith(color: hint))],
                       )),
                 ],
                 if ((e.terms ?? '').isNotEmpty)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.description_outlined),
-                    title: const Text('Terms & conditions'),
-                    trailing: const Icon(Icons.chevron_right),
+                    leading: const Icon(CupertinoIcons.doc_text),
+                    title: const Text('Terms & Conditions'),
+                    trailing: Icon(CupertinoIcons.chevron_right, size: 16, color: context.colors.tertiaryLabel),
                     onTap: () => _showTerms(e.terms!),
                   ),
                 if (e.sponsors.isNotEmpty) ...[_header('Sponsors'), _sponsors(e.sponsors)],
                 if (e.otherEvents.isNotEmpty) ...[
-                  _header('Events you may like'),
+                  _header('You May Also Like'),
                   SizedBox(
-                    height: 236,
+                    height: EventCard.railHeight(context, width: 200),
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: e.otherEvents.length,
-                      itemBuilder: (_, i) => EventCard(
+                      itemBuilder: (_, i) => Padding(
+                        padding: const EdgeInsets.only(right: 14),
+                        child: EventCard(
                         event: e.otherEvents[i],
                         width: 200,
                         onTap: () => Get.to(() => const EventDetailsScreen(),
                             arguments: e.otherEvents[i], preventDuplicates: false),
-                      ),
+                      )),
                     ),
                   ),
                 ],
@@ -246,24 +247,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final label = _loading
         ? 'Loading…'
         : web
-            ? 'Book on organiser\'s site'
+            ? 'Book on Organiser’s Site'
             : soon
-                ? (e.notifyMe ? 'You’ll be notified' : 'Notify me')
+                ? (e.notifyMe ? 'You’ll Be Notified' : 'Notify Me')
                 : e.badge.isBookable
-                    ? 'Book now'
+                    ? 'Get Tickets'
                     : e.badge.label;
     return Container(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12)],
+        color: context.colors.canvas,
+        border: Border(top: BorderSide(color: context.colors.separator, width: 0.5)),
       ),
       child: SafeArea(
         top: false,
         child: Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('Starting from', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-            Text(e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text('From', style: context.text.bodySmall),
+            Text(e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free', style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
@@ -291,11 +292,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _openingSoon(EventModel e) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.md)),
+        decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.md)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Countdown(target: e.badge.opensAt!, onDone: _load),
           const SizedBox(height: 4),
-          Text('Opens ${DateFormat('EEE, d MMM • h:mm a').format(e.badge.opensAt!)}'),
+          Text('Opens ${DateFormat('EEE d MMM · h:mm a').format(e.badge.opensAt!)}', style: context.text.bodyMedium),
         ]),
       );
 
@@ -305,20 +306,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         children: items
             .map((g) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
+                  decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.md)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                    Text(g.label, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
-                    Text(g.value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(g.label, style: context.text.labelMedium!.copyWith(color: context.colors.secondaryLabel)),
+                    Text(g.value, style: context.text.titleSmall),
                   ]),
                 ))
             .toList(),
       );
 
   Widget _artists(List<ArtistModel> artists) => SizedBox(
-        height: 128,
+        height: 72 + 8 + textBlockHeight(context, context.text.bodySmall) + textBlockHeight(context, context.text.labelSmall) + 6,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: artists.length,
@@ -332,13 +330,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 child: Column(children: [
                   CircleAvatar(
                     radius: 36,
-                    backgroundColor: context.colors.tint.withValues(alpha: 0.1),
+                    backgroundColor: context.colors.fill,
                     backgroundImage: a.imageUrl.isEmpty ? null : CachedNetworkImageProvider(a.imageUrl),
+                    child: a.imageUrl.isEmpty ? Icon(CupertinoIcons.music_note, color: context.colors.tertiaryLabel) : null,
                   ),
-                  const SizedBox(height: 4),
-                  Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall!.copyWith(color: context.colors.label, fontWeight: FontWeight.w600)),
                   if (a.isHeadliner)
-                    Text('HEADLINER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: context.colors.tint)),
+                    Text('Headliner', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall!.copyWith(color: context.colors.secondaryLabel)),
                 ]),
               ),
             );
@@ -373,7 +372,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           .map((t) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(t.key, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                  Text(t.key, style: context.text.bodySmall),
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: AppSpacing.sm,
@@ -409,43 +408,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           expand: false,
           initialChildSize: 0.6,
           builder: (_, sc) => ListView(controller: sc, padding: const EdgeInsets.all(AppSpacing.lg), children: [
-            const Text('Terms & conditions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Terms & Conditions', style: context.text.titleLarge),
             const SizedBox(height: AppSpacing.md),
-            Text(terms, style: const TextStyle(height: 1.5)),
+            Text(terms, style: context.text.bodyMedium),
           ]),
         ),
       );
 
   Widget _header(String t) => Padding(
         padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
-        child: Text(t, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        child: Semantics(header: true, child: Text(t, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700))),
       );
 
-  Widget _pill(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: context.colors.tint.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.pill)),
-        child: Text(text, style: TextStyle(color: context.colors.tint, fontWeight: FontWeight.w600, fontSize: 12)),
-      );
+  Widget _pill(String text) => TagPill(text);
 
   Widget _row(IconData icon, String text) => Row(children: [
-        Icon(icon, size: 18, color: context.colors.tint),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
+        Icon(icon, size: 20, color: context.colors.secondaryLabel),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: context.text.bodyLarge)),
       ]);
 
   Widget _bullet(IconData icon, String text, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, size: 16, color: color ?? context.colors.tint),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text)),
+          Icon(icon, size: 16, color: color ?? context.colors.secondaryLabel),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: context.text.bodyLarge)),
         ]),
       );
 
   Widget _notice(IconData icon, String text) => Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
-        child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 8), Expanded(child: Text(text))]),
+        decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.md)),
+        child: Row(children: [Icon(icon, size: 20, color: context.colors.warning), const SizedBox(width: 10), Expanded(child: Text(text, style: context.text.bodyMedium))]),
       );
 }
 
@@ -462,11 +457,11 @@ class _ReadMoreState extends State<ReadMore> {
   bool _open = false;
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(height: 1.5, color: Theme.of(context).hintColor);
+    final style = context.text.bodyLarge!;
     final long = widget.text.length > 220;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(widget.text, style: style, maxLines: _open || !long ? null : widget.lines, overflow: _open || !long ? null : TextOverflow.ellipsis),
-      if (long) TextButton(onPressed: () => setState(() => _open = !_open), child: Text(_open ? 'Read less' : 'Read more')),
+      if (long) TextButton(onPressed: () => setState(() => _open = !_open), child: Text(_open ? 'Less' : 'More')),
     ]);
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -60,7 +61,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (didPop) c.abandon();
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Payment')),
+        backgroundColor: context.colors.groupedCanvas,
+        appBar: AppBar(title: const Text('Payment'), backgroundColor: context.colors.groupedCanvas),
         body: SafeArea(
           child: Obx(() {
             final q = c.quote.value;
@@ -74,17 +76,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
-                Text(c.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text('Booking ${q.bookingCode}', style: TextStyle(color: Theme.of(context).hintColor)),
+                Text(c.event.title, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text('Booking ${q.bookingCode}', style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel, fontFeatures: const [FontFeature.tabularFigures()])),
                 const SizedBox(height: AppSpacing.md),
-                PriceBreakdownView(q.price),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(color: context.colors.cell, borderRadius: BorderRadius.circular(AppRadius.md)),
+                  child: PriceBreakdownView(q.price),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 if (q.expiresAt != null)
                   Row(children: [
-                    Icon(Icons.timer_outlined, size: 18, color: _expired ? context.colors.danger : context.colors.warning),
+                    Icon(CupertinoIcons.timer, size: 18, color: _expired ? context.colors.danger : context.colors.warning),
                     const SizedBox(width: 6),
-                    Text(_expired ? 'Hold expired — tickets may no longer be available' : 'Tickets held for $mm:$ss'),
+                    Expanded(child: Text(_expired ? 'Hold expired — tickets may no longer be available' : 'Tickets held for $mm:$ss',
+                        style: context.text.bodyMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]))),
                   ]),
                 const SizedBox(height: AppSpacing.lg),
                 if (c.error.value != null)
@@ -105,10 +112,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.lock_outline, size: 14, color: Theme.of(context).hintColor),
+                  Icon(CupertinoIcons.lock, size: 14, color: context.colors.secondaryLabel),
                   const SizedBox(width: 4),
-                  Text('Secure payment · UPI, cards, netbanking',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                  Text('Secure payment · UPI, cards, netbanking', style: context.text.bodySmall),
                 ]),
               ],
             );
@@ -122,21 +128,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
   List<Widget> _testMode(bool busy) => [
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: context.colors.warning.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-          child: const Text('TEST MODE — the server has no payment gateway configured. No money moves.'),
+          decoration: BoxDecoration(color: context.colors.cell, borderRadius: BorderRadius.circular(AppRadius.md)),
+          child: Row(children: [
+            Icon(CupertinoIcons.wrench, size: 20, color: context.colors.warning),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Test mode: the server has no payment gateway configured. No money moves.', style: context.text.bodyMedium)),
+          ]),
         ),
         const SizedBox(height: AppSpacing.sm),
         PrimaryButton(
-          label: 'Simulate successful payment',
+          label: 'Simulate Successful Payment',
           loading: busy,
           onPressed: () async => _onPaid(await c.confirmWith({'mockResult': 'success'})),
         ),
         TextButton(
           onPressed: busy ? null : () => c.confirmWith({'mockResult': 'failure'}),
-          child: const Text('Simulate failed payment'),
+          child: const Text('Simulate Failed Payment'),
         ),
       ];
 

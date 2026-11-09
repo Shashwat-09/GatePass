@@ -31,147 +31,94 @@ class SelectTicketScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Get.put(BookingController())..start(event);
     return Scaffold(
-      appBar: AppBar(title: const Text('Select tickets')),
+      backgroundColor: context.colors.groupedCanvas,
+      appBar: AppBar(title: const Text('Tickets'), backgroundColor: context.colors.groupedCanvas),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.lg),
         children: [
-          Text(event.title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          if (_session != null)
-            Text('${_session!.venueName} · ${DateFormat('EEE, d MMM • h:mm a').format(_session!.startsAt)}',
-                style: TextStyle(color: context.colors.secondaryLabel)),
-          const SizedBox(height: AppSpacing.md),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(event.title, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
+              if (_session != null)
+                Text('${_session!.venueName} · ${DateFormat('EEE d MMM · h:mm a').format(_session!.startsAt)}', style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel)),
+            ]),
+          ),
           ..._grouped(context, c),
-          const SizedBox(height: 8),
-          Text('Max ${event.maxPerUser} tickets per user.',
-              style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Text('Up to ${event.maxPerUser} tickets per person.', style: context.text.bodySmall),
+          ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Obx(() => Row(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Subtotal',
-                          style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
-                      Text(formatPaise(c.subtotalPaise),
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(
-                    child: PrimaryButton(
-                      label: 'Continue',
-                      onPressed: c.totalQty > 0
-                          ? () => goToCheckout(c)
-                          : null,
-                    ),
-                  ),
-                ],
-              )),
-        ),
-      ),
+      bottomNavigationBar: Obx(() => CheckoutBar(
+            caption: 'Subtotal',
+            amount: formatPaise(c.subtotalPaise),
+            button: PrimaryButton(label: 'Continue', loading: c.loading.value, onPressed: c.totalQty > 0 ? () => goToCheckout(c) : null),
+          )),
     );
   }
 
-  /// Tiers grouped under their category heading (Standing, VIP Lounge…).
+  /// Ticket types grouped under their category (Standing, VIP Lounge…), as inset grouped sections.
   List<Widget> _grouped(BuildContext context, BookingController c) {
     final groups = <String, List<TierModel>>{};
     for (final t in _tiers) {
       groups.putIfAbsent(t.category ?? '', () => []).add(t);
     }
     return [
-      for (final g in groups.entries) ...[
-        if (g.key.isNotEmpty && groups.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 4),
-            child: Text(g.key, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-          ),
-        ...g.value.map((t) => _tierRow(context, c, t)),
-      ],
+      for (final g in groups.entries)
+        InsetGroup(
+          header: g.key.isNotEmpty && groups.length > 1 ? g.key : null,
+          children: g.value.map((t) => _tierRow(context, c, t)).toList(),
+        ),
     ];
   }
 
   Widget _tierRow(BuildContext context, BookingController c, TierModel t) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(t.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  if (t.phaseName != null)
-                    Text(t.phaseName!, style: TextStyle(fontSize: 12, color: context.colors.tint, fontWeight: FontWeight.w700)),
-                  if ((t.description ?? '').isNotEmpty)
-                    Text(t.description!, style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel)),
-                  const SizedBox(height: 2),
-                  Row(children: [
-                    Text(t.pricePaise == 0 ? 'Free' : formatPaise(t.pricePaise),
-                        style: TextStyle(color: context.colors.tint, fontWeight: FontWeight.w700)),
-                    if (t.strikePricePaise != null) ...[
-                      const SizedBox(width: 6),
-                      Text(formatPaise(t.strikePricePaise!),
-                          style: TextStyle(decoration: TextDecoration.lineThrough, color: context.colors.secondaryLabel, fontSize: 12)),
-                    ],
-                  ]),
-                  if (t.offerLabel != null)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: context.colors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.pill)),
-                      child: Text(t.offerLabel!, style: TextStyle(color: context.colors.success, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ),
-                  if (t.remaining <= 0)
-                    Text('Sold out', style: TextStyle(color: context.colors.danger, fontSize: 12, fontWeight: FontWeight.w700))
-                  else if (t.remaining <= 10)
-                    Text('Only ${t.remaining} left', style: TextStyle(color: context.colors.warning, fontSize: 12)),
-                  if (t.maxPerUser != null)
-                    Text('Max ${t.maxPerUser} per person', style: TextStyle(color: context.colors.secondaryLabel, fontSize: 11)),
-                  if (t.minQty > 1)
-                    Text('Min ${t.minQty} per booking', style: TextStyle(color: context.colors.secondaryLabel, fontSize: 11)),
-                ],
-              ),
-            ),
-            t.requiresApproval
-                ? OutlinedButton(
-                    key: Key('request-${t.id}'),
-                    onPressed: t.remaining > 0 ? () => Get.to(() => RequestTicketScreen(event: event, tier: t)) : null,
-                    child: const Text('Request'),
-                  )
-                : Obx(() => _stepper(c, t)),
-          ],
+    final col = context.colors;
+    final notes = <Widget>[
+      if (t.offerLabel != null) Padding(padding: const EdgeInsets.only(top: 6), child: TagPill(t.offerLabel!, color: col.success)),
+      if (t.remaining <= 0)
+        Text('Sold out', style: context.text.bodySmall!.copyWith(color: col.danger, fontWeight: FontWeight.w600))
+      else if (t.remaining <= 10)
+        Text('Only ${t.remaining} left', style: context.text.bodySmall!.copyWith(color: col.warning, fontWeight: FontWeight.w600)),
+      if (t.maxPerUser != null) Text('Max ${t.maxPerUser} per person', style: context.text.bodySmall),
+      if (t.minQty > 1) Text('Min ${t.minQty} per booking', style: context.text.bodySmall),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 12, AppSpacing.sm, 12),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t.name, style: context.text.titleMedium),
+            if (t.phaseName != null) Text(t.phaseName!, style: context.text.bodySmall!.copyWith(color: col.tint, fontWeight: FontWeight.w600)),
+            if ((t.description ?? '').isNotEmpty) Text(t.description!, style: context.text.bodySmall),
+            const SizedBox(height: 4),
+            Row(children: [
+              Text(t.pricePaise == 0 ? 'Free' : formatPaise(t.pricePaise), style: context.text.bodyLarge!.copyWith(fontWeight: FontWeight.w600)),
+              if (t.strikePricePaise != null) ...[
+                const SizedBox(width: 6),
+                Text(formatPaise(t.strikePricePaise!),
+                    style: context.text.bodySmall!.copyWith(decoration: TextDecoration.lineThrough, decorationColor: col.secondaryLabel)),
+              ],
+            ]),
+            ...notes,
+          ]),
         ),
-      ),
-    );
-  }
-
-  Widget _stepper(BookingController c, TierModel t) {
-    final qty = c.qtyFor(t.id);
-    return Row(
-      children: [
-        IconButton.filledTonal(
-          onPressed: qty > 0 ? () => c.dec(t) : null,
-          icon: const Icon(Icons.remove),
-        ),
-        SizedBox(
-          width: 32,
-          child: Text('$qty',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        ),
-        IconButton.filled(
-          onPressed: c.canInc(t) ? () => c.inc(t) : null,
-          icon: const Icon(Icons.add),
-        ),
-      ],
+        const SizedBox(width: AppSpacing.sm),
+        t.requiresApproval
+            ? OutlinedButton(
+                key: Key('request-${t.id}'),
+                onPressed: t.remaining > 0 ? () => Get.to(() => RequestTicketScreen(event: event, tier: t)) : null,
+                child: const Text('Request'),
+              )
+            : Obx(() => QtyStepper(
+                  label: t.name,
+                  value: c.qtyFor(t.id),
+                  onMinus: c.qtyFor(t.id) > 0 ? () => c.dec(t) : null,
+                  onPlus: c.canInc(t) ? () => c.inc(t) : null,
+                )),
+      ]),
     );
   }
 }

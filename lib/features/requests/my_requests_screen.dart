@@ -143,8 +143,8 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: r.canBook
-                  ? FilledButton(onPressed: () => _book(r), child: const Text('Book now'))
-                  : TextButton(onPressed: () => _withdraw(r), child: const Text('Withdraw request')),
+                  ? FilledButton(onPressed: () => _book(r), child: const Text('Book Now'))
+                  : TextButton(onPressed: () => _withdraw(r), child: const Text('Withdraw Request')),
             ),
         ]),
       ),

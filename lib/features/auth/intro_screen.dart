@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -20,9 +21,9 @@ class _IntroScreenState extends State<IntroScreen> {
   int _page = 0;
 
   static const _slides = [
-    _Slide(Icons.explore_rounded, 'Discover', 'Find concerts, comedy and festivals in your city.'),
+    _Slide(CupertinoIcons.compass, 'Discover', 'Find concerts, comedy and festivals in your city.'),
     _Slide(Icons.event_seat_rounded, 'Book fast', 'Pick tickets and pay in a few taps.'),
-    _Slide(Icons.qr_code_2_rounded, 'Just scan in', 'Your ticket is a QR — show it at the gate.'),
+    _Slide(CupertinoIcons.qrcode, 'Just scan in', 'Your ticket is a QR — show it at the gate.'),
   ];
 
   void _finish() {

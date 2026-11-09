@@ -48,8 +48,8 @@ void main() {
     await t.pumpWidget(GetMaterialApp(initialRoute: '/start', getPages: [GetPage(name: '/start', page: () => const SizedBox()), ...Routes.pages]));
     Get.toNamed(Routes.eventDetails, arguments: 'neon-nights');
     await t.pumpAndSettle();
-    expect(find.text('Book on organiser\'s site'), findsOneWidget);
-    expect(find.text('Book now'), findsNothing);
+    expect(find.text('Book on Organiser’s Site'), findsOneWidget);
+    expect(find.text('Get Tickets'), findsNothing);
   });
 
   testWidgets('the web view refuses non-web links', (t) async {

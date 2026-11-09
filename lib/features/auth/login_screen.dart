@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -39,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.xl),
-              Icon(Icons.local_activity_rounded,
+              Icon(CupertinoIcons.ticket_fill,
                   size: 48, color: context.colors.tint),
               const SizedBox(height: AppSpacing.lg),
               const Text('Enter your number',

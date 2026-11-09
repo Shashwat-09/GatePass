@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -81,9 +82,9 @@ class _BundleScreenState extends State<BundleScreen> {
         ],
         Row(children: [
           const Expanded(child: Text('Passes', style: TextStyle(fontWeight: FontWeight.w700))),
-          IconButton.filledTonal(onPressed: _qty > b.minQty ? () => setState(() => _qty--) : null, icon: const Icon(Icons.remove)),
+          IconButton.filledTonal(onPressed: _qty > b.minQty ? () => setState(() => _qty--) : null, icon: const Icon(CupertinoIcons.minus)),
           SizedBox(width: 32, child: Text('$_qty', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-          IconButton.filled(onPressed: _qty < _max ? () => setState(() => _qty++) : null, icon: const Icon(Icons.add)),
+          IconButton.filled(onPressed: _qty < _max ? () => setState(() => _qty++) : null, icon: const Icon(CupertinoIcons.plus)),
         ]),
       ]),
       bottomNavigationBar: SafeArea(

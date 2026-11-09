@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -143,7 +144,7 @@ class _VoucherTabState extends State<_VoucherTab> with AutomaticKeepAliveClientM
               radius: 24,
               backgroundColor: color.withValues(alpha: 0.15),
               backgroundImage: v.brandLogoUrl != null ? CachedNetworkImageProvider(v.brandLogoUrl!) : null,
-              child: v.brandLogoUrl == null ? Icon(Icons.card_giftcard, color: color) : null,
+              child: v.brandLogoUrl == null ? Icon(CupertinoIcons.gift, color: color) : null,
             ),
           ),
           Expanded(

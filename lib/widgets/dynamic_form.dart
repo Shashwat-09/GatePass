@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -170,7 +171,7 @@ class _DynamicFormState extends State<DynamicForm> {
           _caption(context, f),
           OutlinedButton.icon(
             key: _k(f),
-            icon: Icon(f.type == 'date' ? Icons.event : Icons.schedule),
+            icon: Icon(f.type == 'date' ? CupertinoIcons.calendar : CupertinoIcons.clock),
             label: Text(v ?? (f.type == 'date' ? 'Choose a date' : 'Choose a time')),
             onPressed: () async {
               if (f.type == 'date') {
@@ -195,7 +196,7 @@ class _DynamicFormState extends State<DynamicForm> {
               key: _k(f),
               icon: _uploading.contains(f.key)
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.upload_file),
+                  : const Icon(CupertinoIcons.arrow_up_doc),
               label: Text(has ? 'Replace file' : 'Upload file'),
               onPressed: _uploading.contains(f.key) ? null : () => _upload(f),
             ),

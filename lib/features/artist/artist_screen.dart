@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -68,9 +69,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
                     if (a.spotifyUrl != null)
-                      OutlinedButton.icon(onPressed: () => openLink(a.spotifyUrl!), icon: const Icon(Icons.music_note), label: const Text('Listen on Spotify')),
+                      OutlinedButton.icon(onPressed: () => openLink(a.spotifyUrl!), icon: const Icon(CupertinoIcons.music_note), label: const Text('Listen on Spotify')),
                     if (a.youtubeUrl != null)
-                      OutlinedButton.icon(onPressed: () => openLink(a.youtubeUrl!), icon: const Icon(Icons.play_arrow), label: const Text('Watch on YouTube')),
+                      OutlinedButton.icon(onPressed: () => openLink(a.youtubeUrl!), icon: const Icon(CupertinoIcons.play_fill), label: const Text('Watch on YouTube')),
                   ]),
                   if (a.about.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),

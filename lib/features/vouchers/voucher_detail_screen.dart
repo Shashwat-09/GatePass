@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
@@ -107,12 +108,12 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
       if (v.couponCode != null) ...[
         const SizedBox(height: AppSpacing.md),
         ListTile(
-          leading: const Icon(Icons.local_offer_outlined),
+          leading: const Icon(CupertinoIcons.tag),
           title: Text(v.couponCode!, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
           subtitle: const Text('Coupon code'),
           trailing: IconButton(
             tooltip: 'Copy',
-            icon: const Icon(Icons.copy),
+            icon: const Icon(CupertinoIcons.doc_on_doc),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: v.couponCode!));
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code copied')));
@@ -131,7 +132,7 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
         const Text('Shared with', style: TextStyle(fontWeight: FontWeight.w800)),
         ...v.shares.map((s) => ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.person_outline),
+              leading: const Icon(CupertinoIcons.person),
               title: Text(s.name ?? s.recipient),
               subtitle: Text([if (s.name != null) s.recipient, if (s.sharedAt != null) DateFormat('d MMM, h:mm a').format(s.sharedAt!)].join(' · ')),
               trailing: Text('× ${s.units}'),
@@ -207,16 +208,16 @@ class _ShareSheetState extends State<_ShareSheet> {
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: 'Mobile number',
-            suffixIcon: IconButton(tooltip: 'Pick from contacts', icon: const Icon(Icons.contacts_outlined), onPressed: _pick),
+            suffixIcon: IconButton(tooltip: 'Pick from contacts', icon: const Icon(CupertinoIcons.person_2), onPressed: _pick),
           ),
         ),
         TextField(key: const Key('vshare-name'), controller: _name, decoration: const InputDecoration(labelText: 'Name (optional)')),
         if (max > 1)
           Row(children: [
             const Expanded(child: Text('Units')),
-            IconButton(onPressed: _units > 1 ? () => setState(() => _units--) : null, icon: const Icon(Icons.remove_circle_outline)),
+            IconButton(onPressed: _units > 1 ? () => setState(() => _units--) : null, icon: const Icon(CupertinoIcons.minus_circle)),
             Text('$_units', style: const TextStyle(fontWeight: FontWeight.w800)),
-            IconButton(key: const Key('vshare-inc'), onPressed: _units < max ? () => setState(() => _units++) : null, icon: const Icon(Icons.add_circle_outline)),
+            IconButton(key: const Key('vshare-inc'), onPressed: _units < max ? () => setState(() => _units++) : null, icon: const Icon(CupertinoIcons.plus_circle)),
           ]),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
         const SizedBox(height: AppSpacing.md),

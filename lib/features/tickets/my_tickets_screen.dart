@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/ticket_repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/ticket_stub.dart';
 import 'claim_screen.dart';
 import 'ticket_view_screen.dart';
 
@@ -90,43 +92,66 @@ class MyTicketsController extends GetxController {
   }
 }
 
-class MyTicketsScreen extends StatelessWidget {
+class MyTicketsScreen extends StatefulWidget {
   const MyTicketsScreen({super.key});
+  @override
+  State<MyTicketsScreen> createState() => _MyTicketsScreenState();
+}
+
+class _MyTicketsScreenState extends State<MyTicketsScreen> {
+  int _segment = 0;
+  static const _segments = ['Booked', 'Received', 'Shared', 'History'];
 
   @override
   Widget build(BuildContext context) {
     final c = Get.put(MyTicketsController());
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My tickets'),
-          actions: [
+    final lists = [
+      _tickets(c.upcoming, 'You haven’t booked a ticket yet'),
+      _tickets(c.received, 'No tickets received yet'),
+      _transfers(c),
+      _tickets(c.history, 'No past tickets yet'),
+    ];
+    return Scaffold(
+      backgroundColor: context.colors.groupedCanvas,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          largeTitleBar(context, 'Tickets', background: context.colors.groupedCanvas, actions: [
             IconButton(
               tooltip: 'Claim tickets with a code',
-              icon: const Icon(Icons.redeem_outlined),
+              padding: EdgeInsets.zero,
+              icon: Icon(CupertinoIcons.gift, color: context.colors.tint),
               onPressed: () => Get.to(() => const ClaimScreen()),
             ),
             Obx(() => IconButton(
                   tooltip: 'Export to Excel',
+                  padding: EdgeInsets.zero,
                   icon: c.exporting.value
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.file_download_outlined),
+                      ? const CupertinoActivityIndicator()
+                      : Icon(CupertinoIcons.arrow_down_to_line, color: context.colors.tint),
                   onPressed: c.exporting.value ? null : c.export,
                 )),
-          ],
-          bottom: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [Tab(text: 'Booked'), Tab(text: 'Received'), Tab(text: 'Shared'), Tab(text: 'History')],
+          ]),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoSlidingSegmentedControl<int>(
+                  groupValue: _segment,
+                  onValueChanged: (v) => setState(() => _segment = v ?? 0),
+                  children: {
+                    for (var i = 0; i < _segments.length; i++)
+                      i: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(_segments[i], style: context.text.titleSmall!.copyWith(fontWeight: _segment == i ? FontWeight.w600 : FontWeight.w400)),
+                      ),
+                  },
+                ),
+              ),
+            ),
           ),
-        ),
-        body: TabBarView(children: [
-          _tickets(c.upcoming, 'You haven’t booked a ticket yet'),
-          _tickets(c.received, 'No tickets received yet'),
-          _transfers(c),
-          _tickets(c.history, 'No past tickets yet'),
-        ]),
+        ],
+        body: IndexedStack(index: _segment, children: lists),
       ),
     );
   }
@@ -166,36 +191,51 @@ class MyTicketsScreen extends StatelessWidget {
     });
   }
 
+  /// A small ticket stub: event above the tear line, what gets you in below it.
   Widget _ticketCard(BuildContext context, TicketModel t) {
-    final dateStr = t.date == null ? 'Date TBA' : DateFormat('EEE, d MMM • h:mm a').format(t.date!);
-    final what = [if (t.tierName.isNotEmpty) t.tierName, t.seatLabel ?? '${t.quantity} ticket${t.quantity == 1 ? '' : 's'}'].join(' · ');
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(AppSpacing.md),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(color: context.colors.tint.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.sm)),
-          child: Icon(t.receivedFrom != null ? Icons.card_giftcard : Icons.qr_code_2_rounded, color: context.colors.tint),
+    final c = context.colors;
+    final status = ticketStatus(context, t);
+    final when = t.date == null ? 'Date to be announced' : DateFormat('EEE d MMM · h:mm a').format(t.date!);
+    final what = [if (t.tierName.isNotEmpty) t.tierName, if (t.seatLabel != null) t.seatLabel!].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Semantics(
+        button: true,
+        label: '${t.eventTitle}, $when, admit ${t.entryTotal}, ${status.label}',
+        excludeSemantics: true,
+        child: GestureDetector(
+          onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
+          child: TicketStub(
+            background: c.groupedCanvas,
+            notch: 10,
+            header: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(when.toUpperCase(), style: context.text.labelMedium!.copyWith(color: c.tint, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+                const SizedBox(height: 4),
+                Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium),
+                Text(t.venueName, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+                if (t.receivedFrom != null) Text('From ${t.receivedFrom}', style: context.text.bodySmall),
+              ]),
+            ),
+            stub: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 12, 14),
+              child: Row(children: [
+                Icon(CupertinoIcons.qrcode, size: 26, color: c.label),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Admit ${t.entryTotal}', style: context.text.titleSmall),
+                    if (what.isNotEmpty) Text(what, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+                  ]),
+                ),
+                TagPill(status.label, color: status.color),
+                Icon(CupertinoIcons.chevron_right, size: 16, color: c.tertiaryLabel),
+              ]),
+            ),
+          ),
         ),
-        title: Text(t.eventTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('${t.venueName}\n$dateStr · $what${t.receivedFrom != null ? '\nFrom ${t.receivedFrom}' : ''}', maxLines: 4),
-        isThreeLine: true,
-        trailing: _badge(context, t),
-        onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
       ),
-    );
-  }
-
-  Widget _badge(BuildContext context, TicketModel t) {
-    final used = t.entryTotal > 0 && t.entryUsed >= t.entryTotal;
-    final label = t.status != 'active' ? t.status : (used ? 'used' : (t.entryUsed > 0 ? 'partly used' : 'active'));
-    final color = label == 'active' ? context.colors.success : (label == 'used' ? context.colors.secondaryLabel : context.colors.warning);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
     );
   }
 
@@ -222,30 +262,31 @@ class MyTicketsScreen extends StatelessWidget {
   }
 
   Widget _transferCard(BuildContext context, MyTicketsController c, TransferModel t) {
-    final status = switch (t.status) { 'pending' => 'Waiting to be claimed', 'claimed' => 'Delivered', _ => 'Claimed back' };
+    final status = switch (t.status) { 'pending' => 'Waiting to Be Claimed', 'claimed' => 'Delivered', _ => 'Claimed Back' };
     final color = t.status == 'claimed' ? context.colors.success : (t.isPending ? context.colors.warning : context.colors.secondaryLabel);
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${t.quantity} × ${t.eventTitle}', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Row(children: [
+            Expanded(child: Text('${t.quantity} × ${t.eventTitle}', style: context.text.titleMedium)),
+            TagPill(status, color: color),
+          ]),
           const SizedBox(height: 4),
-          Text('${t.method == 'link' ? 'Share link' : 'To'} ${t.counterpart ?? ''}'.trim(), style: TextStyle(color: Theme.of(context).hintColor)),
-          const SizedBox(height: 4),
-          Text(status, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+          Text('${t.method == 'link' ? 'Share link' : 'To'} ${t.counterpart ?? ''}'.trim(), style: context.text.bodySmall),
           if (t.isPending)
             Row(children: [
               if (t.shareUrl != null)
                 TextButton.icon(
                   onPressed: () => SharePlus.instance.share(ShareParams(text: 'Tickets for ${t.eventTitle} on GatePass: ${t.shareUrl}')),
-                  icon: const Icon(Icons.share, size: 18),
-                  label: const Text('Share again'),
+                  icon: const Icon(CupertinoIcons.square_arrow_up, size: 18),
+                  label: const Text('Share Again'),
                 ),
               TextButton.icon(
                 onPressed: () => c.claimBack(t),
-                icon: const Icon(Icons.undo, size: 18),
-                label: const Text('Claim back'),
+                icon: const Icon(CupertinoIcons.arrow_uturn_left, size: 18),
+                label: const Text('Claim Back'),
               ),
             ]),
         ]),
@@ -262,13 +303,14 @@ class _OfflineBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(AppRadius.sm)),
+      decoration: BoxDecoration(color: context.colors.cell, borderRadius: BorderRadius.circular(AppRadius.md)),
       child: Row(children: [
-        Icon(Icons.cloud_off, size: 18, color: context.colors.warning),
-        const SizedBox(width: 8),
+        Icon(CupertinoIcons.wifi_slash, size: 20, color: context.colors.warning),
+        const SizedBox(width: 10),
         Expanded(
           child: Text('Offline — showing tickets saved on this phone'
-              '${saved == null ? '' : ' (${DateFormat('d MMM, h:mm a').format(saved)})'}. QR codes still work at the gate.'),
+              '${saved == null ? '' : ' (${DateFormat('d MMM, h:mm a').format(saved)})'}. QR codes still work at the gate.',
+              style: context.text.bodyMedium),
         ),
       ]),
     );

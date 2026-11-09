@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -54,7 +55,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         bottom: _progress > 0 && _progress < 100
             ? PreferredSize(preferredSize: const Size.fromHeight(2), child: LinearProgressIndicator(value: _progress / 100, color: context.colors.tint))
             : null,
-        actions: [if (c != null) IconButton(tooltip: 'Reload', icon: const Icon(Icons.refresh), onPressed: c.reload)],
+        actions: [if (c != null) IconButton(tooltip: 'Reload', icon: const Icon(CupertinoIcons.arrow_clockwise), onPressed: c.reload)],
       ),
       body: _error != null
           ? StateView.error(_error!, onRetry: c == null ? null : () { setState(() => _error = null); c.reload(); })

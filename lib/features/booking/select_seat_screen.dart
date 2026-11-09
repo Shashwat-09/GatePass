@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -140,25 +141,11 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
           ],
         );
       }),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Obx(() => Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text('${c.totalQty} selected', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
-                  Text(formatPaise(c.subtotalPaise), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                ]),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: PrimaryButton(
-                    label: 'Continue',
-                    loading: c.loading.value,
-                    onPressed: c.totalQty > 0 && !c.loading.value ? _continue : null,
-                  ),
-                ),
-              ])),
-        ),
-      ),
+      bottomNavigationBar: Obx(() => CheckoutBar(
+            caption: '${c.totalQty} selected',
+            amount: formatPaise(c.subtotalPaise),
+            button: PrimaryButton(label: 'Continue', loading: c.loading.value, onPressed: c.totalQty > 0 && !c.loading.value ? _continue : null),
+          )),
     );
   }
 
@@ -171,11 +158,8 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Widget _stage() => Container(
         margin: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: context.colors.tint.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-        ),
-        child: const Center(child: Text('STAGE', style: TextStyle(letterSpacing: 4, fontSize: 12))),
+        decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.sm)),
+        child: Center(child: Text('STAGE', style: context.text.labelMedium!.copyWith(letterSpacing: 4, color: context.colors.secondaryLabel))),
       );
 
   Widget _header(SeatSectionModel s, Color color, String trailing) => Padding(
@@ -185,14 +169,13 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${s.name} • ${formatPaise(s.pricePaise)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              if (s.description.isNotEmpty)
-                Text(s.description, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+              Text('${s.name} · ${formatPaise(s.pricePaise)}', style: context.text.titleMedium),
+              if (s.description.isNotEmpty) Text(s.description, style: context.text.bodySmall),
             ]),
           ),
           if (s.gate != null)
-            Padding(padding: const EdgeInsets.only(left: 8), child: Chip(label: Text(s.gate!), visualDensity: VisualDensity.compact)),
-          Text(trailing, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+            Padding(padding: const EdgeInsets.only(left: 8, right: 8), child: TagPill(s.gate!)),
+          Text(trailing, style: context.text.bodySmall),
         ]),
       );
 
@@ -207,27 +190,24 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            border: Border.all(color: color.withValues(alpha: 0.6), style: BorderStyle.solid),
+            color: context.colors.cell,
+            border: Border.all(color: color, width: 1.5),
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           child: Row(children: [
-            const Icon(Icons.groups_outlined),
-            const SizedBox(width: 8),
+            Icon(CupertinoIcons.person_3, color: context.colors.secondaryLabel),
+            const SizedBox(width: 10),
             Expanded(
-              child: Text(available <= 0 ? 'Sold out' : 'Standing • $available place${available == 1 ? '' : 's'} left',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(available <= 0 ? 'Sold out' : 'Standing · $available place${available == 1 ? '' : 's'} left',
+                  style: context.text.titleSmall),
             ),
-            IconButton(
-              key: Key('standing-dec-${s.id}'),
-              onPressed: qty > 0 ? () => c.decStanding(s) : null,
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
-            Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            IconButton(
-              key: Key('standing-inc-${s.id}'),
-              onPressed: available > qty ? () => c.incStanding(s, available: available) : null,
-              icon: const Icon(Icons.add_circle_outline),
+            QtyStepper(
+              label: s.name,
+              value: qty,
+              minusKey: Key('standing-dec-${s.id}'),
+              plusKey: Key('standing-inc-${s.id}'),
+              onMinus: qty > 0 ? () => c.decStanding(s) : null,
+              onPlus: available > qty ? () => c.incStanding(s, available: available) : null,
             ),
           ]),
         ),
@@ -238,9 +218,8 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
 
   Widget _sectionView(SeatSectionModel sec) {
     final color = _color(sec);
-    final hint = Theme.of(context).hintColor;
     Widget rowLabel(int r) => SizedBox(
-        width: 22, child: Text(sec.rowLabel(r), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: hint)));
+        width: 24, child: Text(sec.rowLabel(r), textAlign: TextAlign.center, style: context.text.labelSmall!.copyWith(color: context.colors.secondaryLabel)));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -266,17 +245,16 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
 
   Widget _seat(SeatSectionModel sec, Color color, int r, int col) {
     final key = '$r-$col';
-    if (sec.gaps.contains(key)) return const SizedBox(width: 32, height: 26);
+    // 32 pt seats on a 36 pt pitch (HIG mobile minimum is 28 pt).
+    if (sec.gaps.contains(key)) return const SizedBox(width: 36, height: 32);
     final accessible = sec.accessible.contains(key);
     return Obx(() {
       final mine = _mine.contains('${sec.id}:$key');
       final booked = sec.booked.contains(key) && !mine;
       final selected = c.isSelected(sec.id, r, col);
-      final bg = booked
-          ? Theme.of(context).disabledColor.withValues(alpha: 0.25)
-          : selected
-              ? context.colors.tint
-              : color.withValues(alpha: 0.18);
+      // Shape as well as color: available = outlined, taken = solid grey, selected = tinted with a check.
+      final bg = booked ? context.colors.fill : (selected ? context.colors.tintFill : Colors.transparent);
+      final border = booked || selected ? null : Border.all(color: color, width: 1.5);
       return Semantics(
         label: '${sec.name} row ${sec.rowLabel(r)} seat ${sec.seatNumber(r, col)}${booked ? ', taken' : ''}${accessible ? ', accessible' : ''}',
         button: !booked,
@@ -284,14 +262,14 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
           key: Key('seat-${sec.id}-$key'),
           onTap: booked ? null : () => c.toggleSeat(sec, r, col),
           child: Container(
-            width: 26,
-            height: 26,
-            margin: const EdgeInsets.all(3),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.all(2),
+            decoration: BoxDecoration(color: bg, border: border, borderRadius: BorderRadius.circular(8)),
             child: selected
-                ? const Icon(Icons.check, size: 15, color: Colors.white)
+                ? const Icon(CupertinoIcons.checkmark, size: 16, color: Colors.white)
                 : accessible
-                    ? Icon(Icons.accessible, size: 15, color: booked ? Theme.of(context).disabledColor : color)
+                    ? Icon(Icons.accessible, size: 16, color: booked ? context.colors.tertiaryLabel : context.colors.label)
                     : null,
           ),
         ),
@@ -304,19 +282,23 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         spacing: AppSpacing.md,
         runSpacing: AppSpacing.sm,
         children: [
-          _legendItem(context.colors.tint.withValues(alpha: 0.18), 'Available'),
-          _legendItem(context.colors.tint, 'Selected'),
-          _legendItem(Theme.of(context).disabledColor.withValues(alpha: 0.25), 'Taken'),
-          const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.accessible, size: 16), SizedBox(width: 6), Text('Accessible', style: TextStyle(fontSize: 12))]),
+          _legendItem(null, 'Available', outline: context.colors.secondaryLabel),
+          _legendItem(context.colors.tintFill, 'Selected'),
+          _legendItem(context.colors.fill, 'Taken'),
+          Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.accessible, size: 16), const SizedBox(width: 6), Text('Accessible', style: context.text.bodySmall)]),
         ],
       );
 
-  Widget _legendItem(Color c, String label) => Row(
+  Widget _legendItem(Color? c, String label, {Color? outline}) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 16, height: 16, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(4))),
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(color: c, border: outline == null ? null : Border.all(color: outline, width: 1.5), borderRadius: BorderRadius.circular(4)),
+          ),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: context.text.bodySmall),
         ],
       );
 }

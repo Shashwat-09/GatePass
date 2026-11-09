@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// GatePass design system — Apple Human Interface Guidelines applied to Flutter
@@ -204,7 +205,9 @@ class AppTheme {
       inverseSurface: p.label,
       onInverseSurface: p.canvas,
     );
-    final text = AppTypography.textTheme(p.label, p.secondaryLabel);
+    // Apple sizes on the platform's own font family (SF Pro on iOS, Roboto on Android).
+    final platform = Typography.material2021(platform: defaultTargetPlatform);
+    final text = (isDark ? platform.white : platform.black).merge(AppTypography.textTheme(p.label, p.secondaryLabel));
     final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md));
     final prominent = ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.fill : p.tintFill),

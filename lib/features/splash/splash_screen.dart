@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -86,7 +87,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.local_activity_rounded, color: Colors.white, size: 72),
+            Icon(CupertinoIcons.ticket_fill, color: Colors.white, size: 72),
             SizedBox(height: 16),
             Text(AppConfig.appName,
                 style: TextStyle(

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -94,13 +95,13 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
                 IconButton.filledTonal(
                   key: const Key('req-dec'),
                   onPressed: _qty > t.minQty ? () => setState(() => _qty--) : null,
-                  icon: const Icon(Icons.remove),
+                  icon: const Icon(CupertinoIcons.minus),
                 ),
                 SizedBox(width: 32, child: Text('$_qty', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
                 IconButton.filled(
                   key: const Key('req-inc'),
                   onPressed: _qty < _max ? () => setState(() => _qty++) : null,
-                  icon: const Icon(Icons.add),
+                  icon: const Icon(CupertinoIcons.plus),
                 ),
               ]),
               const SizedBox(height: AppSpacing.lg),

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -109,16 +110,16 @@ class _ShareSheetState extends State<_ShareSheet> {
           const SizedBox(height: AppSpacing.md),
           Row(children: [
             const Expanded(child: Text('How many?', style: TextStyle(fontWeight: FontWeight.w600))),
-            IconButton.filledTonal(onPressed: _count > 1 ? () => setState(() => _count--) : null, icon: const Icon(Icons.remove)),
+            IconButton.filledTonal(onPressed: _count > 1 ? () => setState(() => _count--) : null, icon: const Icon(CupertinoIcons.minus)),
             SizedBox(width: 36, child: Text('$_count', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-            IconButton.filled(onPressed: _count < _max ? () => setState(() => _count++) : null, icon: const Icon(Icons.add)),
+            IconButton.filled(onPressed: _count < _max ? () => setState(() => _count++) : null, icon: const Icon(CupertinoIcons.plus)),
           ]),
           Text('You can share up to $_max.', style: TextStyle(fontSize: 12, color: hint)),
           const SizedBox(height: AppSpacing.md),
           SegmentedButton<bool>(
             segments: const [
-              ButtonSegment(value: true, icon: Icon(Icons.link), label: Text('Share a link')),
-              ButtonSegment(value: false, icon: Icon(Icons.phone_iphone), label: Text('Send to number')),
+              ButtonSegment(value: true, icon: Icon(CupertinoIcons.link), label: Text('Share a link')),
+              ButtonSegment(value: false, icon: Icon(CupertinoIcons.device_phone_portrait), label: Text('Send to number')),
             ],
             selected: {_byLink},
             onSelectionChanged: (s) => setState(() => _byLink = s.first),
@@ -139,7 +140,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                 prefixText: '+91 ',
                 hintText: 'Friend’s mobile number',
                 counterText: '',
-                suffixIcon: IconButton(tooltip: 'Pick from contacts', icon: const Icon(Icons.contacts_outlined), onPressed: _pickContact),
+                suffixIcon: IconButton(tooltip: 'Pick from contacts', icon: const Icon(CupertinoIcons.person_2), onPressed: _pickContact),
               ),
             ),
           if (_error != null) ...[

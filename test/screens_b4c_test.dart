@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass/data/models/models.dart';
 import 'package:gatepass/features/booking/registration_screen.dart';
@@ -119,7 +119,7 @@ void main() {
     ], 'page': 1, 'total': 1});
     await t.pumpWidget(app(SelectTicketScreen(event: ev)));
     await t.pumpAndSettle();
-    expect(find.byIcon(Icons.add), findsNothing); // no stepper for request-only tickets
+    expect(find.byIcon(CupertinoIcons.plus), findsNothing); // no stepper for request-only tickets
     await t.tap(find.byKey(const Key('request-t-com')));
     await t.pumpAndSettle();
     expect(find.byType(RequestTicketScreen), findsOneWidget);
@@ -155,10 +155,10 @@ void main() {
     await t.pumpWidget(app(const MyRequestsScreen()));
     await t.pumpAndSettle();
     expect(find.text('Reason: Founders only'), findsOneWidget);
-    await t.tap(find.text('Withdraw request'));
+    await t.tap(find.text('Withdraw Request'));
     await t.pumpAndSettle();
     expect(d.backend.callsTo('api/approval-requests/c').single.method, 'DELETE');
-    await t.tap(find.text('Book now'));
+    await t.tap(find.text('Book Now'));
     await t.pumpAndSettle();
     expect(find.byType(SummaryScreen), findsOneWidget);
     expect(Get.find<BookingController>().qtyFor('t-vip'), 2);
@@ -226,7 +226,7 @@ void main() {
       'successTitle': 'Thank you!', 'successMessage': 'See you soon', 'ctaLabel': 'See upcoming events', 'ctaUrl': 'https://gatepass.example/events'}});
     await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
     await t.pumpAndSettle();
-    await t.tap(find.text('Share feedback'));
+    await t.tap(find.text('Share Feedback'));
     await t.pumpAndSettle();
     expect(find.byType(SurveyScreen), findsOneWidget);
     await t.tap(find.text('Submit'));

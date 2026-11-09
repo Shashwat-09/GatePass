@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
@@ -108,14 +109,14 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
         Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: TextField(
-            decoration: const InputDecoration(hintText: 'Search city', prefixIcon: Icon(Icons.search)),
+            decoration: const InputDecoration(hintText: 'Search city', prefixIcon: Icon(CupertinoIcons.search)),
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
         ListTile(
           leading: _locating
               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-              : Icon(Icons.my_location, color: context.colors.tint),
+              : Icon(CupertinoIcons.location, color: context.colors.tint),
           title: const Text('Use my current location'),
           onTap: _locating ? null : _useLocation,
         ),
@@ -137,7 +138,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
                       : ListView.builder(
                           itemCount: _filtered.length,
                           itemBuilder: (_, i) => ListTile(
-                            leading: const Icon(Icons.location_city_outlined),
+                            leading: const Icon(CupertinoIcons.building_2_fill),
                             title: Text(_filtered[i].name),
                             onTap: () => _select(_filtered[i]),
                           ),

@@ -14,10 +14,12 @@ Color badgeColor(BuildContext context, String key) => switch (key) {
 
 /// Small status pill (Filling fast, Sold out, Tickets open soon…).
 class EventBadgeChip extends StatelessWidget {
-  const EventBadgeChip(this.badge, {super.key, this.dense = false, this.hideOpen = true});
+  const EventBadgeChip(this.badge, {super.key, this.dense = false, this.hideOpen = true, this.onImage = false});
   final EventBadge badge;
   final bool dense;
   final bool hideOpen;
+  /// Over event art: an opaque pill so the label keeps its contrast on any image.
+  final bool onImage;
 
   @override
   Widget build(BuildContext context) {
@@ -25,8 +27,11 @@ class EventBadgeChip extends StatelessWidget {
     final c = badgeColor(context, badge.key);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 3 : 4),
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Text(badge.label, style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: dense ? 11 : 12)),
+      decoration: BoxDecoration(
+        color: onImage ? context.colors.cell : c.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(badge.label, style: (dense ? context.text.labelSmall : context.text.labelMedium)!.copyWith(color: c, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -65,9 +70,9 @@ class _CountdownState extends State<Countdown> {
   @override
   Widget build(BuildContext context) {
     final d = widget.target.difference(DateTime.now());
-    if (d.isNegative) return const Text('Tickets are on sale now', style: TextStyle(fontWeight: FontWeight.w700));
+    if (d.isNegative) return Text('Tickets are on sale now', style: context.text.titleSmall);
     String two(int n) => n.toString().padLeft(2, '0');
     final text = '${d.inDays > 0 ? '${d.inDays}d ' : ''}${two(d.inHours % 24)}h ${two(d.inMinutes % 60)}m ${two(d.inSeconds % 60)}s';
-    return Text('${widget.prefix}$text', style: TextStyle(fontWeight: FontWeight.w700, color: context.colors.warning));
+    return Text('${widget.prefix}$text', style: context.text.titleSmall!.copyWith(color: context.colors.warning, fontFeatures: const [FontFeature.tabularFigures()]));
   }
 }

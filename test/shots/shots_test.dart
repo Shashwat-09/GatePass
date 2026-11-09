@@ -38,8 +38,14 @@ Future<void> _loadFonts() async {
     await l.load();
   }
 
-  await family('Roboto', ['Regular', 'Medium', 'Bold', 'Black', 'Light'].map((w) => '$_fontDir/Roboto-$w.ttf').toList());
+  final roboto = ['Regular', 'Medium', 'Bold', 'Black', 'Light'].map((w) => '$_fontDir/Roboto-$w.ttf').toList();
+  // Android's system font, also under the names unstyled text and Cupertino widgets ask for.
+  for (final name in ['Roboto', 'FlutterTest', 'Ahem', 'CupertinoSystemText', 'CupertinoSystemDisplay', '.SF Pro Text', '.SF Pro Display', '.SF UI Text', '.SF UI Display']) {
+    await family(name, roboto);
+  }
   await family('MaterialIcons', ['$_fontDir/MaterialIcons-Regular.otf']);
+  final cupertino = Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev').listSync().whereType<Directory>().where((d) => d.path.contains('cupertino_icons-')).last;
+  await family('packages/cupertino_icons/CupertinoIcons', ['${cupertino.path}/assets/CupertinoIcons.ttf']);
 }
 
 void main() {
@@ -47,7 +53,12 @@ void main() {
     test('screenshots (run with --dart-define=SHOTS=true)', () {}, skip: true);
     return;
   }
-  setUpAll(_loadFonts);
+  setUpAll(() async {
+    await _loadFonts();
+    // Image cache wants a temp dir (images themselves can't load in tests: no network).
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'), (_) async => Directory.systemTemp.path);
+  });
 
   late Deps d;
   setUp(() async {

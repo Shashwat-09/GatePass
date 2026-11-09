@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../app/theme.dart';
 
@@ -62,7 +62,7 @@ class _HoldTimerState extends State<HoldTimer> {
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.timer_outlined, size: 16, color: context.colors.warning),
+        Icon(CupertinoIcons.timer, size: 16, color: context.colors.warning),
         const SizedBox(width: 4),
         Text(widget.compact ? time : 'Seats held for $time',
             style: TextStyle(color: context.colors.warning, fontWeight: FontWeight.w700)),

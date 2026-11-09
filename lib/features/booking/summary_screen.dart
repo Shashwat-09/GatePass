@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -30,47 +31,58 @@ class _SummaryScreenState extends State<SummaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Order summary')),
+      backgroundColor: context.colors.groupedCanvas,
+      appBar: AppBar(title: const Text('Order Summary'), backgroundColor: context.colors.groupedCanvas),
       body: SafeArea(
         child: Obx(() {
           final pv = c.preview.value;
+          final lines = c.seated
+              ? c.seatedLines.map((l) => (l.$1, l.$2)).toList()
+              : c.event.tiers.where((t) => c.qtyFor(t.id) > 0).map((t) => ('${t.name} × ${c.qtyFor(t.id)}', t.pricePaise * c.qtyFor(t.id))).toList();
           return Column(children: [
             Expanded(
-              child: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
-                Text(c.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                const SizedBox(height: AppSpacing.md),
-                if (c.hold.value != null) HoldTimer(expiresAt: c.hold.value!.expiresAt, onExpired: () => c.hold.value = null),
-                if (c.seated)
-                  ...c.seatedLines.map((l) => _line(l.$1, formatPaise(l.$2)))
-                else
-                  ...c.event.tiers
-                      .where((t) => c.qtyFor(t.id) > 0)
-                      .map((t) => _line('${t.name} × ${c.qtyFor(t.id)}', formatPaise(t.pricePaise * c.qtyFor(t.id)))),
-                const Divider(height: AppSpacing.xl),
-                _promoRow(),
-                if (c.promoError.value != null)
+              child: ListView(padding: const EdgeInsets.only(top: AppSpacing.sm), children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+                  child: Text(c.event.title, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                if (c.hold.value != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(c.promoError.value!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13)),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: HoldTimer(expiresAt: c.hold.value!.expiresAt, onExpired: () => c.hold.value = null),
                   ),
-                if ((pv?.coinBalancePaise ?? 0) > 0) _coinsRow(pv!.coinBalancePaise),
-                const SizedBox(height: AppSpacing.md),
-                if (pv == null)
-                  c.previewLoading.value ? const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())) : const SizedBox.shrink()
-                else
-                  Opacity(opacity: c.previewLoading.value ? 0.5 : 1, child: PriceBreakdownView(pv.price)),
+                InsetGroup(header: 'Tickets', children: [for (final l in lines) GroupRow(title: l.$1, value: formatPaise(l.$2))]),
+                InsetGroup(
+                  footer: c.promoError.value,
+                  children: [
+                    _promoRow(),
+                    if ((pv?.coinBalancePaise ?? 0) > 0) _coinsRow(pv!.coinBalancePaise),
+                  ],
+                ),
+                InsetGroup(header: 'Price details', children: [
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: pv == null
+                        ? (c.previewLoading.value ? const Center(child: CupertinoActivityIndicator()) : const SizedBox.shrink())
+                        : Opacity(opacity: c.previewLoading.value ? 0.5 : 1, child: PriceBreakdownView(pv.price)),
+                  ),
+                ]),
               ]),
             ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+            Container(
+              decoration: BoxDecoration(
+                color: context.colors.canvas,
+                border: Border(top: BorderSide(color: context.colors.separator, width: 0.5)),
+              ),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm + 2, AppSpacing.md, AppSpacing.sm + 2),
               child: Column(children: [
                 if (c.error.value != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(c.error.value!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    child: Text(c.error.value!, textAlign: TextAlign.center, style: context.text.bodyMedium!.copyWith(color: context.colors.danger)),
                   ),
                 PrimaryButton(
-                  label: pv == null ? 'Proceed to pay' : (pv.price.payablePaise == 0 ? 'Confirm booking' : 'Pay ${formatPaise(pv.price.payablePaise)}'),
+                  label: pv == null ? 'Continue to Payment' : (pv.price.payablePaise == 0 ? 'Confirm Booking' : 'Pay ${formatPaise(pv.price.payablePaise)}'),
                   loading: c.loading.value || c.payState.value == PayState.verifying,
                   onPressed: c.totalQty == 0 || pv == null || c.previewLoading.value
                       ? null
@@ -93,41 +105,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _promoRow() {
     final applied = c.promoCode.value;
-    return InkWell(
+    return GroupRow(
+      icon: applied != null ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.tag,
+      title: applied != null ? '$applied applied' : 'Apply Promo Code',
       onTap: () => Get.to(() => const PromoScreen()),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: context.colors.tint.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Row(children: [
-          Icon(applied != null ? Icons.check_circle : Icons.local_offer_outlined, color: context.colors.tint, size: 20),
-          const SizedBox(width: 8),
-          Expanded(child: Text(applied != null ? '$applied applied' : 'Apply promo code')),
-          if (applied != null)
-            TextButton(onPressed: c.removePromo, child: const Text('Remove'))
-          else
-            const Icon(Icons.chevron_right, size: 20),
-        ]),
-      ),
+      chevron: applied == null,
+      trailing: applied != null ? TextButton(onPressed: c.removePromo, child: const Text('Remove')) : null,
     );
   }
 
-  Widget _coinsRow(int balance) => SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: c.useCoins.value,
-        onChanged: c.toggleCoins,
-        title: const Text('Use coins'),
-        subtitle: Text('Balance: ${formatPaise(balance)}'),
-        secondary: Icon(Icons.toll_outlined, color: context.colors.warning),
-      );
-
-  Widget _line(String label, String amount) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Flexible(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15))),
-          Text(amount, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-        ]),
+  Widget _coinsRow(int balance) => GroupRow(
+        icon: CupertinoIcons.money_dollar_circle,
+        title: 'Use Coins',
+        subtitle: 'Balance ${formatPaise(balance)}',
+        // The whole row toggles the switch (bigger target).
+        onTap: () => c.toggleCoins(!c.useCoins.value),
+        chevron: false,
+        trailing: Switch.adaptive(value: c.useCoins.value, onChanged: c.toggleCoins),
       );
 }

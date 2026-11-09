@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -95,7 +96,7 @@ class _PromoScreenState extends State<PromoScreen> {
         else
           ..._codes!.map((p) => Card(
                 child: ListTile(
-                  leading: Icon(Icons.local_offer, color: context.colors.tint),
+                  leading: Icon(CupertinoIcons.tag_fill, color: context.colors.tint),
                   title: Text(p.code, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
                   subtitle: Text(p.description.isNotEmpty ? p.description : p.summary),
                   trailing: TextButton(onPressed: _busy ? null : () => _apply(p.code), child: const Text('APPLY')),

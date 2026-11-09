@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -88,16 +89,16 @@ class NotificationsScreen extends StatelessWidget {
       case 'ticket_received':
       case 'transfer_claimed':
       case 'transfer_returned':
-        return Icons.confirmation_number_outlined;
+        return CupertinoIcons.ticket;
       case 'event':
       case 'event_on_sale':
-        return Icons.event_outlined;
+        return CupertinoIcons.calendar;
       case 'approval':
-        return Icons.how_to_reg_outlined;
+        return CupertinoIcons.person_badge_plus;
       case 'voucher':
-        return Icons.card_giftcard;
+        return CupertinoIcons.gift;
       default:
-        return Icons.notifications_none;
+        return CupertinoIcons.bell;
     }
   }
 }

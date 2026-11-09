@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -53,7 +54,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     ...t.bundles.map((b) => Card(
                           child: ListTile(
-                            leading: Icon(Icons.nights_stay_outlined, color: context.colors.tint),
+                            leading: Icon(CupertinoIcons.moon_stars, color: context.colors.tint),
                             title: Text(b.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text('Pick ${b.nights} night${b.nights == 1 ? '' : 's'} · one show each'),
                             trailing: Text(formatPaise(b.pricePaise), style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -63,7 +64,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                         )),
                     ...t.seasonPasses.map((p) => Card(
                           child: ListTile(
-                            leading: Icon(Icons.confirmation_number_outlined, color: context.colors.tint),
+                            leading: Icon(CupertinoIcons.ticket, color: context.colors.tint),
                             title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                             subtitle: Text([
                               if (p.validFrom != null && p.validTo != null) 'Valid ${_day(p.validFrom!)} – ${_day(p.validTo!)}',
@@ -107,7 +108,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
                             subtitle: s.label == null ? null : Text(s.label!),
                             trailing: s.soldOut
                                 ? Text('Sold out', style: TextStyle(color: context.colors.danger, fontWeight: FontWeight.w700))
-                                : const Icon(Icons.chevron_right),
+                                : const Icon(CupertinoIcons.chevron_right),
                             enabled: !s.soldOut,
                             onTap: () => Get.to(() => SelectTicketScreen(event: widget.event, sessionId: s.sessionId)),
                           ),

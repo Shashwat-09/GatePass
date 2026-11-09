@@ -36,18 +36,18 @@ class PriceBreakdownView extends StatelessWidget {
           margin: const EdgeInsets.only(top: AppSpacing.sm),
           padding: const EdgeInsets.all(AppSpacing.sm),
           width: double.infinity,
-          decoration: BoxDecoration(color: context.colors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.sm)),
-          child: Text('You save ${formatPaise(p.savingsPaise)} on this order 🎉',
-              style: TextStyle(color: context.colors.success, fontWeight: FontWeight.w700)),
+          decoration: BoxDecoration(color: context.colors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadius.sm)),
+          child: Text('You save ${formatPaise(p.savingsPaise)} on this order',
+              style: context.text.titleSmall!.copyWith(color: context.colors.success)),
         ),
     ]);
   }
 
   Widget _line(BuildContext context, String label, String amount, {bool bold = false, bool sub = false, Color? color}) {
-    final style = TextStyle(
-      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-      fontSize: bold ? 17 : (sub ? 13 : 15),
-      color: color ?? (sub ? Theme.of(context).hintColor : null),
+    final base = bold ? context.text.titleMedium! : (sub ? context.text.bodySmall! : context.text.bodyMedium!);
+    final style = base.copyWith(
+      color: color ?? (sub ? context.colors.secondaryLabel : context.colors.label),
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
     return Padding(
       padding: EdgeInsets.symmetric(vertical: sub ? 2 : 4),

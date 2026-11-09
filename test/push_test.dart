@@ -78,7 +78,7 @@ void main() {
 
   testWidgets('inbox items open their screen', (t) async {
     d.backend.json('GET', 'api/notifications', {'items': [
-      {'id': 'n1', 'type': 'approval', 'title': 'Request approved', 'body': 'Book now', 'route': 'requests', 'isRead': false, 'createdAt': '2026-11-09T10:00:00Z'},
+      {'id': 'n1', 'type': 'approval', 'title': 'Request approved', 'body': 'Get Tickets', 'route': 'requests', 'isRead': false, 'createdAt': '2026-11-09T10:00:00Z'},
     ], 'page': 1, 'total': 1, 'unread': 1});
     d.backend.json('POST', 'api/notifications/mark-as-read', {});
     d.backend.json('GET', 'api/approval-requests/my', {'items': [], 'page': 1, 'total': 0});

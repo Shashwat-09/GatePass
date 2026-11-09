@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -83,7 +84,7 @@ class _EventListScreenState extends State<EventListScreen> {
         IconButton(
           tooltip: 'Filters',
           onPressed: _openFilters,
-          icon: Badge(isLabelVisible: !_filter.isEmpty, label: Text('${_filter.count}'), child: const Icon(Icons.tune)),
+          icon: Badge(isLabelVisible: !_filter.isEmpty, label: Text('${_filter.count}'), child: const Icon(CupertinoIcons.slider_horizontal_3)),
         ),
       ]),
       body: _loading
