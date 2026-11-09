@@ -45,6 +45,7 @@ dependencies:
   add_2_calendar: ^3.1.1
   geolocator: ^14.1.2
   flutter_native_contact_picker: ^0.0.13
+  file_picker: ^13.3.2
 
 dev_dependencies:
   flutter_test:

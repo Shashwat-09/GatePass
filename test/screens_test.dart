@@ -328,6 +328,7 @@ void main() {
     final ev = EventModel.fromJson(eventJson(seated: true));
     d.backend.json('GET', 'api/booking/seat-map', seatMapJson());
     d.backend.json('GET', 'api/booking/seat-reserve/active', {'reservation': null});
+    d.backend.json('GET', 'api/forms/fetch', {'forms': []});
     d.backend.json('POST', 'api/booking/seat-reserve', {
       'reservationToken': 'hold-token-1234567890',
       'expiresAt': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String(),

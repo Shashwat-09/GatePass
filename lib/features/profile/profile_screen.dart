@@ -12,6 +12,7 @@ import '../../core/format.dart';
 import '../../data/repositories/booking_repository.dart';
 import 'edit_profile_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../requests/my_requests_screen.dart';
 import '../tickets/claim_screen.dart';
 import '../vouchers/vouchers_screen.dart';
 
@@ -67,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         _item(Icons.notifications_none, 'Notifications', () => Get.to(() => const NotificationsScreen())),
         _item(Icons.redeem_outlined, 'Claim shared tickets', () => Get.to(() => const ClaimScreen())),
+        _item(Icons.how_to_reg_outlined, 'My requests', () => Get.to(() => const MyRequestsScreen())),
         if (AppConfig.phase2) _item(Icons.card_giftcard, 'My vouchers', () => Get.to(() => const VouchersScreen())),
         const Divider(),
         _item(Icons.edit_outlined, 'Edit account details', () async {

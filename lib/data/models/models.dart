@@ -89,9 +89,14 @@ class TierModel {
   final String? offerLabel;
   final int? maxPerUser;
   final String? sessionId;
-  final String passType; // single | season
+  final String passType; // single | season | bundle
   final String? validFrom;
   final String? validTo;
+  /// Request-to-book: the organiser approves each request first.
+  final bool requiresApproval;
+  final int maxRequestsPerUser;
+  /// Bundle passes: nights to pick (one show each).
+  final int? bundleNights;
 
   TierModel({
     required this.id,
@@ -111,6 +116,9 @@ class TierModel {
     this.passType = 'single',
     this.validFrom,
     this.validTo,
+    this.requiresApproval = false,
+    this.maxRequestsPerUser = 1,
+    this.bundleNights,
   });
 
   factory TierModel.fromJson(Map<String, dynamic> j) => TierModel(
@@ -131,6 +139,9 @@ class TierModel {
         passType: (j['passType'] ?? 'single').toString(),
         validFrom: j['validFrom']?.toString(),
         validTo: j['validTo']?.toString(),
+        requiresApproval: j['requiresApproval'] == true,
+        maxRequestsPerUser: (j['maxRequestsPerUser'] as num?)?.toInt() ?? 1,
+        bundleNights: (j['bundleNights'] as num?)?.toInt(),
       );
 }
 
@@ -260,7 +271,8 @@ class EventSession {
 class SessionTree {
   final List<({String name, String address, List<({String date, bool soldOut, List<({String sessionId, String? label, DateTime startsAt, bool soldOut})> slots})> dates})> venues;
   final List<({String tierId, String name, int pricePaise, String? validFrom, String? validTo, int remaining})> seasonPasses;
-  SessionTree(this.venues, this.seasonPasses);
+  final List<BundleModel> bundles;
+  SessionTree(this.venues, this.seasonPasses, [this.bundles = const []]);
   factory SessionTree.fromJson(Map<String, dynamic> j) => SessionTree(
         ((j['venues'] as List?) ?? const []).map((v) {
           final m = v as Map<String, dynamic>;
@@ -294,6 +306,49 @@ class SessionTree {
             validFrom: m['validFrom']?.toString(),
             validTo: m['validTo']?.toString(),
             remaining: (m['remaining'] as num?)?.toInt() ?? 0,
+          );
+        }).toList(),
+        ((j['bundles'] as List?) ?? const []).map((b) => BundleModel.fromJson(b as Map<String, dynamic>)).toList(),
+      );
+}
+
+/// Bundle pass: pick one show for each of [nights] nights.
+class BundleModel {
+  final String tierId;
+  final String name;
+  final String description;
+  final int pricePaise;
+  final int nights;
+  final int remaining;
+  final int minQty;
+  final int? maxPerUser;
+  final List<({String date, List<({String sessionId, String? label, String venueName, DateTime startsAt})> options})> dates;
+  const BundleModel({
+    required this.tierId, required this.name, this.description = '', required this.pricePaise, required this.nights,
+    this.remaining = 0, this.minQty = 1, this.maxPerUser, this.dates = const [],
+  });
+  factory BundleModel.fromJson(Map<String, dynamic> j) => BundleModel(
+        tierId: j['tierId'].toString(),
+        name: (j['name'] ?? '').toString(),
+        description: (j['description'] ?? '').toString(),
+        pricePaise: (j['pricePaise'] as num?)?.toInt() ?? 0,
+        nights: (j['nights'] as num?)?.toInt() ?? 1,
+        remaining: (j['remaining'] as num?)?.toInt() ?? 0,
+        minQty: (j['minQty'] as num?)?.toInt() ?? 1,
+        maxPerUser: (j['maxPerUser'] as num?)?.toInt(),
+        dates: ((j['dates'] as List?) ?? const []).map((d) {
+          final dm = d as Map<String, dynamic>;
+          return (
+            date: dm['date'].toString(),
+            options: ((dm['options'] as List?) ?? const []).map((o) {
+              final om = o as Map<String, dynamic>;
+              return (
+                sessionId: om['sessionId'].toString(),
+                label: om['label']?.toString(),
+                venueName: (om['venueName'] ?? '').toString(),
+                startsAt: DateTime.parse(om['startsAt'].toString()).toLocal(),
+              );
+            }).toList(),
           );
         }).toList(),
       );
@@ -540,6 +595,8 @@ class TicketModel {
   final String? validFrom;
   final String? validTo;
   bool get isSeason => passType == 'season';
+  /// Post-event feedback is open for this event.
+  final bool surveyAvailable;
 
   TicketModel({
     required this.id,
@@ -561,6 +618,7 @@ class TicketModel {
     this.notes,
     this.mapLink,
     this.passType = 'single',
+    this.surveyAvailable = false,
     this.validFrom,
     this.validTo,
   }) : entryTotal = entryTotal ?? quantity;
@@ -587,6 +645,7 @@ class TicketModel {
         notes: j['notes']?.toString(),
         mapLink: j['mapLink']?.toString(),
         passType: (j['passType'] ?? 'single').toString(),
+        surveyAvailable: j['surveyAvailable'] == true,
         validFrom: j['validFrom']?.toString(),
         validTo: j['validTo']?.toString(),
       );
@@ -613,6 +672,7 @@ class TicketModel {
         'notes': notes,
         'mapLink': mapLink,
         'passType': passType,
+        'surveyAvailable': surveyAvailable,
         'validFrom': validFrom,
         'validTo': validTo,
       };
@@ -972,3 +1032,213 @@ class SeatHold {
         subtotalPaise: (j['subtotalPaise'] as num?)?.toInt() ?? 0,
       );
 }
+
+/// One question of a registration form or survey (server validates again).
+class FormFieldDef {
+  final String key;
+  final String label;
+  /// text, textarea, number, email, phone, select, radio, checkbox, date, time, file
+  final String type;
+  final bool required;
+  final String? placeholder;
+  final String? helperText;
+  final List<({String label, String value})> options;
+  final int? minLength;
+  final int? maxLength;
+  final String? pattern;
+  final String? patternMessage;
+  final String? defaultValue;
+  final ({String dependsOnKey, String equals})? conditional;
+  final List<String> allowedExtensions;
+  final int? maxFileSize;
+  const FormFieldDef({
+    required this.key, required this.label, this.type = 'text', this.required = false, this.placeholder, this.helperText,
+    this.options = const [], this.minLength, this.maxLength, this.pattern, this.patternMessage, this.defaultValue,
+    this.conditional, this.allowedExtensions = const [], this.maxFileSize,
+  });
+
+  factory FormFieldDef.fromJson(Map<String, dynamic> j) {
+    final c = j['conditional'];
+    return FormFieldDef(
+      key: j['key'].toString(),
+      label: (j['label'] ?? '').toString(),
+      type: (j['type'] ?? 'text').toString(),
+      required: j['required'] == true,
+      placeholder: j['placeholder']?.toString(),
+      helperText: j['helperText']?.toString(),
+      options: ((j['options'] as List?) ?? const []).map((o) {
+        final m = o as Map<String, dynamic>;
+        return (label: (m['label'] ?? m['value']).toString(), value: m['value'].toString());
+      }).toList(),
+      minLength: (j['minLength'] as num?)?.toInt(),
+      maxLength: (j['maxLength'] as num?)?.toInt(),
+      pattern: j['pattern']?.toString(),
+      patternMessage: j['patternMessage']?.toString(),
+      defaultValue: j['defaultValue']?.toString(),
+      conditional: c is Map ? (dependsOnKey: c['dependsOnKey'].toString(), equals: c['equals'].toString()) : null,
+      allowedExtensions: ((j['allowedExtensions'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      maxFileSize: (j['maxFileSize'] as num?)?.toInt(),
+    );
+  }
+
+  bool visible(Map<String, dynamic> answers) {
+    final c = conditional;
+    if (c == null) return true;
+    final v = answers[c.dependsOnKey];
+    return v is List ? v.map((e) => e.toString()).contains(c.equals) : (v?.toString() ?? '') == c.equals;
+  }
+
+  /// Client-side check mirroring the server; null when valid.
+  String? validate(dynamic v) {
+    final empty = v == null || (v is List && v.isEmpty) || (v is String && v.trim().isEmpty) || (type == 'checkbox' && options.isEmpty && v == false);
+    if (empty) return required ? 'This field is required' : null;
+    final s = v is String ? v.trim() : v.toString();
+    switch (type) {
+      case 'email':
+        if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$').hasMatch(s)) return 'Enter a valid email';
+      case 'phone':
+        if (!RegExp(r'^\+?\d{7,15}$').hasMatch(s.replaceAll(RegExp(r'[\s-]'), ''))) return 'Enter a valid phone number';
+      case 'number':
+        if (!RegExp(r'^-?\d+(\.\d+)?$').hasMatch(s)) return 'Enter a number';
+    }
+    if (const ['text', 'textarea', 'email', 'phone'].contains(type)) {
+      if (minLength != null && s.length < minLength!) return 'At least $minLength characters';
+      if (maxLength != null && s.length > maxLength!) return 'At most $maxLength characters';
+      if (pattern != null) {
+        try {
+          if (!RegExp(pattern!).hasMatch(s)) return patternMessage ?? 'Invalid format';
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+}
+
+class RegistrationFormModel {
+  final String id;
+  final String title;
+  final String description;
+  final int version;
+  /// `booking` (once) or `attendee` (once per ticket).
+  final String scope;
+  final List<String> ticketIds;
+  final List<FormFieldDef> fields;
+  const RegistrationFormModel({
+    required this.id, required this.title, this.description = '', this.version = 1, this.scope = 'booking',
+    this.ticketIds = const [], this.fields = const [],
+  });
+  bool get perAttendee => scope == 'attendee';
+  factory RegistrationFormModel.fromJson(Map<String, dynamic> j) => RegistrationFormModel(
+        id: j['id'].toString(),
+        title: (j['title'] ?? '').toString(),
+        description: (j['description'] ?? '').toString(),
+        version: (j['version'] as num?)?.toInt() ?? 1,
+        scope: (j['scope'] ?? 'booking').toString(),
+        ticketIds: ((j['ticketIds'] as List?) ?? const []).map((e) => e.toString()).toList(),
+        fields: ((j['fields'] as List?) ?? const []).map((f) => FormFieldDef.fromJson(f as Map<String, dynamic>)).toList(),
+      );
+}
+
+/// A filled form, as sent with book-ticket / approval requests.
+class FormResponse {
+  final String formId;
+  final int version;
+  final int? attendee;
+  final Map<String, dynamic> answers;
+  const FormResponse({required this.formId, required this.version, this.attendee, required this.answers});
+  Map<String, dynamic> toJson() => {'formId': formId, 'version': version, if (attendee != null) 'attendee': attendee, 'answers': answers};
+}
+
+class ApprovalRequestModel {
+  final String id;
+  /// pending_review | approved | rejected | cancelled | booked
+  final String status;
+  final String statusLabel;
+  final int quantity;
+  final String? rejectionReason;
+  final String ticketId;
+  final String ticketName;
+  final int pricePaise;
+  final bool free;
+  final String? bookingId;
+  final DateTime? createdAt;
+  final String eventId;
+  final String eventSlug;
+  final String eventTitle;
+  final String venueName;
+  final String cardImageUrl;
+  final DateTime? eventDate;
+  const ApprovalRequestModel({
+    required this.id, required this.status, required this.statusLabel, required this.quantity, this.rejectionReason,
+    required this.ticketId, required this.ticketName, this.pricePaise = 0, this.free = false, this.bookingId, this.createdAt,
+    this.eventId = '', this.eventSlug = '', this.eventTitle = '', this.venueName = '', this.cardImageUrl = '', this.eventDate,
+  });
+  bool get canBook => status == 'approved' && !free;
+  bool get canWithdraw => status == 'pending_review';
+  factory ApprovalRequestModel.fromJson(Map<String, dynamic> j) {
+    final ev = (j['eventSnapshot'] as Map<String, dynamic>?) ?? const {};
+    return ApprovalRequestModel(
+      id: j['id'].toString(),
+      status: (j['status'] ?? '').toString(),
+      statusLabel: (j['statusLabel'] ?? j['status'] ?? '').toString(),
+      quantity: (j['quantity'] as num?)?.toInt() ?? 1,
+      rejectionReason: j['rejectionReason']?.toString(),
+      ticketId: (j['ticketId'] ?? '').toString(),
+      ticketName: (j['ticketName'] ?? '').toString(),
+      pricePaise: (j['pricePaise'] as num?)?.toInt() ?? 0,
+      free: j['free'] == true,
+      bookingId: j['bookingId']?.toString(),
+      createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+      eventId: (ev['id'] ?? '').toString(),
+      eventSlug: (ev['slug'] ?? '').toString(),
+      eventTitle: (ev['title'] ?? '').toString(),
+      venueName: (ev['venueName'] ?? '').toString(),
+      cardImageUrl: (ev['cardImageUrl'] ?? '').toString(),
+      eventDate: DateTime.tryParse((ev['startDate'] ?? '').toString())?.toLocal(),
+    );
+  }
+}
+
+class SurveyModel {
+  final String eventId;
+  final String eventTitle;
+  final String title;
+  /// `form` (in-app questions) or `redirect` (external form).
+  final String mode;
+  final bool submitted;
+  final List<FormFieldDef> fields;
+  final SurveyDone done;
+  const SurveyModel({
+    required this.eventId, required this.eventTitle, required this.title, this.mode = 'form', this.submitted = false,
+    this.fields = const [], required this.done,
+  });
+  factory SurveyModel.fromJson(Map<String, dynamic> j) => SurveyModel(
+        eventId: j['eventId'].toString(),
+        eventTitle: (j['eventTitle'] ?? '').toString(),
+        title: (j['title'] ?? 'Feedback').toString(),
+        mode: (j['mode'] ?? 'form').toString(),
+        submitted: j['submitted'] == true,
+        fields: (((j['form'] as Map?)?['fields'] as List?) ?? const []).map((f) => FormFieldDef.fromJson(f as Map<String, dynamic>)).toList(),
+        done: SurveyDone.fromJson((j['postSubmit'] as Map<String, dynamic>?) ?? const {}),
+      );
+}
+
+/// What to show after a survey: thank-you text, optional CTA or redirect.
+class SurveyDone {
+  final String title;
+  final String message;
+  final String? ctaLabel;
+  final String? ctaUrl;
+  final String? redirectUrl;
+  final int redirectDelaySeconds;
+  const SurveyDone({this.title = 'Thank you!', this.message = '', this.ctaLabel, this.ctaUrl, this.redirectUrl, this.redirectDelaySeconds = 0});
+  factory SurveyDone.fromJson(Map<String, dynamic> j) => SurveyDone(
+        title: (j['successTitle'] ?? 'Thank you!').toString(),
+        message: (j['successMessage'] ?? '').toString(),
+        ctaLabel: j['ctaLabel']?.toString(),
+        ctaUrl: j['ctaUrl']?.toString(),
+        redirectUrl: j['redirectUrl']?.toString(),
+        redirectDelaySeconds: (j['redirectDelaySeconds'] as num?)?.toInt() ?? 0,
+      );
+}
+

@@ -50,10 +50,10 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 34 | **Season pass**: valid days, season start/end, one entry per date — `seasonPass, validityType, validDaysCount` | ✅ `passType: season`, valid from/to (IST days), N entries per day at the gate (online + offline) | B4 |
 | 35 | **Seat map**: canvas with sections, rows, aisles, walkways, gates, stage position, accessible seats, colours, **standing areas mixed with seats**, per-section pricing — `get_seat_map_response`, `seat_map_painter.dart` | ✅ sections with colours, row letters, aisles/walkways, accessible seats, gates, stage top/bottom, standing areas by quantity; on by default | B4 |
 | 36 | **Seat hold** with reservation token, countdown, resume active reservation, release — `api/booking/seat-reserve`, `checkActiveReservation` | ✅ `POST/GET active/DELETE api/booking/seat-reserve`, token → `book-ticket`, countdown, resume | B4 |
-| 37 | **Registration forms**: text, textarea, select, radio, checkbox, date, time, **file upload**, regex, min/max length, **conditional fields**, per attendee, versioned — `registration_form_model`, `api/forms/fetch` | ⬜ | B4 |
-| 38 | **Approval-gated / request tickets** with max requests per user, my requests (pending review / approved / rejected with reason) — `api/approval-requests` | ⬜ | B4 |
-| 39 | **Bundle / multi-night passes**: choose nights, night assignment rules, bundle showcase — `bundle_night_assignment.dart`, `bundle_config_response` | ⬜ | B4 |
-| 40 | Post-event **survey** with redirect — `api/event-survey/form|submit` | ⬜ | B4 |
+| 37 | **Registration forms**: text, textarea, select, radio, checkbox, date, time, **file upload**, regex, min/max length, **conditional fields**, per attendee, versioned — `registration_form_model`, `api/forms/fetch` | ✅ `GET api/forms/fetch`, `POST api/forms/upload`; answers validated on `book-ticket`; versioned (old answers → 409) | B4 |
+| 38 | **Approval-gated / request tickets** with max requests per user, my requests (pending review / approved / rejected with reason) — `api/approval-requests` | ✅ request + answers, my requests, withdraw; organiser approve/reject; free tickets issued on approval, paid ones unlocked for checkout | B4 |
+| 39 | **Bundle / multi-night passes**: choose nights, night assignment rules, bundle showcase — `bundle_night_assignment.dart`, `bundle_config_response` | ✅ `passType: bundle`: one show per night, one ticket per night (gate day rules apply) | B4 |
+| 40 | Post-event **survey** with redirect — `api/event-survey/form|submit` | ✅ form or redirect, one per ticket holder, opens when the event starts; thank-you CTA | B4 |
 | 41 | Payment (Easebuzz) → success animation ("Ticket Booked 🥳", confetti) | ✅ (Razorpay, verified) | — |
 | **My tickets** (`my_tickets_response`) ||||
 | 42 | Tabs **Booked / Received / Shared / History**, counts, pagination | ✅ | B3 |
@@ -61,7 +61,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 44 | **Screenshot blocking** on ticket screens — `MainActivity` channel `flutter/screenshot`, "secure mode" | ✅ | B3 |
 | 45 | Split: by phone or **contact picker**, choose **specific seats**, split link, **split depth / remaining splits** limits, shared-with list, claim back, "cannot split with your own number" | ✅ incl. system contact picker; seat tickets are one per seat so any seat can be passed on | B3 |
 | 46 | Invoice / payment receipt PDF download | ✅ | — |
-| 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | ⬜ | B4–B5 |
+| 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | 🟡 bundle night schedule ✅ (B4); box-office/comp tickets with organiser tools (B5); RSVP = free request-to-book or free tier; premiere-specific fields not planned | B4–B5 |
 | **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
 | 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ⬜ | B5 |
 | **Engagement** ||||

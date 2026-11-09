@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../survey/survey_screen.dart';
 import '../../app/theme.dart';
 import '../../core/di.dart';
 import '../../data/models/models.dart';
@@ -124,6 +125,14 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                       icon: const Icon(Icons.ios_share),
                       label: Text(t.quantity > 1 ? 'Share / split tickets' : 'Send to a friend'),
                     ),
+                  if (t.surveyAvailable) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      onPressed: () => Get.to(() => SurveyScreen(eventId: t.eventId)),
+                      icon: const Icon(Icons.rate_review_outlined),
+                      label: const Text('Share feedback'),
+                    ),
+                  ],
                   if (t.invoiceUrl != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     OutlinedButton.icon(

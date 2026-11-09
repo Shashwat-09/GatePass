@@ -153,5 +153,15 @@ Each spec: **route**, **data in**, **widgets/layout**, **interactions**, **state
 - **Layout:** avatar + name/phone; menu: Edit profile, Language, Privacy policy, Terms, Help/Support, Delete account, Logout.
 - **Interactions:** Edit → bottom sheet (`PUT api/user`); Delete → confirm dialog → `DELETE api/user` → logout; Logout → clear token → `/login`.
 
+### Event formats (v0.7, legacy B4)
+All data screens implement loading / loaded / empty / error-retry.
+- **Select date & time** (`SelectSessionScreen`) — multi-show events: venue chips → date chips → time-slot cards (sold-out flags); a "Passes" section lists season passes and bundles. Steps with a single choice are skipped.
+- **Bundle** (`BundleScreen`) — one chip row per night; pick one show per night ("Pick N of M nights"); quantity stepper; Continue only when every required night is chosen.
+- **Seat map** (`SelectSeatScreen`) — stage (top/bottom), sections with colour dot, price, gate chip, row letters on both sides, aisles as gaps, accessible seats (♿), taken seats greyed; standing areas as a card with "N places left" and a stepper; legend. Continue holds the selection on the server; an app-bar countdown runs while held; a live hold is resumed on return ("We kept your seats"); changing the selection or leaving releases it.
+- **Attendee details** (`RegistrationScreen`) — shown after ticket selection when forms apply: per form, one card (booking) or one card per attendee; dynamic fields (text, textarea, number, email, phone, select, radio chips, checkbox / multi-select chips, date, time, file upload) with conditional fields and inline errors (client checks + server `error.fields`).
+- **Request tickets** (`RequestTicketScreen`) — from the "Request" button on request-only ticket types: explanation, quantity, the same forms; "Send request" → confirmation → My requests.
+- **My requests** (`MyRequestsScreen`, Profile → My requests) — cards with status chip (Pending review / Approved / Rejected / Cancelled / Booked), rejection reason, "Withdraw request" (pending) and "Book now" (approved paid tickets); load more.
+- **Share feedback** (`SurveyScreen`) — from the ticket screen once the event has started: questions or a link to the organiser's form; thank-you view with optional CTA / auto-redirect.
+
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
 Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.

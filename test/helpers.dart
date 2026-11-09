@@ -41,7 +41,13 @@ class FakeBackend {
 
   late final client = MockClient((req) async {
     final path = req.url.path.replaceFirst(RegExp('^/'), '');
-    calls.add(Call(req.method, path, req.headers, req.body.isEmpty ? null : jsonDecode(req.body)));
+    dynamic body;
+    try {
+      body = req.body.isEmpty ? null : jsonDecode(req.body);
+    } catch (_) {
+      body = req.body; // multipart upload
+    }
+    calls.add(Call(req.method, path, req.headers, body));
     final h = routes['${req.method} $path'];
     if (h == null) return err('NOT_FOUND', 'no route ${req.method} $path', 404);
     return h(req);

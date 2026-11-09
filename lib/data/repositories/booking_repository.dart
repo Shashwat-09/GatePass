@@ -90,7 +90,6 @@ class BookingRepository {
     required List<Map<String, dynamic>> items,
     String? promoCode,
     bool useCoins = false,
-    String? reservationToken,
   }) async {
     if (AppConfig.useMockData) {
       final base = _mockBase(event, items);
@@ -163,6 +162,7 @@ class BookingRepository {
     String? promoCode,
     bool useCoins = false,
     String? reservationToken,
+    List<FormResponse> formResponses = const [],
   }) async {
     if (AppConfig.useMockData) {
       final base = _mockBase(event, items);
@@ -187,6 +187,7 @@ class BookingRepository {
       if (promoCode != null) 'promoCode': promoCode,
       if (useCoins) 'useCoins': true,
       if (reservationToken != null) 'reservationToken': reservationToken,
+      if (formResponses.isNotEmpty) 'formResponses': formResponses.map((f) => f.toJson()).toList(),
     });
     if (!r.isOk) return r.cast();
     return ApiResult.ok(BookingQuote.fromJson(r.data as Map<String, dynamic>));

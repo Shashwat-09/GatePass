@@ -8,6 +8,7 @@ import '../../core/format.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../../widgets/common.dart';
+import 'bundle_screen.dart';
 import 'select_ticket_screen.dart';
 
 /// Multi-show events: pick venue → date → time slot, or a season pass.
@@ -44,12 +45,22 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
       appBar: AppBar(title: const Text('Select date & time')),
       body: t == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())
-          : t.venues.isEmpty && t.seasonPasses.isEmpty
+          : t.venues.isEmpty && t.seasonPasses.isEmpty && t.bundles.isEmpty
               ? const StateView.empty('No Date & Time Available')
               : ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
-                  if (t.seasonPasses.isNotEmpty) ...[
+                  if (t.seasonPasses.isNotEmpty || t.bundles.isNotEmpty) ...[
                     const Text('Passes', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                     const SizedBox(height: AppSpacing.sm),
+                    ...t.bundles.map((b) => Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.nights_stay_outlined, color: AppColors.primary),
+                            title: Text(b.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text('Pick ${b.nights} night${b.nights == 1 ? '' : 's'} · one show each'),
+                            trailing: Text(formatPaise(b.pricePaise), style: const TextStyle(fontWeight: FontWeight.w800)),
+                            enabled: b.remaining > 0,
+                            onTap: () => Get.to(() => BundleScreen(event: widget.event, bundle: b)),
+                          ),
+                        )),
                     ...t.seasonPasses.map((p) => Card(
                           child: ListTile(
                             leading: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary),

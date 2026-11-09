@@ -10,7 +10,7 @@ import '../../data/repositories/booking_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/hold_timer.dart';
 import '../controllers/booking_controller.dart';
-import 'summary_screen.dart';
+import 'registration_screen.dart';
 
 /// Seat map: stage, sections with row letters, aisles and accessible seats,
 /// standing areas sold by quantity. "Continue" holds the selection on the
@@ -89,7 +89,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Future<void> _continue() async {
     if (await c.holdSelection()) {
       _rememberMine(c.hold.value!);
-      Get.to(() => const SummaryScreen());
+      await goToCheckout(c);
       return;
     }
     if (!mounted) return;

@@ -14,14 +14,17 @@ class ApiResult<T> {
   /// Server error code (API spec §8.2), e.g. SOLD_OUT, PAYMENT_FAILED.
   final String? code;
   final int statusCode;
+  /// Per-field validation messages from the server (`error.fields`).
+  final Map<String, String>? fields;
   const ApiResult.ok(this.data, {this.statusCode = 200})
       : error = null,
-        code = null;
-  const ApiResult.fail(this.error, {this.statusCode = 0, this.code}) : data = null;
+        code = null,
+        fields = null;
+  const ApiResult.fail(this.error, {this.statusCode = 0, this.code, this.fields}) : data = null;
   bool get isOk => error == null;
 
   /// Re-type a failure (for repositories mapping one result into another).
-  ApiResult<R> cast<R>() => ApiResult<R>.fail(error, statusCode: statusCode, code: code);
+  ApiResult<R> cast<R>() => ApiResult<R>.fail(error, statusCode: statusCode, code: code, fields: fields);
 }
 
 enum Method { get, post, put, delete }
@@ -88,6 +91,29 @@ class ApiService {
     }
   }
 
+  /// Multipart upload of one file (form `file` fields). Same auth/refresh rules.
+  Future<ApiResult<dynamic>> upload(String path, List<int> bytes, String filename, {bool retryOnAuth = true}) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}$path');
+    final hadToken = _tokens.accessToken != null;
+    try {
+      final req = http.MultipartRequest('POST', uri)
+        ..headers.addAll(_headers()..remove('Content-Type'))
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      final res = await http.Response.fromStream(await _client.send(req).timeout(const Duration(seconds: 60)));
+      if (res.statusCode == 401 && hadToken && retryOnAuth) {
+        if (await _refresh()) return await upload(path, bytes, filename, retryOnAuth: false);
+        return const ApiResult.fail('Your session has expired. Please log in again.', statusCode: 401, code: 'UNAUTHENTICATED');
+      }
+      return _parse(res);
+    } on TimeoutException {
+      return const ApiResult.fail('The upload timed out. Try a smaller file.');
+    } on http.ClientException {
+      return const ApiResult.fail('No internet connection. Check your network and try again.');
+    } catch (_) {
+      return const ApiResult.fail('Could not upload the file. Please try again.');
+    }
+  }
+
   ApiResult<dynamic> _parse(http.Response res) {
     dynamic decoded;
     try {
@@ -100,13 +126,15 @@ class ApiService {
       return ApiResult.ok(data, statusCode: res.statusCode);
     }
     String? code;
+    Map<String, String>? fields;
     var msg = res.statusCode >= 500 ? 'Something went wrong. Please try again.' : 'Request failed (${res.statusCode})';
     if (decoded is Map && decoded['error'] is Map) {
       final err = decoded['error'] as Map;
       code = err['code']?.toString();
       if (err['message'] != null && res.statusCode < 500) msg = err['message'].toString();
+      if (err['fields'] is Map) fields = (err['fields'] as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
     }
-    return ApiResult.fail(msg, statusCode: res.statusCode, code: code);
+    return ApiResult.fail(msg, statusCode: res.statusCode, code: code, fields: fields);
   }
 
   /// Exchanges the refresh token for a new pair. Concurrent 401s share one call.

@@ -7,7 +7,8 @@ import '../../core/format.dart';
 import '../../data/models/models.dart';
 import '../../widgets/common.dart';
 import '../controllers/booking_controller.dart';
-import 'summary_screen.dart';
+import '../requests/request_ticket_screen.dart';
+import 'registration_screen.dart';
 
 class SelectTicketScreen extends StatelessWidget {
   const SelectTicketScreen({super.key, required this.event, this.sessionId, this.seasonOnly = false});
@@ -18,6 +19,7 @@ class SelectTicketScreen extends StatelessWidget {
   final bool seasonOnly;
 
   List<TierModel> get _tiers => event.tiers.where((t) {
+        if (t.passType == 'bundle') return false; // picked night by night in BundleScreen
         if (seasonOnly) return t.passType == 'season';
         if (sessionId != null) return t.sessionId == sessionId;
         return true;
@@ -66,7 +68,7 @@ class SelectTicketScreen extends StatelessWidget {
                     child: PrimaryButton(
                       label: 'Continue',
                       onPressed: c.totalQty > 0
-                          ? () => Get.to(() => const SummaryScreen())
+                          ? () => goToCheckout(c)
                           : null,
                     ),
                   ),
@@ -138,7 +140,13 @@ class SelectTicketScreen extends StatelessWidget {
                 ],
               ),
             ),
-            Obx(() => _stepper(c, t)),
+            t.requiresApproval
+                ? OutlinedButton(
+                    key: Key('request-${t.id}'),
+                    onPressed: t.remaining > 0 ? () => Get.to(() => RequestTicketScreen(event: event, tier: t)) : null,
+                    child: const Text('Request'),
+                  )
+                : Obx(() => _stepper(c, t)),
           ],
         ),
       ),

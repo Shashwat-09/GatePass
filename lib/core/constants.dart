@@ -76,6 +76,12 @@ class Endpoints {
   // booking
   static const seatMap = 'api/booking/seat-map';
   static const seatReserve = 'api/booking/seat-reserve';
+  static const formsFetch = 'api/forms/fetch';
+  static const formsUpload = 'api/forms/upload';
+  static const approvalRequests = 'api/approval-requests';
+  static const myApprovalRequests = 'api/approval-requests/my';
+  static const surveyForm = 'api/event-survey/form';
+  static const surveySubmit = 'api/event-survey/submit';
   static const sessions = 'api/booking/sessions';
   static const promocodes = 'api/promocodes';
   static const bookTicket = 'api/payment/book-ticket';

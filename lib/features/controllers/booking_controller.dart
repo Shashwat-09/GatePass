@@ -40,6 +40,12 @@ class BookingController extends GetxController {
   final _standingSections = <String, SeatSectionModel>{};
   /// Server hold for the current seat selection (cleared when the selection changes).
   final hold = Rxn<SeatHold>();
+  /// Bundle passes: chosen show per night, by tier id.
+  final bundleSessions = <String, List<String>>{};
+  /// Registration answers sent with the order (see RegistrationScreen).
+  List<FormResponse> formResponses = const [];
+  /// Server messages for registration answers from the last checkout attempt.
+  Map<String, String> formErrors = const {};
   /// Applied promo code (validated and priced by the server).
   final promoCode = RxnString();
   final promoError = RxnString();
@@ -63,6 +69,8 @@ class BookingController extends GetxController {
     standingQty.clear();
     _standingSections.clear();
     hold.value = null;
+    bundleSessions.clear();
+    formResponses = const [];
     promoCode.value = null;
     promoError.value = null;
     useCoins.value = false;
@@ -273,7 +281,19 @@ class BookingController extends GetxController {
           ...seats.map((s) => {'sectionId': s.sectionId, 'row': s.row, 'col': s.col}),
           ...standingQty.entries.where((e) => e.value > 0).map((e) => {'sectionId': e.key, 'qty': e.value}),
         ]
-      : qtyByTier.entries.where((e) => e.value > 0).map((e) => {'tierId': e.key, 'qty': e.value}).toList();
+      : qtyByTier.entries
+          .where((e) => e.value > 0)
+          .map((e) => {'tierId': e.key, 'qty': e.value, if (bundleSessions[e.key] != null) 'sessionIds': bundleSessions[e.key]})
+          .toList();
+
+  /// Ticket types in the order (for picking the registration forms that apply).
+  List<String> get chosenTierIds => qtyByTier.entries.where((e) => e.value > 0).map((e) => e.key).toList();
+
+  /// Attendees a form covers: all tickets, or only its ticket types.
+  int attendeesFor(RegistrationFormModel f) {
+    if (seated || f.ticketIds.isEmpty) return totalQty;
+    return qtyByTier.entries.where((e) => f.ticketIds.contains(e.key)).fold(0, (a, e) => a + e.value);
+  }
 
   /// Creates the pending booking + gateway order and stores the server quote.
   Future<bool> createOrder() async {
@@ -285,11 +305,12 @@ class BookingController extends GetxController {
     final h = seated && (hold.value?.isLive ?? false) ? hold.value : null;
     final r = await _repo.bookTicket(event,
         items: _items(), idempotencyKey: _idempotencyKey, promoCode: promoCode.value, useCoins: useCoins.value,
-        reservationToken: h?.token);
+        reservationToken: h?.token, formResponses: formResponses);
     loading.value = false;
     if (!r.isOk) {
       error.value = r.error;
       errorCode.value = r.code;
+      formErrors = r.fields ?? const {};
       if (r.code == 'HOLD_EXPIRED') hold.value = null;
       _idempotencyKey = BookingRepository.newIdempotencyKey();
       return false;
