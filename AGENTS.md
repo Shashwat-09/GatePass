@@ -96,6 +96,7 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Tests: backend 135 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: payouts/settlements for organisers, seat-map editor in the console, iOS build (see docs/10 for what remains).
+- 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).
 - ⬜ iOS: configured but not built/tested (needs macOS + Xcode; Razorpay iOS pod).
 
 ## 10. Naming & placeholders to replace
