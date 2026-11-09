@@ -2,7 +2,8 @@ import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, R
 import { IsOptional, IsString, Length, Matches } from 'class-validator';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
-import { JwtAuthGuard, optionalUserId, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { eventFor } from '../common/event-access';
+import { AuthedRequest, JwtAuthGuard, optionalUserId, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { AttributionClick, EventEntity } from '../db/entities';
 import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 
@@ -60,9 +61,10 @@ export class AttributionController {
 
   /** Clicks and confirmed sales per source / medium / campaign / affiliate. */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Get('admin/events/:id/attribution')
-  async report(@Param('id', new ParseUUIDPipe()) eventId: string) {
+  async report(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string) {
+    await eventFor(this.ds.manager, req, eventId);
     const sales: { source: string; medium: string; campaign: string; ref: string; bookings: string; revenue: string; tickets: string }[] = await this.ds.query(`
       SELECT COALESCE(b.attribution->>'source', '(direct)') AS source, COALESCE(b.attribution->>'medium', '') AS medium,
              COALESCE(b.attribution->>'campaign', '') AS campaign, COALESCE(b.attribution->>'ref', '') AS ref,

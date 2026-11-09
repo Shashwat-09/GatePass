@@ -49,6 +49,8 @@ export async function createApp(): Promise<NestExpressApplication> {
   // Gate check-in PWA (staff) at /gate; share-link landing assets at /s.
   app.useStaticAssets(join(__dirname, '..', 'public', 'gate'), { prefix: '/gate', index: 'index.html' });
   app.useStaticAssets(join(__dirname, '..', 'public', 'share'), { prefix: '/s', index: false });
+  // Organiser console (events, tickets, comps, sales) at /organiser.
+  app.useStaticAssets(join(__dirname, '..', 'public', 'organiser'), { prefix: '/organiser', index: 'index.html' });
 
   if (cfg.enableSwagger) {
     const doc = new DocumentBuilder()
@@ -67,7 +69,7 @@ async function bootstrap() {
   const app = await createApp();
   const port = config().port;
   await app.listen(port);
-  new Logger('Main').log(`GatePass API on :${port}  (/api, /health, /gate${config().enableSwagger ? ', /docs' : ''})`);
+  new Logger('Main').log(`GatePass API on :${port}  (/api, /health, /gate, /organiser${config().enableSwagger ? ', /docs' : ''})`);
 }
 
 if (require.main === module) {

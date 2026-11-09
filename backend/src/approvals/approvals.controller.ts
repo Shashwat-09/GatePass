@@ -8,6 +8,7 @@ import { paged, parsePage } from '../common/pagination';
 import { BookingService, currentPrice } from '../booking/booking.service';
 import { ApprovalRequest, ApprovalStatus, EventEntity, Tier, User } from '../db/entities';
 import { eventBadge } from '../events/event-status';
+import { eventFor } from '../common/event-access';
 import { FormsService } from '../forms/forms.service';
 import { notify } from '../notifications/notify';
 
@@ -109,12 +110,13 @@ export class ApprovalsController {
   // ── organiser ──
 
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Get('admin/approval-requests')
-  async list(@Query('eventId') eventId?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+  async list(@Req() req: AuthedRequest, @Query('eventId') eventId?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
     const q = parsePage(page, limit);
     const where: Record<string, string> = {};
-    if (eventId && /^[0-9a-f-]{36}$/.test(eventId)) where.eventId = eventId;
+    if (eventId && /^[0-9a-f-]{36}$/.test(eventId)) where.eventId = (await eventFor(this.ds.manager, req, eventId)).id;
+    else if (req.userRole !== 'admin') throw new ApiError('VALIDATION_ERROR', 'Choose an event');
     if (status && status in LABEL) where.status = status;
     const [rows, total] = await this.ds.getRepository(ApprovalRequest).findAndCount({ where, order: { createdAt: 'ASC' }, skip: q.skip, take: q.limit });
     const users = rows.length ? await this.ds.getRepository(User).findBy({ id: In(rows.map((r) => r.userId)) }) : [];
@@ -127,11 +129,11 @@ export class ApprovalsController {
 
   /** Approves a request; a free ticket is issued straight away. */
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Post('admin/approval-requests/:id/approve')
   @HttpCode(200)
   async approve(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
-    const r = await this.decide(id, req.userId!, 'approved', null);
+    const r = await this.decide(req, id, 'approved', null);
     const tier = await this.ds.getRepository(Tier).findOneByOrFail({ id: r.tierId });
     let issueError: string | null = null;
     if (currentPrice(tier).pricePaise === 0) {
@@ -146,18 +148,20 @@ export class ApprovalsController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Post('admin/approval-requests/:id/reject')
   @HttpCode(200)
   async reject(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: RejectDto) {
-    const r = await this.decide(id, req.userId!, 'rejected', dto.reason?.trim() || null);
+    const r = await this.decide(req, id, 'rejected', dto.reason?.trim() || null);
     return (await this.views([r]))[0];
   }
 
-  private decide(id: string, by: string, status: 'approved' | 'rejected', reason: string | null) {
+  private decide(req: AuthedRequest, id: string, status: 'approved' | 'rejected', reason: string | null) {
+    const by = req.userId!;
     return this.ds.transaction(async (m) => {
       const r = await m.createQueryBuilder(ApprovalRequest, 'r').setLock('pessimistic_write').where('r.id = :id', { id }).getOne();
       if (!r) throw new ApiError('NOT_FOUND', 'Request not found');
+      await eventFor(m, req, r.eventId);
       if (r.status !== 'pending_review') throw new ApiError('CONFLICT', `This request is already ${LABEL[r.status].toLowerCase()}`);
       Object.assign(r, { status, rejectionReason: reason, decidedBy: by, decidedAt: new Date() });
       await m.save(r);

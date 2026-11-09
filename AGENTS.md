@@ -66,10 +66,10 @@ flutter build apk --release --split-per-abi --dart-define=BASE_URL=https://api.y
 ```bash
 cd backend && npm ci
 cp .env.example .env          # dev: console OTP 123456, mock payments, in-memory or Redis KV
-npm run start:dev             # http://localhost:4000/api · /health · /gate · /docs
+npm run start:dev             # http://localhost:4000/api · /health · /gate · /organiser · /docs
 npm run lint && npm test      # needs Postgres (TEST_DATABASE_URL, default localhost:5433/eventa_test)
 npm run migration:generate -- src/db/migrations/<Name>   # after editing src/db/entities.ts
-npm run seed · npm run user:role -- <phone> staff
+npm run seed · npm run user:role -- <phone> staff|organiser|admin
 # or the whole stack: docker compose up --build   (repo root)
 ```
 One module per domain under `backend/src/` (auth, users, cities, events, booking+payments, tickets, invoices, gate, health, infra).
@@ -77,7 +77,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.2, release-readiness pass)
+## 9. Current status (v0.8)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -88,13 +88,14 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Partner vouchers (v0.8): campaigns, complimentary per booking, tabs, multi-unit sharing, rotating QR, counter redeem in `/gate`.
 - ✅ Push (v0.8): device tokens, FCM HTTP v1 outbox worker (off until `FCM_SERVICE_ACCOUNT`), tap routing from push and inbox, `device-id`/`selected-city` headers.
 - ✅ Attribution & links (v0.8): UTM/click-id/affiliate capture → clicks + booking source + organiser report; web-only events in an in-app web view; tickets/explore deep links.
+- ✅ Organiser tools (v0.8): `organiser` role scoped to own events; `/organiser` web console + `api/organiser/*` (events, ticket types, shows, status with holder notices, comp/box-office tickets, sales summary, approvals, report).
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 133 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 135 (unit + e2e on real Postgres), client 76 (repositories, controller, widgets light/dark) + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
-- ⬜ Next (see docs/10, batch B5): organiser tools (event/session/tier CRUD, comp/box-office tickets).
+- ⬜ Next: payouts/settlements for organisers, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - ⬜ iOS: configured but not built/tested (needs macOS + Xcode; Razorpay iOS pod).
 
 ## 10. Naming & placeholders to replace

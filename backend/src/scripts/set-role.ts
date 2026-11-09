@@ -8,8 +8,8 @@ import { User, UserRole } from '../db/entities';
  */
 async function main() {
   const [phone, role] = process.argv.slice(2);
-  if (!/^\d{10}$/.test(phone ?? '') || !['customer', 'staff', 'admin'].includes(role ?? '')) {
-    throw new Error('usage: npm run user:role -- <10-digit phone> <customer|staff|admin>');
+  if (!/^\d{10}$/.test(phone ?? '') || !['customer', 'staff', 'organiser', 'admin'].includes(role ?? '')) {
+    throw new Error('usage: npm run user:role -- <10-digit phone> <customer|staff|organiser|admin>');
   }
   await dataSource.initialize();
   const repo = dataSource.getRepository(User);

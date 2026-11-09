@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>GatePass · Organiser</title>
+<link rel="stylesheet" href="/organiser/organiser.css">
+</head>
+<body>
+<header>
+  <strong>GatePass</strong> <span>Organiser</span>
+  <nav><button id="toList" class="link" hidden>All events</button><button id="logout" class="link" hidden>Log out</button></nav>
+</header>
+<main>
+  <section id="login">
+    <h1>Organiser sign in</h1>
+    <p class="muted">Use the mobile number of your organiser account.</p>
+    <label>Mobile number <input id="phone" inputmode="numeric" maxlength="10" autocomplete="tel-national"></label>
+    <button id="send">Send code</button>
+    <div id="otpBox" hidden>
+      <label>6-digit code <input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+      <button id="verify">Sign in</button>
+    </div>
+    <p id="loginMsg" class="msg"></p>
+  </section>
+
+  <section id="list" hidden>
+    <div class="row"><h1>Your events</h1><button id="newEvent">New event</button></div>
+    <table><thead><tr><th>Event</th><th>Date</th><th>Status</th><th>Sold</th></tr></thead><tbody id="events"></tbody></table>
+    <p id="listMsg" class="muted"></p>
+  </section>
+
+  <section id="editor" hidden>
+    <div class="row"><h1 id="evHeading">New event</h1><span id="evStatus" class="pill"></span></div>
+    <div id="statusBar" class="row gap" hidden>
+      <button data-status="live">Publish</button>
+      <button data-status="draft" class="secondary">Unpublish</button>
+      <button data-status="postponed" class="secondary">Postpone</button>
+      <button data-status="cancelled" class="danger">Cancel event</button>
+      <a id="publicLink" target="_blank" rel="noopener"></a>
+    </div>
+
+    <form id="evForm" class="card grid">
+      <label class="wide">Title <input name="title" required maxlength="120"></label>
+      <label>City <select name="cityId" required></select></label>
+      <label>Genre <input name="genre" maxlength="40"></label>
+      <label>Venue <input name="venueName" required maxlength="120"></label>
+      <label>Address <input name="venueAddress" maxlength="300"></label>
+      <label>Starts <input name="startDate" type="datetime-local" required></label>
+      <label>Ends <input name="endDate" type="datetime-local"></label>
+      <label>Tickets per person <input name="maxPerUser" type="number" min="1" max="50" value="6"></label>
+      <label>Age limit <input name="ageLimit" type="number" min="0" max="25"></label>
+      <label class="wide">Card image (https) <input name="cardImageUrl" type="url"></label>
+      <label class="wide">Description <textarea name="description" rows="4"></textarea></label>
+      <label class="wide">Notes on the ticket <textarea name="ticketNotes" rows="2"></textarea></label>
+      <label class="check"><input name="isWebOnly" type="checkbox"> Sold on another website</label>
+      <label class="wide">Ticket page link (https) <input name="externalUrl" type="url"></label>
+      <div class="wide row gap"><button type="submit">Save</button><span id="evMsg" class="msg"></span></div>
+    </form>
+
+    <div id="more" hidden>
+      <h2>Sales</h2>
+      <div id="stats" class="stats"></div>
+      <p><button id="download" class="secondary">Download attendee report (.xlsx)</button></p>
+
+      <h2>Ticket types</h2>
+      <table><thead><tr><th>Name</th><th>Price ₹</th><th>Quantity</th><th>Sold</th><th>On sale</th><th></th></tr></thead><tbody id="tiers"></tbody></table>
+      <form id="tierForm" class="card grid">
+        <label>Name <input name="name" required maxlength="60"></label>
+        <label>Price ₹ <input name="price" type="number" min="0" step="1" required></label>
+        <label>Quantity <input name="quantity" type="number" min="1" required></label>
+        <label>Max per person <input name="maxPerUser" type="number" min="1" max="50"></label>
+        <label>Show <select name="sessionId"><option value="">All shows</option></select></label>
+        <label class="check"><input name="requiresApproval" type="checkbox"> Request to book</label>
+        <div class="wide row gap"><button type="submit">Add ticket type</button><span id="tierMsg" class="msg"></span></div>
+      </form>
+
+      <h2>Shows (dates & venues)</h2>
+      <ul id="sessions" class="plain"></ul>
+      <form id="sessionForm" class="card grid">
+        <label>Venue <input name="venueName" required maxlength="120"></label>
+        <label>Label <input name="label" maxlength="60" placeholder="Evening show"></label>
+        <label>Starts <input name="startsAt" type="datetime-local" required></label>
+        <label>Ends <input name="endsAt" type="datetime-local"></label>
+        <div class="wide row gap"><button type="submit">Add show</button><span id="sessionMsg" class="msg"></span></div>
+      </form>
+
+      <h2>Complimentary & box office</h2>
+      <form id="issueForm" class="card grid">
+        <label>Ticket type <select name="tierId" required></select></label>
+        <label>Quantity <input name="quantity" type="number" min="1" max="50" value="1" required></label>
+        <label>Mobile number <input name="phone" inputmode="numeric" maxlength="10" required></label>
+        <label>Name <input name="name" maxlength="60"></label>
+        <label>Type <select name="kind"><option value="comp">Complimentary</option><option value="box_office">Box office (paid at venue)</option></select></label>
+        <label>Amount ₹ (box office) <input name="amount" type="number" min="0"></label>
+        <label>Paid by <select name="paymentMode"><option value="">—</option><option>cash</option><option>upi</option><option>card</option></select></label>
+        <div class="wide row gap"><button type="submit">Issue tickets</button><span id="issueMsg" class="msg"></span></div>
+      </form>
+
+      <h2>Requests to approve</h2>
+      <ul id="approvals" class="plain"></ul>
+    </div>
+  </section>
+</main>
+<script src="/organiser/organiser.js"></script>
+</body>
+</html>

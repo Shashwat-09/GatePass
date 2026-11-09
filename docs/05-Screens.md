@@ -175,5 +175,8 @@ All data screens implement loading / loaded / empty / error-retry.
 ### Web view (v0.8)
 - **Web view** (`WebViewScreen`) — for web-only events ("Book on organiser's site") and web links the app can't open itself: progress bar, reload, error-retry; only http/https pages load.
 
+### Organiser console (web, v0.8)
+- `/organiser` (OTP sign-in, organiser/admin accounts): events table → event page with status buttons (Publish / Unpublish / Postpone / Cancel with a message to holders), details form, sales cards (tickets, revenue, online, box office, complimentary, checked in, requests waiting), attendee report download, ticket types (inline price / quantity / on-sale edits + add), shows (add / hide), complimentary & box-office issuing, and the requests queue (approve / reject with reason). Light and dark follow the system.
+
 ## 5.6 Design tokens (from `lib/app/theme.dart`)
 Primary `#6C4DF6`, accent `#FF5C8A`, success `#2BBF7E`; radii 10/16/24; spacing 4/8/16/24/32; cards elevation 0 + 16-radius; buttons 54-high pill-ish 16-radius; light + dark both defined. Reuse tokens only — no inline hex in screens.

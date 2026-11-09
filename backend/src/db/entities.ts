@@ -39,7 +39,7 @@ export class AccountDeletion {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
-export type UserRole = 'customer' | 'staff' | 'admin';
+export type UserRole = 'customer' | 'staff' | 'organiser' | 'admin';
 
 @Entity('users')
 export class User {
@@ -101,6 +101,8 @@ export class EventEntity {
   /** Where the stage is drawn on the seat map. */
   @Column({ type: 'varchar', default: 'top' }) stagePosition!: 'top' | 'bottom' | 'none';
   @Column({ default: 6 }) maxPerUser!: number;
+  /** Organiser account that manages this event (admins manage all). */
+  @Index() @Column({ type: 'uuid', nullable: true }) organiserId!: string | null;
   /** Sold on another website: the app opens `externalUrl` in a web view instead of booking. */
   @Column({ default: false }) isWebOnly!: boolean;
   @Column({ type: 'varchar', nullable: true }) externalUrl!: string | null;

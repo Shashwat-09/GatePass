@@ -221,7 +221,8 @@ CREATE TABLE public.events (
     "ticketNotes" text,
     "stagePosition" character varying DEFAULT 'top'::character varying NOT NULL,
     "isWebOnly" boolean DEFAULT false NOT NULL,
-    "externalUrl" character varying
+    "externalUrl" character varying,
+    "organiserId" uuid
 );
 
 CREATE TABLE public.form_responses (
@@ -772,6 +773,8 @@ CREATE INDEX "IDX_b4b6eedd8891e7cf45c500081a" ON public.ticket_transfers USING b
 CREATE INDEX "IDX_b97fceb16f5a30d15a93a3bf4e" ON public.approval_requests USING btree ("userId");
 
 CREATE INDEX "IDX_c37e9818eeaad9543032f6a6f1" ON public.tickets USING btree ("ownerUserId");
+
+CREATE INDEX "IDX_c7d2c5a6caba3caa041a263992" ON public.events USING btree ("organiserId");
 
 CREATE INDEX "IDX_cd4bb350a09b34e02b708ad3f5" ON public.form_responses USING btree ("eventId");
 

@@ -47,7 +47,7 @@ The API **refuses to start** if a production setting is unsafe (see API spec §8
 4. Reconciliation: watch logs for `REFUND NEEDED` (refund API failed) and `Amount mismatch`; compare daily settlements with `bookings` where `status='confirmed'`.
 
 ## Gate staff & offline entry
-1. `docker exec <api> node dist/scripts/set-role.js 9876543210 staff` (use `admin` for organisers who need the Excel report).
+1. `docker exec <api> node dist/scripts/set-role.js 9876543210 staff` (gate staff). Organisers get `organiser` and use `https://api.yourdomain.com/organiser` to set up events, issue comps/box-office tickets, approve requests and download the attendee report.
 2. Staff open `https://api.yourdomain.com/gate` in Chrome on Android, sign in with OTP, and **install it** (menu → *Add to Home screen*).
 3. **Before doors open**, with internet, pick the event — the device downloads the ticket list. Press *Refresh offline list* again just before doors to include late buyers and shares.
 4. If the venue loses internet (or the server is down) the scanner switches to offline checks automatically: tickets on the list are checked against their QR hash and entry count; tickets bought later are accepted on their Ed25519 signature. Scans queue on the device and sync when the connection returns.

@@ -11,6 +11,7 @@ import { ApiError } from '../common/api-error';
 import { paged, parsePage } from '../common/pagination';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { signPath, verifyPathSignature } from '../common/signing';
+import { eventFor } from '../common/event-access';
 import { config } from '../config/config';
 import { FormField, FormResponse, FormUpload, RegistrationForm } from '../db/entities';
 import { KvStore } from '../infra/kv.service';
@@ -112,7 +113,9 @@ export class FormsAdminController {
   }
 
   @Get('events/:id/form-responses')
-  async responses(@Param('id', new ParseUUIDPipe()) eventId: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+  @Roles('organiser', 'admin')
+  async responses(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+    await eventFor(this.ds.manager, req, eventId);
     const q = parsePage(page, limit);
     const [rows, total] = await this.ds.getRepository(FormResponse).findAndCount({
       where: { eventId }, order: { createdAt: 'DESC' }, skip: q.skip, take: q.limit,

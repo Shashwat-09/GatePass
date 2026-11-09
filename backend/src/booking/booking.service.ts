@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
-import { DataSource, EntityManager, In, LessThan, Not } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, LessThan, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { signPath, signTicketQr } from '../common/signing';
 import { config } from '../config/config';
@@ -594,6 +594,48 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return lines;
+  }
+
+  // ───────────────────────────── organiser: comp / box-office ─────────────────────────────
+
+  /**
+   * Complimentary or box-office (paid at the venue) tickets issued by the
+   * organiser to a phone number. Takes stock like a sale; the holder sees the
+   * tickets after signing in with that number.
+   */
+  async issueOffline(input: {
+    eventId: string; tierId: string; quantity: number; phone: string; name?: string | null;
+    kind: 'comp' | 'box_office'; amountPaise?: number; paymentMode?: string | null; note?: string | null; issuedBy: string;
+  }) {
+    return this.ds.transaction(async (m) => {
+      const event = await m.findOneByOrFail(EventEntity, { id: input.eventId });
+      const tier = await m.createQueryBuilder(Tier, 't').setLock('pessimistic_write')
+        .where('t.id = :id AND t."eventId" = :e', { id: input.tierId, e: event.id }).getOne();
+      if (!tier) throw new ApiError('VALIDATION_ERROR', 'Unknown ticket type');
+      if (tier.passType === 'bundle') throw new ApiError('VALIDATION_ERROR', 'Bundle passes are sold in the app');
+      const left = tier.quantity - tier.sold - tier.reserved;
+      if (input.quantity > left) throw new ApiError('SOLD_OUT', left > 0 ? `Only ${left} ${tier.name} left` : `${tier.name} is sold out`);
+      let user = await m.findOne(User, { where: { phone: input.phone, deletedAt: IsNull() } });
+      if (!user) user = await m.save(m.create(User, { phone: input.phone, name: input.name ?? null }));
+      const unit = currentPrice(tier).pricePaise;
+      const total = input.kind === 'comp' ? 0 : input.amountPaise ?? unit * input.quantity;
+      const id = randomUUID();
+      const b = await m.save(m.create(Booking, {
+        id, code: bookingCode(), userId: user.id, eventId: event.id, status: 'confirmed',
+        basePaise: total, discountPaise: 0, offerDiscountPaise: 0, promoDiscountPaise: 0, promoCodeId: null, feePaise: 0, taxPaise: 0,
+        gst: {}, billingState: null, totalPaise: total, coinsPaise: 0, payablePaise: total,
+        gateway: input.kind, orderRef: '', txnId: `${input.kind}_${id}`, idempotencyKey: null,
+        failureReason: input.note ?? null,
+        items: [{ tierId: tier.id, tierName: tier.name, qty: input.quantity, unitPricePaise: input.kind === 'comp' ? 0 : Math.round(total / input.quantity), sessionId: tier.sessionId }],
+        attribution: { source: input.kind, ...(input.paymentMode ? { medium: input.paymentMode } : {}), issuedBy: input.issuedBy },
+        expiresAt: new Date(), confirmedAt: new Date(),
+      }));
+      await m.increment(Tier, { id: tier.id }, 'sold', input.quantity);
+      await this.issueTickets(m, b, event);
+      await notify(m, user.id, 'booking', input.kind === 'comp' ? 'You have complimentary tickets' : 'Your tickets are ready',
+        `${input.quantity} × ${tier.name} for ${event.title}. Booking ${b.code}.`, { bookingId: b.id, eventId: event.id });
+      return { bookingId: b.id, bookingCode: b.code, userId: user.id, totalPaise: total };
+    });
   }
 
   // ───────────────────────────── seat holds (booking/seat-reserve) ─────────────────────────────

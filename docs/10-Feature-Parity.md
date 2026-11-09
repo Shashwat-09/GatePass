@@ -61,7 +61,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 | 44 | **Screenshot blocking** on ticket screens — `MainActivity` channel `flutter/screenshot`, "secure mode" | ✅ | B3 |
 | 45 | Split: by phone or **contact picker**, choose **specific seats**, split link, **split depth / remaining splits** limits, shared-with list, claim back, "cannot split with your own number" | ✅ incl. system contact picker; seat tickets are one per seat so any seat can be passed on | B3 |
 | 46 | Invoice / payment receipt PDF download | ✅ | — |
-| 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | 🟡 bundle night schedule ✅ (B4); box-office/comp tickets with organiser tools (B5); RSVP = free request-to-book or free tier; premiere-specific fields not planned | B4–B5 |
+| 47 | Box-office / complimentary tickets, RSVP, bundle night schedule, **movie premiere tickets** (theatre, screen, poster) | ✅ bundle night schedule (B4); complimentary + box-office tickets from the organiser console (B5); RSVP = free request-to-book or free tier; premiere-specific fields not planned | B4–B5 |
 | **Vouchers** (`voucher_response`, 1.8 MB UI) ||||
 | 48 | Partner-brand vouchers: tabs Active/Used/Expired, brand logo/colours, benefit, min order, max discount, validity, **multi-unit**, **share units**, shared list, **rotating QR** ("refreshes each time you open it"), coupon code copy, redeem at counter, revoked | ✅ campaigns (brand, colour, benefit, min order, max discount, validity, terms, coupon code), complimentary per booking or issued to numbers; Active/Used/Expired tabs + counts; multi-unit; share units by number (also before sign-up); QR rotates on every open (5-min, Ed25519); counter redeem via `/gate` by QR or reference; revoke | B5 |
 | **Engagement** ||||
@@ -77,7 +77,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not built. **Batch** = order of delivery
 |---|---|---|---|
 | 54 | WebView shell for `https://seller.showmates.in` with offline screen — `WebviewScreen`, `NoInternetScreen` | ➖ (our tools are web) | — |
 | 55 | JS bridge: **QR scanner** (`openQRScanner/closeScanner`), location, contacts permission, notification permission + FCM token — `bridge/js_bridge.dart` | ✅ scanner (works offline) | — |
-| 56 | Seller portal features (event setup, sales, payouts…) | Not in the APK — they live on the website, so they **cannot be recovered from the code**. GatePass builds its own organiser tools | B5 |
+| 56 | Seller portal features (event setup, sales, payouts…) | Not in the APK — they live on the website, so they **cannot be recovered from the code**. GatePass builds its own organiser tools ✅ GatePass `/organiser` console + `api/organiser/*`: events (draft → live → postponed/cancelled with holder notices), ticket types, shows, comp/box-office tickets, sales summary, attendee report, approvals. Payouts: not built (needs a settlement provider) | B5 |
 
 ## Delivery plan
 - **B1** event page parity · **B2** pricing (phases, offers, limits, promo codes, fees/GST split, coins) · **B3** profile/discovery/location/force-update/ticket polish · **B4** event formats (venues, dates, slots, season pass, seat maps, forms, approvals, surveys, bundles) · **B5** vouchers, push, attribution, organiser tools.

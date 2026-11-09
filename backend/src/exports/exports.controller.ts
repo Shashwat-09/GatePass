@@ -1,7 +1,9 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { eventFor } from '../common/event-access';
 import { Response } from 'express';
 import { ApiError } from '../common/api-error';
-import { JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { verifyPathSignature } from '../common/signing';
 import { ExportsService } from './exports.service';
 
@@ -16,7 +18,7 @@ function send(res: Response, buf: Buffer, filename: string) {
 
 @Controller()
 export class ExportsController {
-  constructor(private readonly exports: ExportsService) {}
+  constructor(private readonly exports: ExportsService, private readonly ds: DataSource) {}
 
   /** Customer export, opened from the app via a short-lived signed link. */
   @Get('exports/me/:file')
@@ -28,11 +30,12 @@ export class ExportsController {
     send(res, await this.exports.customer(m[1]), `gatepass-my-tickets-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  /** Organiser/admin event report (contains attendee phone numbers — admin only). */
+  /** Event report (contains attendee phone numbers — the event's organiser or an admin). */
   @Get('admin/events/:id/export.xlsx')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
-  async event(@Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response) {
+  @Roles('organiser', 'admin')
+  async event(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response) {
+    await eventFor(this.ds.manager, req, id);
     send(res, await this.exports.event(id), `gatepass-event-${id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 }

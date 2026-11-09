@@ -6,6 +6,7 @@ import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-au
 import { paged, parsePage } from '../common/pagination';
 import { EventEntity, EventSurvey, FormField, SurveyResponse, Ticket } from '../db/entities';
 import { checkFieldDefs, validateAnswers } from '../forms/form-fields';
+import { eventFor } from '../common/event-access';
 
 class SubmitDto {
   @IsUUID() eventId!: string;
@@ -75,10 +76,10 @@ export class SurveyController {
   // ── organiser ──
 
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Put('admin/events/:id/survey')
-  async upsert(@Param('id', new ParseUUIDPipe()) eventId: string, @Body() dto: SurveyDto) {
-    if (!(await this.ds.getRepository(EventEntity).exist({ where: { id: eventId } }))) throw new ApiError('NOT_FOUND', 'Event not found');
+  async upsert(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string, @Body() dto: SurveyDto) {
+    await eventFor(this.ds.manager, req, eventId);
     if (dto.mode === 'redirect' && !dto.redirectUrl) throw new ApiError('VALIDATION_ERROR', 'redirectUrl is required for redirect surveys');
     if (dto.mode === 'form') {
       const bad = checkFieldDefs(dto.fields ?? []) ?? (dto.fields?.length ? null : 'Add at least one question');
@@ -97,9 +98,10 @@ export class SurveyController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('organiser', 'admin')
   @Get('admin/events/:id/survey-responses')
-  async responses(@Param('id', new ParseUUIDPipe()) eventId: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+  async responses(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+    await eventFor(this.ds.manager, req, eventId);
     const q = parsePage(page, limit);
     const [rows, total] = await this.ds.getRepository(SurveyResponse).findAndCount({ where: { eventId }, order: { createdAt: 'DESC' }, skip: q.skip, take: q.limit });
     return paged(rows.map((r) => ({ id: r.id, userId: r.userId, answers: r.answers, createdAt: r.createdAt.toISOString() })), q, total);
