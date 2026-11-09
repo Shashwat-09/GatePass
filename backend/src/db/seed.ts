@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
-import { Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, PromoCode, SeatReservation, SeatSection, Tier } from './entities';
+import {
+  Artist, City, EventArtist, EventEntity, EventSession, EventSponsor, EventSurvey, PromoCode, RegistrationForm, SeatReservation, SeatSection, Tier,
+} from './entities';
 
 /**
  * Inserts demo reference data (cities, 3 events, tiers, seat sections) if the
@@ -102,6 +104,61 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
     await m.save(m.create(Tier, {
       eventId: fest.id, name: 'Weekend pass', type: 'ga', pricePaise: 149900, quantity: 50, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1,
       passType: 'season', validFrom: new Date(s1.startsAt.getTime() + 330 * 60_000).toISOString().slice(0, 10), validTo: to,
+    }));
+
+    // Bundle: pick one show per night across the weekend.
+    await m.save(m.create(Tier, {
+      eventId: fest.id, name: 'Two-night bundle', type: 'ga', pricePaise: 109900, quantity: 40, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1,
+      passType: 'bundle', description: 'One show each night — you choose which.',
+    }));
+
+    // Request-to-book event with a per-attendee registration form.
+    const mixer = await ev({
+      slug: 'startup-mixer', title: 'Startup Mixer Pune', description: 'Founders, operators and investors. Entry by request for community passes.',
+      cardImageUrl: 'https://picsum.photos/seed/mixer/800/600', bannerUrl: 'https://picsum.photos/seed/mixer/1200/600',
+      genre: 'Workshop', cityId: pune.id, venueName: 'The Hive', venueAddress: 'Baner, Pune',
+      startDate: inDays(5), endDate: inDays(5), priceFromPaise: 0, hasSeatMap: false,
+    });
+    await m.save([
+      m.create(Tier, { eventId: mixer.id, name: 'Open entry', type: 'ga', pricePaise: 29900, quantity: 200, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1 }),
+      m.create(Tier, {
+        eventId: mixer.id, name: 'Community pass', type: 'ga', pricePaise: 0, quantity: 50, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1,
+        requiresApproval: true, maxRequestsPerUser: 1, maxPerUser: 1, description: 'Free — the organiser reviews each request.',
+      }),
+      m.create(Tier, {
+        eventId: mixer.id, name: 'Founder table', type: 'vip', pricePaise: 199900, quantity: 20, sold: 0, reserved: 0, minQty: 1, entryPerTicket: 1,
+        requiresApproval: true, maxRequestsPerUser: 2, maxPerUser: 2, description: 'Reserved for founders. Approval required.',
+      }),
+    ]);
+    await m.save(m.create(RegistrationForm, {
+      title: 'Attendee details', description: 'One per attendee. Shared only with the organiser.', scope: 'attendee', eventIds: [mixer.id],
+      fields: [
+        { key: 'fullName', label: 'Full name', type: 'text', required: true, minLength: 2, maxLength: 60 },
+        { key: 'email', label: 'Email', type: 'email', required: true },
+        { key: 'company', label: 'Company', type: 'text' },
+        { key: 'role', label: 'You are a…', type: 'select', required: true, options: [
+          { label: 'Founder', value: 'founder' }, { label: 'Investor', value: 'investor' },
+          { label: 'Operator', value: 'operator' }, { label: 'Student', value: 'student' },
+        ] },
+        { key: 'studentId', label: 'Student ID', type: 'file', required: true, helperText: 'PDF or photo, up to 5 MB',
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], maxFileSize: 5 * 1024 * 1024, conditional: { dependsOnKey: 'role', equals: 'student' } },
+        { key: 'linkedin', label: 'LinkedIn handle', type: 'text', pattern: '^[A-Za-z0-9-]{3,100}$', patternMessage: 'Letters, numbers and dashes only' },
+        { key: 'diet', label: 'Food preference', type: 'radio', options: [
+          { label: 'No preference', value: 'none' }, { label: 'Vegetarian', value: 'veg' }, { label: 'Other', value: 'other' },
+        ] },
+        { key: 'dietOther', label: 'Tell us more', type: 'text', required: true, conditional: { dependsOnKey: 'diet', equals: 'other' } },
+        { key: 'consent', label: 'I agree to share these details with the organiser', type: 'checkbox', required: true },
+      ],
+    }));
+    await m.save(m.create(EventSurvey, {
+      eventId: neon.id, title: 'How was Neon Nights?', mode: 'form', ctaLabel: 'See upcoming events', ctaUrl: 'https://gatepass.example/events',
+      fields: [
+        { key: 'rating', label: 'Overall rating', type: 'radio', required: true, options: ['1', '2', '3', '4', '5'].map((v) => ({ label: v, value: v })) },
+        { key: 'liked', label: 'What did you like?', type: 'checkbox', options: [
+          { label: 'Music', value: 'music' }, { label: 'Venue', value: 'venue' }, { label: 'Entry', value: 'entry' },
+        ] },
+        { key: 'comments', label: 'Anything else?', type: 'textarea', maxLength: 500 },
+      ],
     }));
 
     // Pricing demo: offer on Neon General, phases on Citadel Standing, VIP per-user cap.

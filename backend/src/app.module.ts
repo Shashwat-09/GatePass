@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ApprovalsModule } from './approvals/approvals.module';
 import { AuthModule } from './auth/auth.module';
+import { FormsModule } from './forms/forms.module';
+import { SurveyModule } from './survey/survey.module';
 import { BookingModule } from './booking/booking.module';
 import { CitiesModule } from './cities/cities.module';
 import { DbModule } from './db/db.module';
@@ -32,6 +35,9 @@ import { UsersModule } from './users/users.module';
     ExportsModule,
     PromosModule,
     ExtrasModule,
+    FormsModule,
+    ApprovalsModule,
+    SurveyModule,
   ],
 })
 export class AppModule {}

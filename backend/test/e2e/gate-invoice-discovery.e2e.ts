@@ -94,7 +94,7 @@ describe('gate check-in, invoices, discovery (e2e)', () => {
   it('filters by city name or id (Postgres) and paginates lists', async () => {
     const byName = (await ctx.http.get('/api/home/highlights?cityId=pune').expect(200)).body.data;
     const slugs = byName.sections[0].events.map((e: { slug: string }) => e.slug).sort();
-    expect(slugs).toEqual(['neon-nights', 'standup-central']);
+    expect(slugs).toEqual(['neon-nights', 'standup-central', 'startup-mixer']);
     const cities = (await ctx.http.get('/api/city/cities?q=mum').expect(200)).body.data;
     expect(cities.items.map((c: { name: string }) => c.name)).toEqual(['Mumbai']);
     const byId = (await ctx.http.get(`/api/events?cityId=${cities.items[0].id}`).expect(200)).body.data;
@@ -102,8 +102,8 @@ describe('gate check-in, invoices, discovery (e2e)', () => {
     const none = (await ctx.http.get('/api/events?cityId=Atlantis').expect(200)).body.data;
     expect(none).toMatchObject({ items: [], total: 0 });
     const page = (await ctx.http.get('/api/events?limit=3&page=2').expect(200)).body.data;
-    expect(page).toMatchObject({ page: 2, limit: 3, total: 5 });
-    expect(page.items).toHaveLength(2);
+    expect(page).toMatchObject({ page: 2, limit: 3, total: 6 });
+    expect(page.items).toHaveLength(3);
     const search = (await ctx.http.get('/api/events/search?q=comedy').expect(200)).body.data;
     expect(search.items.map((e: { slug: string }) => e.slug).sort()).toEqual(['comedy-weekend', 'standup-central']);
   });

@@ -232,7 +232,12 @@ export class Tier {
   /** Session this ticket type is for (null = single-show event, or a season pass). */
   @Index() @Column({ type: 'uuid', nullable: true }) sessionId!: string | null;
   /** 'single' = one show; 'season' = valid every day from validFrom to validTo, quantity entries per day. */
-  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season';
+  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season' | 'bundle';
+  /** Bundle passes: how many nights the buyer picks (one show per night); null = every night. */
+  @Column({ type: 'int', nullable: true }) bundleNights!: number | null;
+  /** Request-to-book: the organiser approves each request before it can be bought (or is issued, if free). */
+  @Column({ default: false }) requiresApproval!: boolean;
+  @Column({ default: 1 }) maxRequestsPerUser!: number;
   @Column({ type: 'date', nullable: true }) validFrom!: string | null;
   @Column({ type: 'date', nullable: true }) validTo!: string | null;
 }
@@ -348,6 +353,10 @@ export interface BookingItem {
   gate?: string | null;
   /** Ticket seat label, e.g. "Gold · Row B Seat 4 · Gate 2". */
   label?: string;
+  /** Bundle pass: chosen show per night (one ticket each). */
+  sessionIds?: string[];
+  /** Request-to-book ticket bought under this approved request. */
+  approvalRequestId?: string;
   unitPricePaise: number;
   phaseName?: string;
   offerDiscountPaise?: number;
@@ -398,7 +407,7 @@ export class Ticket {
   @Index() @Column({ type: 'uuid' }) eventId!: string;
   @Index() @Column({ type: 'uuid', nullable: true }) tierId!: string | null;
   @Column({ type: 'uuid', nullable: true }) sessionId!: string | null;
-  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season';
+  @Column({ type: 'varchar', default: 'single' }) passType!: 'single' | 'season' | 'bundle';
   @Column({ type: 'date', nullable: true }) validFrom!: string | null;
   @Column({ type: 'date', nullable: true }) validTo!: string | null;
   @Column() eventTitle!: string;
@@ -486,7 +495,125 @@ export class PaymentEvent {
   @CreateDateColumn({ type: 'timestamptz' }) receivedAt!: Date;
 }
 
+
+/** Field of a registration form or survey (validated on the server). */
+export interface FormField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'select' | 'radio' | 'checkbox' | 'date' | 'time' | 'file';
+  required?: boolean;
+  placeholder?: string;
+  helperText?: string;
+  options?: { label: string; value: string }[];
+  minLength?: number;
+  maxLength?: number;
+  /** Regular expression the answer must match, with an optional message. */
+  pattern?: string;
+  patternMessage?: string;
+  defaultValue?: string;
+  /** Shown only when another field has this value. */
+  conditional?: { dependsOnKey: string; equals: string };
+  allowedExtensions?: string[];
+  /** Bytes. */
+  maxFileSize?: number;
+}
+
+/**
+ * Registration form attached to events (and optionally specific ticket types).
+ * `scope`: one response per booking, or one per attendee (ticket unit).
+ * Editing the fields bumps `version`; answers to an old version are refused.
+ */
+@Entity('registration_forms')
+export class RegistrationForm {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column() title!: string;
+  @Column({ type: 'text', default: '' }) description!: string;
+  @Column({ default: 1 }) version!: number;
+  @Column({ default: true }) isActive!: boolean;
+  @Column({ type: 'varchar', default: 'booking' }) scope!: 'booking' | 'attendee';
+  @Column({ type: 'jsonb', default: () => "'[]'" }) eventIds!: string[];
+  /** Ticket types the form applies to; empty = all. */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) ticketIds!: string[];
+  @Column({ type: 'jsonb', default: () => "'[]'" }) fields!: FormField[];
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+@Entity('form_responses')
+export class FormResponse {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) formId!: string;
+  @Column() version!: number;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ type: 'uuid' }) userId!: string;
+  @Index() @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) approvalRequestId!: string | null;
+  /** Attendee number (0-based) for per-attendee forms. */
+  @Column({ type: 'int', nullable: true }) attendee!: number | null;
+  @Column({ type: 'jsonb' }) answers!: Record<string, unknown>;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** File uploaded for a form answer (stored under UPLOAD_DIR). */
+@Entity('form_uploads')
+export class FormUpload {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Column() name!: string;
+  @Column() mime!: string;
+  @Column() size!: number;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+export type ApprovalStatus = 'pending_review' | 'approved' | 'rejected' | 'cancelled' | 'booked';
+
+@Entity('approval_requests')
+export class ApprovalRequest {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column({ type: 'uuid' }) userId!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ type: 'uuid' }) tierId!: string;
+  @Column() quantity!: number;
+  @Column({ type: 'varchar', default: 'pending_review' }) status!: ApprovalStatus;
+  @Column({ type: 'varchar', nullable: true }) rejectionReason!: string | null;
+  /** Registration answers given with the request (used when the ticket is issued). */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) formResponses!: unknown[];
+  /** Booking that bought (or was issued for) this request. */
+  @Column({ type: 'uuid', nullable: true }) bookingId!: string | null;
+  @Column({ type: 'uuid', nullable: true }) decidedBy!: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) decidedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Post-event survey: an in-app form, or a redirect to an external form. */
+@Entity('event_surveys')
+export class EventSurvey {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index({ unique: true }) @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ default: 'How was the event?' }) title!: string;
+  @Column({ type: 'varchar', default: 'form' }) mode!: 'form' | 'redirect';
+  @Column({ type: 'jsonb', default: () => "'[]'" }) fields!: FormField[];
+  @Column({ type: 'varchar', nullable: true }) redirectUrl!: string | null;
+  @Column({ default: 0 }) redirectDelaySeconds!: number;
+  @Column({ default: 'Thank you!' }) successTitle!: string;
+  @Column({ default: 'Your feedback helps us make the next one better.' }) successMessage!: string;
+  @Column({ type: 'varchar', nullable: true }) ctaLabel!: string | null;
+  @Column({ type: 'varchar', nullable: true }) ctaUrl!: string | null;
+  @Column({ default: true }) isActive!: boolean;
+}
+
+@Entity('survey_responses')
+@Unique('uq_survey_response_user', ['surveyId', 'userId'])
+export class SurveyResponse {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ type: 'uuid' }) surveyId!: string;
+  @Index() @Column({ type: 'uuid' }) eventId!: string;
+  @Column({ type: 'uuid' }) userId!: string;
+  @Column({ type: 'jsonb' }) answers!: Record<string, unknown>;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
+  RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
 ];

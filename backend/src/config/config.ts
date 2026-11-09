@@ -58,6 +58,8 @@ export interface AppConfig {
     coinsCashbackPct: number;
   };
   bookingHoldSec: number;
+  /** Where form file uploads are stored (mount a volume in production). */
+  uploadDir: string;
   /** Pre-checkout seat hold (POST booking/seat-reserve). */
   seatHoldSec: number;
   sweeperEnabled: boolean;
@@ -187,6 +189,7 @@ export function loadConfig(): AppConfig {
       coinsCashbackPct: num('COINS_CASHBACK_PCT', 0),
     },
     bookingHoldSec: num('BOOKING_HOLD_SECONDS', 600),
+    uploadDir: process.env.UPLOAD_DIR || 'uploads',
     seatHoldSec: num('SEAT_HOLD_SECONDS', 600),
     sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test'),
     rateLimit: {

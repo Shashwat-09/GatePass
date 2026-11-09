@@ -12,6 +12,21 @@ CREATE TABLE public.account_deletions (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE public.approval_requests (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid NOT NULL,
+    "eventId" uuid NOT NULL,
+    "tierId" uuid NOT NULL,
+    quantity integer NOT NULL,
+    status character varying DEFAULT 'pending_review'::character varying NOT NULL,
+    "rejectionReason" character varying,
+    "formResponses" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "bookingId" uuid,
+    "decidedBy" uuid,
+    "decidedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.artists (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     slug character varying NOT NULL,
@@ -110,6 +125,21 @@ CREATE TABLE public.event_sponsors (
     priority integer DEFAULT 0 NOT NULL
 );
 
+CREATE TABLE public.event_surveys (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "eventId" uuid NOT NULL,
+    title character varying DEFAULT 'How was the event?'::character varying NOT NULL,
+    mode character varying DEFAULT 'form'::character varying NOT NULL,
+    fields jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "redirectUrl" character varying,
+    "redirectDelaySeconds" integer DEFAULT 0 NOT NULL,
+    "successTitle" character varying DEFAULT 'Thank you!'::character varying NOT NULL,
+    "successMessage" character varying DEFAULT 'Your feedback helps us make the next one better.'::character varying NOT NULL,
+    "ctaLabel" character varying,
+    "ctaUrl" character varying,
+    "isActive" boolean DEFAULT true NOT NULL
+);
+
 CREATE TABLE public.event_watchers (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     "eventId" uuid NOT NULL,
@@ -161,6 +191,28 @@ CREATE TABLE public.events (
     "organizerState" character varying,
     "ticketNotes" text,
     "stagePosition" character varying DEFAULT 'top'::character varying NOT NULL
+);
+
+CREATE TABLE public.form_responses (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "formId" uuid NOT NULL,
+    version integer NOT NULL,
+    "eventId" uuid NOT NULL,
+    "userId" uuid NOT NULL,
+    "bookingId" uuid,
+    "approvalRequestId" uuid,
+    attendee integer,
+    answers jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE public.form_uploads (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "userId" uuid NOT NULL,
+    name character varying NOT NULL,
+    mime character varying NOT NULL,
+    size integer NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE public.migrations (
@@ -237,6 +289,19 @@ CREATE TABLE public.refresh_tokens (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE public.registration_forms (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    title character varying NOT NULL,
+    description text DEFAULT ''::text NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    scope character varying DEFAULT 'booking'::character varying NOT NULL,
+    "eventIds" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "ticketIds" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    fields jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.seat_reservations (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     "eventId" uuid NOT NULL,
@@ -268,6 +333,15 @@ CREATE TABLE public.seat_sections (
     accessible jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
+CREATE TABLE public.survey_responses (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    "surveyId" uuid NOT NULL,
+    "eventId" uuid NOT NULL,
+    "userId" uuid NOT NULL,
+    answers jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.ticket_tiers (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     "eventId" uuid NOT NULL,
@@ -289,7 +363,10 @@ CREATE TABLE public.ticket_tiers (
     "sessionId" uuid,
     "passType" character varying DEFAULT 'single'::character varying NOT NULL,
     "validFrom" date,
-    "validTo" date
+    "validTo" date,
+    "bundleNights" integer,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    "maxRequestsPerUser" integer DEFAULT 1 NOT NULL
 );
 
 CREATE TABLE public.ticket_transfers (
@@ -383,11 +460,20 @@ ALTER TABLE ONLY public.seat_sections
 ALTER TABLE ONLY public.tickets
     ADD CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.survey_responses
+    ADD CONSTRAINT "PK_349995c51959d139d8e485a58ea" PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.promo_redemptions
     ADD CONSTRAINT "PK_34a930e5657a7e0a837b0bb41c9" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.event_watchers
     ADD CONSTRAINT "PK_35ae7557ee7897f6a4d6d2ca64c" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.form_responses
+    ADD CONSTRAINT "PK_36a512e5574d0a366b40b26874e" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.form_uploads
+    ADD CONSTRAINT "PK_3e8695d97ff8a5a28d443f41b58" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.events
     ADD CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY (id);
@@ -400,6 +486,12 @@ ALTER TABLE ONLY public.ticket_transfers
 
 ALTER TABLE ONLY public.cities
     ADD CONSTRAINT "PK_4762ffb6e5d198cfec5606bc11e" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.approval_requests
+    ADD CONSTRAINT "PK_484806bb8ff331b851fc75973c0" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.event_surveys
+    ADD CONSTRAINT "PK_4880275dc318cc18f4ffb220b6a" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.account_deletions
     ADD CONSTRAINT "PK_4d5b2aea48b5d5777b3421ec05c" PRIMARY KEY (id);
@@ -427,6 +519,9 @@ ALTER TABLE ONLY public.seat_reservations
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.registration_forms
+    ADD CONSTRAINT "PK_bbefd7d76d4099a99d2d0172098" PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.bookings
     ADD CONSTRAINT "PK_bee6805982cc1e248e94ce94957" PRIMARY KEY (id);
@@ -457,6 +552,9 @@ ALTER TABLE ONLY public.check_ins
 
 ALTER TABLE ONLY public.seat_reservations
     ADD CONSTRAINT uq_seat_reservation UNIQUE ("eventId", "sectionKey", "seatKey");
+
+ALTER TABLE ONLY public.survey_responses
+    ADD CONSTRAINT uq_survey_response_user UNIQUE ("surveyId", "userId");
 
 CREATE INDEX "IDX_00b1ee696c4eb7916543d2a815" ON public.ticket_transfers USING btree ("fromUserId");
 
@@ -490,6 +588,8 @@ CREATE INDEX "IDX_48b267d894e32a25ebde4b207a" ON public.bookings USING btree (st
 
 CREATE INDEX "IDX_499f672f9ab635111c6988727c" ON public.ticket_tiers USING btree ("sessionId");
 
+CREATE INDEX "IDX_4c583ac21123a2b4d15a780e1c" ON public.approval_requests USING btree ("eventId");
+
 CREATE INDEX "IDX_51ed83c9a1acb790e7d51f1358" ON public.event_sessions USING btree ("eventId");
 
 CREATE INDEX "IDX_55e71c08f6e910d3984567a300" ON public.promo_redemptions USING btree ("promoId");
@@ -510,6 +610,8 @@ CREATE INDEX "IDX_73c68e89cc8f6d4b7fd30627a4" ON public.check_ins USING btree ("
 
 CREATE UNIQUE INDEX "IDX_8048e26d0a40fa42ffdb8e6eee" ON public.ticket_transfers USING btree ("codeHash") WHERE ("codeHash" IS NOT NULL);
 
+CREATE INDEX "IDX_81375960c2258485108718e831" ON public.survey_responses USING btree ("eventId");
+
 CREATE INDEX "IDX_831a5a06f879fb0bebf8965871" ON public.notifications USING btree ("createdAt");
 
 CREATE INDEX "IDX_83df767443e5071cbb9b2fad56" ON public.ticket_transfers USING btree ("fromTicketId");
@@ -518,7 +620,11 @@ CREATE INDEX "IDX_842598ebf1da29c4de2999d447" ON public.event_watchers USING btr
 
 CREATE INDEX "IDX_8a101375d173c39a7c1d02c9d7" ON public.tickets USING btree ("eventId");
 
+CREATE INDEX "IDX_8e9a32f15bd2485ea908787b63" ON public.form_responses USING btree ("formId");
+
 CREATE INDEX "IDX_9291589e1aa8b24959a5e2cc2c" ON public.promo_codes USING btree ("eventId");
+
+CREATE UNIQUE INDEX "IDX_9823ddfd063ac6d07da7212a7f" ON public.event_surveys USING btree ("eventId");
 
 CREATE UNIQUE INDEX "IDX_9add00bfd42ae2bbe830bab9aa" ON public.bookings USING btree (code);
 
@@ -534,13 +640,19 @@ CREATE INDEX "IDX_a9059a9111a2206081a347d3b6" ON public.ticket_tiers USING btree
 
 CREATE INDEX "IDX_b4b6eedd8891e7cf45c500081a" ON public.ticket_transfers USING btree ("toPhone");
 
+CREATE INDEX "IDX_b97fceb16f5a30d15a93a3bf4e" ON public.approval_requests USING btree ("userId");
+
 CREATE INDEX "IDX_c37e9818eeaad9543032f6a6f1" ON public.tickets USING btree ("ownerUserId");
+
+CREATE INDEX "IDX_cd4bb350a09b34e02b708ad3f5" ON public.form_responses USING btree ("eventId");
 
 CREATE INDEX "IDX_cddc3f77556a26ed4b536a3322" ON public.wallet_entries USING btree ("userId");
 
 CREATE INDEX "IDX_d4cdfe3a69b25527954b5957a5" ON public.tickets USING btree ("tierId");
 
 CREATE INDEX "IDX_d6ba170d54388257f185c84c7b" ON public.promo_redemptions USING btree ("userId");
+
+CREATE INDEX "IDX_d847b70879e3ac2934dd9a490f" ON public.form_uploads USING btree ("userId");
 
 CREATE UNIQUE INDEX "IDX_d8698856b9f9735db747084136" ON public.artists USING btree (slug);
 
@@ -551,4 +663,6 @@ CREATE INDEX "IDX_ea811029f9d388932b70fa0123" ON public.seat_sections USING btre
 CREATE INDEX "IDX_f48328147cdd16eaa6eec4c627" ON public.seat_reservations USING btree ("holdToken");
 
 CREATE INDEX "IDX_f95d476ef16fad91a50544b60c" ON public.bookings USING btree ("eventId");
+
+CREATE INDEX "IDX_ffcf7ad575482f388ef63328b0" ON public.form_responses USING btree ("bookingId");
 

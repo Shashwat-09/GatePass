@@ -5,12 +5,13 @@ import { ApiError } from '../common/api-error';
 import { signPath, signTicketQr } from '../common/signing';
 import { config } from '../config/config';
 import {
-  Booking, BookingItem, EventEntity, EventSession, PromoCode, PromoRedemption, SeatReservation, SeatSection, Ticket, Tier, User, WalletEntry,
+  ApprovalRequest, Booking, BookingItem, EventEntity, EventSession, FormResponse, PromoCode, PromoRedemption, SeatReservation, SeatSection, Ticket, Tier, User, WalletEntry,
 } from '../db/entities';
 import { currentPrice, FeeConfig, PromoError, quote, Quote, sameState } from '../pricing/pricing';
 import { KvStore } from '../infra/kv.service';
 import { eventBadge } from '../events/event-status';
 import { istDate } from '../common/ist';
+import { FormResponseInput, FormsService } from '../forms/forms.service';
 import { notify } from '../notifications/notify';
 import { PaymentGateway } from '../payments/gateway';
 
@@ -21,11 +22,15 @@ export interface CheckoutOptions {
   billingState?: string;
   /** Seat hold from POST booking/seat-reserve: the booking takes exactly those seats. */
   reservationToken?: string;
+  /** Registration form answers (see FormsService.check). */
+  formResponses?: FormResponseInput[];
 }
 
 export interface BookItemInput {
   tierId?: string;
   qty?: number;
+  /** Bundle passes: the chosen show for each night. */
+  sessionIds?: string[];
   sectionId?: string;
   row?: number;
   col?: number;
@@ -83,6 +88,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     private readonly ds: DataSource,
     private readonly gateway: PaymentGateway,
     private readonly kv: KvStore,
+    private readonly forms: FormsService,
   ) {}
 
   onModuleInit() {
@@ -135,6 +141,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
             ? await this.takeHold(m, event, userId, opts.reservationToken, id, expiresAt)
             : await this.claimSeats(m, event.id, await this.seatLines(m, event, items), { bookingId: id, holdToken: null, userId, expiresAt });
         await this.checkEventLimit(m, event, userId, lines);
+        const formRows = await this.checkForms(m, event.id, userId, lines, opts.formResponses);
 
         const priced = await this.price(m, event, user, lines, opts, true);
         const b = await m.save(m.create(Booking, {
@@ -152,6 +159,9 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         if (priced.promo) {
           await m.insert(PromoRedemption, { promoId: priced.promo.id, userId, bookingId: id, discountPaise: priced.q.promoDiscountPaise, status: 'held' });
         }
+        if (formRows.length) await m.save(FormResponse, formRows.map((r) => m.create(FormResponse, { ...r, bookingId: id })));
+        const approvalIds = lines.map((l) => l.approvalRequestId).filter((x): x is string => !!x);
+        if (approvalIds.length) await m.update(ApprovalRequest, { id: In(approvalIds) }, { bookingId: id });
         if (priced.q.coinsPaise > 0) {
           await m.insert(WalletEntry, { userId, amountPaise: -priced.q.coinsPaise, kind: 'spend', bookingId: id, note: `Booking ${b.code}` });
         }
@@ -347,12 +357,17 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   /** Validates GA items against tiers (stock, min qty, per-ticket limit) and prices them. */
   private async priceTiers(m: EntityManager, event: EventEntity, items: BookItemInput[], userId: string, lock: boolean): Promise<BookingItem[]> {
     const want = new Map<string, number>();
-    for (const it of items) {
+    const nights = new Map<string, string[]>();
+    for (const it of items ?? []) {
       if (it.sectionId != null || !it.tierId) {
         throw new ApiError('VALIDATION_ERROR', 'Choose a ticket type', { items: 'tierId is required' });
       }
       const q = Math.floor(Number(it.qty));
       if (!Number.isFinite(q) || q < 1) throw new ApiError('VALIDATION_ERROR', 'Quantity must be at least 1');
+      if (it.sessionIds?.length) {
+        if (nights.has(it.tierId)) throw new ApiError('VALIDATION_ERROR', 'Add each pass once');
+        nights.set(it.tierId, it.sessionIds);
+      }
       want.set(it.tierId, (want.get(it.tierId) ?? 0) + q);
     }
     const ids = [...want.keys()].sort();
@@ -391,13 +406,66 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       if (tier.passType === 'season' && tier.validTo && tier.validTo < istDate(new Date())) {
         throw new ApiError('VALIDATION_ERROR', 'This pass is no longer available.');
       }
+      const sessionIds = tier.passType === 'bundle' ? await this.bundleNights(m, event, tier, nights.get(tier.id) ?? []) : undefined;
+      const approvalRequestId = tier.requiresApproval ? await this.approvedRequest(m, userId, tier, qty, lock) : undefined;
       const p = currentPrice(tier);
       lines.push({
         tierId: tier.id, tierName: tier.name, qty, unitPricePaise: p.pricePaise, phaseName: p.phaseName ?? undefined,
-        sessionId: tier.sessionId,
+        sessionId: tier.sessionId, sessionIds, approvalRequestId,
       });
     }
     return lines;
+  }
+
+  /** Bundle pass: exactly one available show per night, for the required number of nights. */
+  private async bundleNights(m: EntityManager, event: EventEntity, tier: Tier, picked: string[]) {
+    const all = await m.findBy(EventSession, { eventId: event.id, isActive: true });
+    const live = all.filter((x) => (x.endsAt ?? new Date(x.startsAt.getTime() + 6 * 3600_000)).getTime() > Date.now());
+    const allNights = new Set(live.map((x) => istDate(x.startsAt)));
+    const need = tier.bundleNights ?? allNights.size;
+    const chosen = [...new Set(picked)].map((id) => live.find((x) => x.id === id));
+    if (chosen.some((x) => !x) || chosen.length !== picked.length) {
+      throw new ApiError('VALIDATION_ERROR', 'One of the shows you picked is no longer available.');
+    }
+    const days = chosen.map((x) => istDate(x!.startsAt));
+    if (new Set(days).size !== days.length) throw new ApiError('VALIDATION_ERROR', 'Pick one show per night.');
+    if (chosen.length !== need) {
+      throw new ApiError('VALIDATION_ERROR', `Pick ${need} night${need === 1 ? '' : 's'} for ${tier.name}.`, { sessionIds: `Pick ${need}` });
+    }
+    return chosen.sort((a, b) => a!.startsAt.getTime() - b!.startsAt.getTime()).map((x) => x!.id);
+  }
+
+  /** Request-to-book tickets: an approved request for at least `qty` that isn't in another live checkout. */
+  private async approvedRequest(m: EntityManager, userId: string, tier: Tier, qty: number, lock: boolean) {
+    const qb = m.createQueryBuilder(ApprovalRequest, 'r')
+      .where('r."userId" = :userId AND r."tierId" = :tierId', { userId, tierId: tier.id }).orderBy('r."createdAt"', 'ASC');
+    if (lock) qb.setLock('pessimistic_write');
+    const reqs = await qb.getMany();
+    for (const r of reqs.filter((x) => x.status === 'approved')) {
+      if (r.bookingId) {
+        const b = await m.findOneBy(Booking, { id: r.bookingId });
+        if (b && b.status === 'pending' && b.expiresAt.getTime() > Date.now()) continue;
+      }
+      if (qty > r.quantity) {
+        throw new ApiError('VALIDATION_ERROR', `You were approved for ${r.quantity} ${tier.name} ticket${r.quantity === 1 ? '' : 's'}.`);
+      }
+      return r.id;
+    }
+    if (reqs.some((x) => x.status === 'pending_review')) {
+      throw new ApiError('VALIDATION_ERROR', 'Your request for this ticket is still under review.');
+    }
+    throw new ApiError('VALIDATION_ERROR', `${tier.name} needs the organiser's approval. Send a request first.`);
+  }
+
+  /** Registration answers: given at checkout, or saved with the approval request being bought. */
+  private async checkForms(m: EntityManager, eventId: string, userId: string, lines: BookingItem[], given?: FormResponseInput[]) {
+    let responses = given;
+    const reqIds = lines.map((l) => l.approvalRequestId).filter((x): x is string => !!x);
+    if (!responses?.length && reqIds.length) {
+      const reqs = await m.findBy(ApprovalRequest, { id: In(reqIds) });
+      responses = reqs.flatMap((r) => r.formResponses as FormResponseInput[]);
+    }
+    return this.forms.check(m, eventId, userId, lines.map((l) => ({ tierId: l.tierId, qty: l.qty ?? 1 })), responses ?? []);
   }
 
   /** Units of one ticket type the user holds (owned tickets + live pending bookings). */
@@ -644,6 +712,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       await m.save(b);
       await this.issueTickets(m, b, event);
       await m.update(PromoRedemption, { bookingId: b.id }, { status: 'used' });
+      const approvalIds = b.items.map((i) => i.approvalRequestId).filter((x): x is string => !!x);
+      if (approvalIds.length) await m.update(ApprovalRequest, { id: In(approvalIds) }, { status: 'booked', bookingId: b.id });
       const cashbackPct = config().pricing.coinsCashbackPct;
       const net = b.basePaise - b.discountPaise;
       if (cashbackPct > 0 && net > 0) {
@@ -709,12 +779,31 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
 
   private async issueTickets(m: EntityManager, b: Booking, event: EventEntity) {
     const tiers = await m.find(Tier, { where: { id: In(b.items.filter((i) => i.tierId).map((i) => i.tierId!)) } });
-    const sessIds = tiers.map((t) => t.sessionId).filter((x): x is string => !!x);
+    const sessIds = [
+      ...tiers.map((t) => t.sessionId).filter((x): x is string => !!x),
+      ...b.items.flatMap((i) => i.sessionIds ?? []),
+    ];
     const sessions = sessIds.length ? await m.findBy(EventSession, { id: In(sessIds) }) : [];
     for (const it of b.items) {
-      const id = randomUUID();
       const qty = it.qty ?? 1;
       const tier = tiers.find((t) => t.id === it.tierId);
+      if (it.sessionIds?.length) {
+        // Bundle: one ticket per chosen night, each valid only for its show.
+        for (const sid of it.sessionIds) {
+          const sess = sessions.find((x) => x.id === sid)!;
+          const id = randomUUID();
+          await m.insert(Ticket, {
+            id, bookingId: b.id, ownerUserId: b.userId, eventId: event.id, tierId: it.tierId ?? null,
+            sessionId: sid, passType: 'bundle', validFrom: null, validTo: null,
+            eventTitle: event.title, venueName: sess.venueName, startDate: sess.startsAt,
+            tierName: it.tierName ?? '', seatLabel: sess.label ?? null,
+            qrToken: signTicketQr(id, event.id), status: 'active',
+            quantity: qty, entriesUsed: 0, entriesTotal: qty * (tier?.entryPerTicket ?? 1), entryPerTicket: tier?.entryPerTicket ?? 1,
+          });
+        }
+        continue;
+      }
+      const id = randomUUID();
       const sess = sessions.find((x) => x.id === tier?.sessionId);
       const season = tier?.passType === 'season';
       const days = season && tier!.validFrom && tier!.validTo

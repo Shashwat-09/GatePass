@@ -7,7 +7,7 @@ import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { signPath } from '../common/signing';
-import { EventEntity, Ticket, User } from '../db/entities';
+import { EventEntity, EventSurvey, Ticket, User } from '../db/entities';
 import { RateLimit } from '../infra/rate-limit.guard';
 import { TransfersService, transferableUnits } from '../transfers/transfers.service';
 
@@ -38,6 +38,7 @@ export class TicketsController {
     const events = new Map((evIds.length ? await this.events.findBy({ id: In(evIds) }) : []).map((e) => [e.id, e]));
     const fromIds = [...new Set(rows.map((t) => t.receivedFromUserId).filter((x): x is string => !!x))];
     const from = new Map((fromIds.length ? await this.users.findBy({ id: In(fromIds) }) : []).map((u) => [u.id, u]));
+    const surveys = new Set((evIds.length ? await this.events.manager.findBy(EventSurvey, { eventId: In(evIds), isActive: true }) : []).map((x) => x.eventId));
     return rows.map((t) => {
       const e = events.get(t.eventId);
       const canShare = !!e && e.allowTransfers && t.status === 'active' && (!t.parentTicketId || e.allowResplit)
@@ -53,6 +54,9 @@ export class TicketsController {
         notes: e?.ticketNotes ?? null,
         mapLink: e?.mapLink ?? null,
         terms: e?.terms ?? null,
+        sessionId: t.sessionId, passType: t.passType, validFrom: t.validFrom, validTo: t.validTo,
+        // Post-event feedback opens once the event has started.
+        surveyAvailable: surveys.has(t.eventId) && !!e?.startDate && e.startDate.getTime() <= Date.now() && t.status !== 'cancelled',
         receivedFrom: t.receivedFromUserId ? from.get(t.receivedFromUserId)?.name ?? 'A friend' : null,
         // Invoices belong to the buyer, not to people who received a share.
         invoiceUrl: t.receivedFromUserId ? null : invoiceUrl(t.bookingId),

@@ -19,6 +19,13 @@ class ItemDto {
   @IsOptional() @IsString() @Matches(/^[\w-]{1,40}$/) sectionId?: string;
   @IsOptional() @IsInt() @Min(0) @Max(500) row?: number;
   @IsOptional() @IsInt() @Min(0) @Max(500) col?: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(31) @IsUUID('all', { each: true }) sessionIds?: string[];
+}
+class FormResponseDto {
+  @IsUUID() formId!: string;
+  @IsInt() @Min(1) version!: number;
+  @IsOptional() @IsInt() @Min(0) @Max(50) attendee?: number;
+  @IsObject() answers!: Record<string, unknown>;
 }
 class BookDto {
   @IsUUID() eventId!: string;
@@ -28,6 +35,8 @@ class BookDto {
   items!: ItemDto[];
   @IsOptional() @IsString() @Matches(/^[A-Za-z0-9_-]{2,40}$/, { message: 'Invalid promo code' }) promoCode?: string;
   @IsOptional() @IsString() @Matches(/^[\w-]{16,64}$/) reservationToken?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => FormResponseDto)
+  formResponses?: FormResponseDto[];
   @IsOptional() @IsBoolean() useCoins?: boolean;
   @IsOptional() @IsString() @Length(2, 40) billingState?: string;
 }
@@ -64,6 +73,7 @@ export class BookingController {
     }
     return this.booking.book(req.userId!, dto.eventId, dto.items, {
       promoCode: dto.promoCode, useCoins: dto.useCoins, billingState: dto.billingState, reservationToken: dto.reservationToken,
+      formResponses: dto.formResponses,
     }, idem);
   }
 

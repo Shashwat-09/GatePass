@@ -280,7 +280,7 @@ export class EventsController {
       shareUrl: eventShareUrl(e.slug),
       notifyMe: watching,
       sessions: sessions.map((x) => this.sessionView(x)),
-      isMultiSession: sessions.length > 1 || tiers.some((t) => t.passType === 'season'),
+      isMultiSession: sessions.length > 1 || tiers.some((t) => t.passType === 'season' || t.passType === 'bundle'),
       tiers: tiers.map((t) => {
         const p = currentPrice(t);
         return {
@@ -290,7 +290,8 @@ export class EventsController {
           nextPhase: p.nextPhase,
           offer: offerActive(t.offer) ? { ...t.offer, label: offerLabel(t.offer) } : null,
           remaining: Math.max(0, t.quantity - t.sold - t.reserved), minQty: t.minQty, entryPerTicket: t.entryPerTicket,
-          maxPerUser: t.maxPerUser,
+          maxPerUser: t.maxPerUser, requiresApproval: t.requiresApproval, maxRequestsPerUser: t.maxRequestsPerUser,
+          bundleNights: t.passType === 'bundle' ? (t.bundleNights ?? new Set(sessions.map((x) => istDate(x.startsAt))).size) : null,
         };
       }),
     };
@@ -337,6 +338,20 @@ export class EventsController {
         tierId: t.id, name: t.name, pricePaise: currentPrice(t).pricePaise, validFrom: t.validFrom, validTo: t.validTo,
         remaining: Math.max(0, t.quantity - t.sold - t.reserved),
       })),
+      // Bundle passes: choose one show per night (legacy bundleConfig.datesWithOptions).
+      bundles: tiers.filter((t) => t.passType === 'bundle').map((t) => {
+        const nights = new Map<string, EventSession[]>();
+        for (const x of sessions) nights.set(istDate(x.startsAt), [...(nights.get(istDate(x.startsAt)) ?? []), x]);
+        return {
+          tierId: t.id, name: t.name, description: t.description, pricePaise: currentPrice(t).pricePaise,
+          nights: t.bundleNights ?? nights.size, remaining: Math.max(0, t.quantity - t.sold - t.reserved),
+          minQty: t.minQty, maxPerUser: t.maxPerUser,
+          dates: [...nights.entries()].map(([date, opts]) => ({
+            date,
+            options: opts.map((x) => ({ sessionId: x.id, label: x.label, venueName: x.venueName, startsAt: x.startsAt.toISOString() })),
+          })),
+        };
+      }),
     };
   }
 

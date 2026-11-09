@@ -2,7 +2,7 @@ import { EntityManager } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { Notification } from '../db/entities';
 
-export type NotificationType = 'booking' | 'ticket_received' | 'transfer_claimed' | 'transfer_returned' | 'event_on_sale';
+export type NotificationType = 'booking' | 'ticket_received' | 'transfer_claimed' | 'transfer_returned' | 'event_on_sale' | 'approval';
 
 /**
  * Writes an inbox notification (inside the caller's transaction when given).
