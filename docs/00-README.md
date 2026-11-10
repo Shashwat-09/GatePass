@@ -54,6 +54,7 @@ It currently runs on in-app mock data (`AppConfig.useMockData = true`) so the UI
 - [10 — Feature parity vs legacy apps](10-Feature-Parity.md)
 - [11 — Design review (Apple HIG)](11-Design-Review.md)
 - [12 — GatePass Organiser (vendor app)](12-Organiser-App.md)
+- [13 — Customer app design brief (for design tools)](13-Customer-App-Design-Brief.md)
 - [Deployment guide](DEPLOYMENT.md)
 - [Release checklist & data safety](RELEASE.md)
 - Legal drafts: [privacy policy](legal/privacy-policy.md), [terms](legal/terms.md)
