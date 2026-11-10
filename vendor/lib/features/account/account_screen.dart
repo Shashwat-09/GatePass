@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/session.dart';
@@ -21,6 +22,20 @@ class AccountScreen extends StatefulWidget {
 class _AccountScreenState extends State<AccountScreen> {
   int _waiting = 0;
   String _device = '';
+
+  Widget _toggle(IconData icon, String title, bool value, void Function(bool) apply, String key) => GroupRow(
+        icon: icon,
+        title: title,
+        chevron: false,
+        trailing: CupertinoSwitch(
+          value: value,
+          onChanged: (v) {
+            setState(() => apply(v));
+            SharedPreferences.getInstance().then((p) => p.setBool(key, v));
+            if (v) Delight.tap();
+          },
+        ),
+      );
 
   @override
   void initState() {
@@ -97,6 +112,10 @@ class _AccountScreenState extends State<AccountScreen> {
             GroupRow(title: 'Scanner ID', value: _device),
           ],
         ),
+        InsetGroup(header: 'Sounds & Vibration', footer: 'The scanner chimes for ADMIT and buzzes twice for a ticket that can’t get in.', children: [
+          _toggle(CupertinoIcons.speaker_2, 'Sounds', Delight.sounds, (v) => Delight.sounds = v, 'pref_sounds'),
+          _toggle(CupertinoIcons.waveform, 'Vibration', Delight.haptics, (v) => Delight.haptics = v, 'pref_haptics'),
+        ]),
         InsetGroup(children: [
           if (me.canManage)
             GroupRow(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../core/constants.dart';
 import '../../services/network/api_service.dart';
 import '../../services/storage/local_storage.dart';
@@ -71,22 +73,81 @@ class TicketRepository {
 
   /// Share [quantity] unused units: to a phone number, or as a link when [phone] is null.
   Future<ApiResult<TicketShareResult>> share(TicketModel t, int quantity, {String? phone}) async {
-    final r = await _api.request(Endpoints.splitTicket, method: Method.post, body: {
+    final r = await shareMany(t, [ShareRecipient(phone: phone, quantity: quantity)]);
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(r.data!.shares.first);
+  }
+
+  /// Share with several people in one request (one QR each). The sender's
+  /// offline copy refreshes in the background so the result shows at once.
+  Future<ApiResult<MultiShareResult>> shareMany(TicketModel t, List<ShareRecipient> to) async {
+    if (AppConfig.useMockData) return ApiResult.ok(_mockShare(t, to));
+    final r = await _api.request(Endpoints.shareTicket, method: Method.post, body: {
       'ticketId': t.id,
-      'quantity': quantity,
-      if (phone != null) 'phone': phone,
+      'recipients': to.map((x) => x.toJson()).toList(),
     });
     if (!r.isOk) return r.cast();
     final d = r.data as Map<String, dynamic>;
-    final result = TicketShareResult(
-      TransferModel.fromJson(d),
-      TicketModel.fromJson(d['ticket'] as Map<String, dynamic>),
-      d['shareUrl']?.toString(),
-      d['code']?.toString(),
-      d['delivered'] == true,
-    );
-    await syncOffline(); // the sender's QR changed — refresh the offline copy
-    return ApiResult.ok(result);
+    final ticket = TicketModel.fromJson(d['ticket'] as Map<String, dynamic>);
+    final shares = (d['transfers'] as List).cast<Map<String, dynamic>>().map((x) => TicketShareResult(
+          TransferModel.fromJson(x),
+          ticket,
+          x['shareUrl']?.toString(),
+          x['code']?.toString(),
+          x['delivered'] == true,
+        )).toList();
+    unawaited(_rememberRecipients(to));
+    unawaited(syncOffline()); // the sender's QR changed — refresh the offline copy
+    return ApiResult.ok(MultiShareResult(shares, ticket));
+  }
+
+  MultiShareResult _mockShare(TicketModel t, List<ShareRecipient> to) {
+    final total = to.fold<int>(0, (n, x) => n + x.quantity);
+    final left = t.quantity - total;
+    final ticket = TicketModel.fromJson({
+      ...t.toJson(),
+      'quantity': left,
+      'entryTotal': t.entryTotal - total,
+      'transferableUnits': t.transferableUnits - total,
+      'status': left == 0 ? 'transferred' : t.status,
+    });
+    var i = 0;
+    final shares = to.map((x) {
+      final link = x.phone == null;
+      final code = link ? 'DEMO${(DateTime.now().millisecondsSinceEpoch + i++).toRadixString(36).toUpperCase()}' : null;
+      return TicketShareResult(
+        TransferModel(
+          id: 'demo-${i++}', direction: 'sent', status: link ? 'pending' : 'claimed', quantity: x.quantity,
+          eventTitle: t.eventTitle, method: link ? 'link' : 'phone', counterpart: link ? 'Anyone with the link' : x.label,
+        ),
+        ticket,
+        code == null ? null : 'https://gatepass.app/t/$code',
+        code,
+        !link,
+      );
+    }).toList();
+    unawaited(_rememberRecipients(to));
+    return MultiShareResult(shares, ticket);
+  }
+
+  /// People you've shared with, newest first (on this phone only).
+  List<ShareRecipient> recentRecipients() {
+    final items = _storage.getJson(StorageKeys.recentRecipients)?['items'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((e) => ShareRecipient(phone: e['phone']?.toString(), name: e['name']?.toString()))
+        .where((r) => r.phone != null && RegExp(r'^[6-9]\d{9}$').hasMatch(r.phone!))
+        .toList();
+  }
+
+  Future<void> _rememberRecipients(List<ShareRecipient> to) async {
+    final fresh = to.where((x) => x.phone != null).toList();
+    if (fresh.isEmpty) return;
+    final keep = [
+      ...fresh,
+      ...recentRecipients().where((r) => !fresh.any((f) => f.phone == r.phone)),
+    ].take(12).map((r) => {'phone': r.phone, if (r.name != null) 'name': r.name}).toList();
+    await _storage.setJson(StorageKeys.recentRecipients, {'items': keep});
   }
 
   Future<ApiResult<SharePreview>> preview(String code) async {

@@ -24,8 +24,10 @@ import 'package:gatepass/features/profile/edit_profile_screen.dart';
 import 'package:gatepass/features/vouchers/vouchers_screen.dart';
 import 'package:gatepass/features/booking/select_seat_screen.dart';
 import 'package:gatepass/features/booking/select_ticket_screen.dart';
+import 'package:gatepass/features/tickets/share_ticket_sheet.dart';
 import 'package:gatepass/features/tickets/ticket_view_screen.dart';
 import 'package:gatepass/features/vouchers/voucher_detail_screen.dart';
+import 'package:gatepass/widgets/common.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
@@ -52,8 +54,8 @@ Future<void> _loadFonts() async {
   }
   await family('MaterialIcons', ['$_fontDir/MaterialIcons-Regular.otf']);
   // Brand fonts bundled with the app (pubspec fonts aren't loaded in tests).
-  await family('Fraunces', ['SemiBold', 'SemiBoldItalic', 'Bold'].map((w) => 'assets/fonts/Fraunces-$w.ttf').toList());
-  await family('Inter', ['Regular', 'Medium', 'SemiBold', 'Bold'].map((w) => 'assets/fonts/Inter-$w.ttf').toList());
+  await family('packages/gatepass_ui/Fraunces', ['SemiBold', 'SemiBoldItalic', 'Bold'].map((w) => 'packages/gatepass_ui/assets/fonts/Fraunces-$w.ttf').toList());
+  await family('packages/gatepass_ui/Inter', ['Regular', 'Medium', 'SemiBold', 'Bold'].map((w) => 'packages/gatepass_ui/assets/fonts/Inter-$w.ttf').toList());
   final cupertino = Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev').listSync().whereType<Directory>().where((d) => d.path.contains('cupertino_icons-')).last;
   await family('packages/cupertino_icons/CupertinoIcons', ['${cupertino.path}/assets/CupertinoIcons.ttf']);
 }
@@ -176,5 +178,37 @@ void main() {
     testWidgets('city ${mode.name}', (t) => shoot(t, 'city', () => const CityPickerScreen(), mode: mode));
     testWidgets('events ${mode.name}', (t) => shoot(t, 'event-list', () => const EventListScreen(title: 'Events in Pune'), mode: mode));
     testWidgets('edit-profile ${mode.name}', (t) => shoot(t, 'edit-profile', () => const EditProfileScreen(), mode: mode));
+    testWidgets('share ${mode.name}', (t) async {
+      await d.storage.setJson(StorageKeys.recentRecipients, {
+        'items': [
+          {'phone': '9123456780', 'name': 'Meera Iyer'},
+          {'phone': '9988776655', 'name': 'Arjun Rao'},
+          {'phone': '9812345670', 'name': 'Kabir'},
+          {'phone': '9001122334'},
+        ],
+      });
+      final tk = {...(fx('my_tickets')['data']['items'] as List).first as Map<String, dynamic>, 'quantity': 4, 'entryTotal': 4, 'transferableUnits': 4};
+      await shoot(t, 'share', () => Scaffold(body: Align(alignment: Alignment.bottomCenter, child: Material(child: ShareSheet(ticket: TicketModel.fromJson(tk))))), mode: mode, before: () async {
+        await t.tap(find.text('Meera'));
+        await t.pumpAndSettle();
+        await t.tap(find.byTooltip('Add one').first);
+        await t.pumpAndSettle();
+        await t.enterText(find.byKey(const Key('share-phone')), '9876543210');
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('share-add')));
+      });
+    });
+    testWidgets('sent ${mode.name}', (t) async {
+      await shoot(t, 'sent', () => Builder(builder: (ctx) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => showSuccess(ctx, title: 'Sent!', message: 'Meera and 1 more have the tickets now.', kind: SuccessKind.sent, hold: const Duration(seconds: 30)));
+          return TicketViewScreen(ticket: TicketModel.fromJson((fx('my_tickets')['data']['items'] as List).first as Map<String, dynamic>));
+        }), mode: mode, settle: false, before: () async {
+          for (var i = 0; i < 9; i++) {
+            await t.pump(const Duration(milliseconds: 100)); // card in, check drawn
+          }
+        });
+      await t.pump(const Duration(seconds: 31)); // let the card close itself
+      await t.pumpAndSettle();
+    });
   }
 }

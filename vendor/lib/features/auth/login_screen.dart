@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
+import 'package:gatepass_ui/utsav_art.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
@@ -53,17 +54,27 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SizedBox(height: AppSpacing.xl),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(color: context.colors.tintFill, borderRadius: BorderRadius.circular(AppRadius.md)),
-                child: const Icon(CupertinoIcons.qrcode_viewfinder, color: Colors.white, size: 32),
+              const SizedBox(height: AppSpacing.md),
+              // Utsav hero: the jaali panel, as on the customer app's tickets.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: JaaliPanel(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('FOR EVENT TEAMS & SELLERS',
+                            style: context.text.labelSmall!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                        const SizedBox(height: 8),
+                        Text('GatePass\nOrganiser', style: context.serif(30, color: Colors.white, height: 1.05)),
+                      ]),
+                    ),
+                    const Icon(CupertinoIcons.qrcode_viewfinder, color: UtsavArt.marigold, size: 44),
+                  ]),
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text('GatePass Organiser', style: context.text.headlineMedium),
-              const SizedBox(height: AppSpacing.sm),
-              Text('Check in guests, follow sales and manage your events. Sign in with your organiser or gate staff number.',
+              Text('Check in guests, follow sales, sell and manage your events. Sign in with the number on your account.',
                   style: context.text.bodyLarge!.copyWith(color: context.colors.secondaryLabel)),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { In, Not, Repository } from 'typeorm';
 import { invoiceUrl } from '../booking/booking.service';
 import { ApiError } from '../common/api-error';
@@ -16,6 +17,15 @@ class SplitDto {
   @IsInt() @Min(1) @Max(50) quantity!: number;
   /** Send to this mobile number; omit to create a share link instead. */
   @IsOptional() @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone?: string;
+}
+class ShareRecipientDto {
+  @IsInt() @Min(1) @Max(50) quantity!: number;
+  /** Omit for a share link. */
+  @IsOptional() @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone?: string;
+}
+class ShareDto {
+  @IsUUID() ticketId!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => ShareRecipientDto) recipients!: ShareRecipientDto[];
 }
 class ClaimDto {
   @IsString() @Length(6, 40) code!: string;
@@ -119,11 +129,22 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard)
   @Post('split')
   @HttpCode(200)
-  @RateLimit({ bucket: 'split', limit: 30, windowSec: 60 })
+  @RateLimit({ bucket: 'split', limit: 60, windowSec: 60 })
   async split(@Req() req: AuthedRequest, @Body() dto: SplitDto) {
     const r = await this.transfers.split(req.userId!, dto.ticketId, dto.quantity, dto.phone);
     const [ticket] = await this.views([r.ticket]);
     return { ...r, ticket };
+  }
+
+  /** Share with several people at once (each gets their own QR). */
+  @UseGuards(JwtAuthGuard)
+  @Post('share')
+  @HttpCode(200)
+  @RateLimit({ bucket: 'split', limit: 60, windowSec: 60 })
+  async share(@Req() req: AuthedRequest, @Body() dto: ShareDto) {
+    const r = await this.transfers.shareMany(req.userId!, dto.ticketId, dto.recipients.map((x) => ({ quantity: x.quantity, phone: x.phone ?? null })));
+    const [ticket] = await this.views([r.ticket]);
+    return { transfers: r.transfers, ticket };
   }
 
   @UseGuards(JwtAuthGuard)

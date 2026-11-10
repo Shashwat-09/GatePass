@@ -45,6 +45,9 @@ Future<void> _loadFonts() async {
     await family(name, roboto);
   }
   await family('MaterialIcons', ['$_fontDir/MaterialIcons-Regular.otf']);
+  // Brand fonts from the shared design package (pubspec fonts aren't loaded in tests).
+  await family('packages/gatepass_ui/Fraunces', ['SemiBold', 'SemiBoldItalic', 'Bold'].map((w) => '../packages/gatepass_ui/assets/fonts/Fraunces-$w.ttf').toList());
+  await family('packages/gatepass_ui/Inter', ['Regular', 'Medium', 'SemiBold', 'Bold'].map((w) => '../packages/gatepass_ui/assets/fonts/Inter-$w.ttf').toList());
   final cupertino = Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev').listSync().whereType<Directory>().where((d) => d.path.contains('cupertino_icons-')).last;
   await family('packages/cupertino_icons/CupertinoIcons', ['${cupertino.path}/assets/CupertinoIcons.ttf']);
 }
@@ -77,7 +80,7 @@ void main() {
     addTearDown(t.view.reset);
     await t.pumpWidget(RepaintBoundary(
       key: key,
-      child: GetMaterialApp(debugShowCheckedModeBanner: false, theme: AppTheme.light(), darkTheme: AppTheme.dark(), themeMode: mode, home: build()),
+      child: GetMaterialApp(debugShowCheckedModeBanner: false, theme: GatePassTheme.light(), darkTheme: GatePassTheme.dark(), themeMode: mode, home: build()),
     ));
     settle ? await t.pumpAndSettle() : await t.pump(const Duration(seconds: 1));
     if (before != null) {

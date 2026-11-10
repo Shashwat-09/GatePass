@@ -14,8 +14,9 @@ class OrganiserApp extends StatelessWidget {
   Widget build(BuildContext context) => GetMaterialApp(
         title: VendorConfig.appName,
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
+        // Same "Utsav" brand as the customer app (packages/gatepass_ui).
+        theme: GatePassTheme.light(),
+        darkTheme: GatePassTheme.dark(),
         themeMode: ThemeMode.system,
         home: home ?? const LaunchScreen(),
       );

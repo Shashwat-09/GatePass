@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
@@ -49,12 +48,9 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<void> _onCode(String code, {bool fromCamera = true}) async {
     final out = await g.check(code, fromCamera: fromCamera);
     if (out == null) return;
-    if (out.admitted) {
-      HapticFeedback.mediumImpact();
-    } else {
-      HapticFeedback.heavyImpact();
-      Future.delayed(const Duration(milliseconds: 140), HapticFeedback.heavyImpact);
-    }
+    // Chime + double tap for ADMIT, low tone + strong buzz otherwise: staff
+    // can tell without looking, even in a loud venue.
+    out.admitted ? Delight.success() : Delight.error();
   }
 
   Future<void> _typeCode() async {
@@ -105,7 +101,7 @@ class _ScanScreenState extends State<ScanScreen> {
     final demo = Session.to.api is DemoVendorApi ? Session.to.api as DemoVendorApi : null;
     // The camera screen is always dark, like the system camera.
     return Theme(
-      data: AppTheme.dark(),
+      data: GatePassTheme.dark(),
       child: Builder(builder: (context) {
         return Scaffold(
           backgroundColor: Colors.black,

@@ -183,14 +183,16 @@ class _BuyScreenState extends State<BuyScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (!r.isOk) {
+      Delight.error();
       setState(() => _error = r.error);
       return;
     }
     if (r.data!.ticketsSent) {
+      Delight.sent();
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: Icon(CupertinoIcons.checkmark_circle_fill, color: ctx.colors.success, size: 44),
+          icon: const SuccessCheck(size: 56),
           title: const Text('Tickets Sent'),
           content: Text('${r.data!.quantity} tickets are in the GatePass app for ${r.data!.recipients.map((x) => '+91 ${x.phone}').join(', ')}. Pay your distributor ${formatPaise(r.data!.totalPaise)}.'),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))],
@@ -338,6 +340,7 @@ class _PayScreenState extends State<PayScreen> {
     });
     final r = await Session.to.api.submitUtr(_o.id, _utr.text.trim());
     if (!mounted) return;
+    r.isOk ? Delight.success() : Delight.error();
     setState(() {
       _busy = false;
       _error = r.error;

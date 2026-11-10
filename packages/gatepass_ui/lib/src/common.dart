@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'delight.dart';
 import 'theme.dart';
 
 /// Primary call-to-action button with a built-in loading state.
@@ -19,17 +20,58 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // The one prominent action on a screen (`buttons.md` › Style).
+    final tap = loading || onPressed == null
+        ? null
+        : () {
+            Delight.press();
+            onPressed!();
+          };
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton(
-        onPressed: loading ? null : onPressed,
-        child: loading
-            ? Row(mainAxisSize: MainAxisSize.min, children: [
-                SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.secondaryLabel)),
-                const SizedBox(width: 10),
-                Text(label),
-              ])
-            : Text(label),
+      child: PressScale(
+        enabled: tap != null,
+        child: ElevatedButton(
+          onPressed: tap,
+          child: loading
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.secondaryLabel)),
+                  const SizedBox(width: 10),
+                  Text(label),
+                ])
+              : Text(label),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shrinks its child slightly while pressed (the iOS button "give").
+class PressScale extends StatefulWidget {
+  const PressScale({super.key, required this.child, this.enabled = true, this.scale = 0.97});
+  final Widget child;
+  final bool enabled;
+  final double scale;
+  @override
+  State<PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<PressScale> {
+  bool _down = false;
+  void _set(bool v) {
+    if (widget.enabled && v != _down) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _set(true),
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: AnimatedScale(
+        scale: _down ? widget.scale : 1,
+        duration: Duration(milliseconds: _down ? 70 : 160),
+        curve: _down ? Curves.easeOut : Curves.easeOutBack,
+        child: widget.child,
       ),
     );
   }
@@ -44,9 +86,15 @@ class SecondaryButton extends StatelessWidget {
   final bool expand;
   @override
   Widget build(BuildContext context) {
+    final tap = onPressed == null
+        ? null
+        : () {
+            Delight.tap();
+            onPressed!();
+          };
     final b = icon == null
-        ? OutlinedButton(onPressed: onPressed, child: Text(label))
-        : OutlinedButton.icon(onPressed: onPressed, icon: Icon(icon, size: 20), label: Text(label));
+        ? OutlinedButton(onPressed: tap, child: Text(label))
+        : OutlinedButton.icon(onPressed: tap, icon: Icon(icon, size: 20), label: Text(label));
     return expand ? SizedBox(width: double.infinity, child: b) : b;
   }
 }
@@ -233,7 +281,12 @@ class GroupRow extends StatelessWidget {
     final c = context.colors;
     final showChevron = chevron ?? (onTap != null && !destructive);
     return InkWell(
-      onTap: onTap,
+      onTap: onTap == null
+          ? null
+          : () {
+              Delight.tap(sound: false);
+              onTap!();
+            },
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
         child: Padding(
@@ -383,7 +436,12 @@ class QtyStepper extends StatelessWidget {
             label: tip,
             child: InkResponse(
               key: key,
-              onTap: onTap,
+              onTap: onTap == null
+                  ? null
+                  : () {
+                      Delight.tap();
+                      onTap();
+                    },
               radius: 22,
               child: SizedBox(
                 width: 44,
@@ -406,7 +464,15 @@ class QtyStepper extends StatelessWidget {
         btn(CupertinoIcons.minus, onMinus, 'Remove one', minusKey),
         SizedBox(
           width: 30,
-          child: Text('$value', textAlign: TextAlign.center, style: context.text.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          // The number rolls up or down as it changes.
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, a) => FadeTransition(
+              opacity: a,
+              child: ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)), child: child),
+            ),
+            child: Text('$value', key: ValueKey(value), textAlign: TextAlign.center, style: context.text.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+          ),
         ),
         btn(CupertinoIcons.plus, onPlus, 'Add one', plusKey),
       ]),

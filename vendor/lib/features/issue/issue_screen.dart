@@ -101,13 +101,15 @@ class _IssueScreenState extends State<IssueScreen> {
     if (!mounted) return;
     setState(() => _sending = false);
     if (!r.isOk) {
+      Delight.error();
       setState(() => _error = r.error);
       return;
     }
+    Delight.sent();
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: Icon(CupertinoIcons.checkmark_circle_fill, color: ctx.colors.success, size: 44),
+        icon: const SuccessCheck(size: 56),
         title: const Text('Tickets Sent'),
         content: Text('Booking ${r.data!.bookingCode}. The tickets are in the GatePass app for +91 $phone as soon as they sign in.'),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))],

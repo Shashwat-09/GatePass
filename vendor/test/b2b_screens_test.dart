@@ -78,6 +78,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Received ₹1,200?'), findsOneWidget);
     await t.tap(find.text('Yes, Received'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 500));
+    expect(find.text('Confirmed'), findsOneWidget); // the green "done" moment
+    await t.pump(const Duration(seconds: 2)); // closes itself
     await t.pumpAndSettle();
     expect(find.text('Nothing waiting for you'), findsOneWidget);
     final o = (await api.distributorOrders(status: 'paid')).data!.items;

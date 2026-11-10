@@ -196,7 +196,7 @@ The customer app wears the **Utsav** brand: ivory paper, deep peacock teal and s
 
 All text pairs meet WCAG AA (4.5:1) on canvas, grouped canvas and cells; tertiary is decorative only. Never put white text on saffron (2.7:1); use ink on saffron or marigold.
 
-**Type.** Display: **Fraunces** SemiBold (headlines, event titles, big dates, prices, section titles). Body: **Inter** (400–700; tabular figures for money and counts). Both are bundled (SIL OFL, `assets/fonts/`, static weights subset to Latin + ₹). `context.serif(size)` for one-off serif numerals; `context.eyebrow` for the letter-spaced ochre line ("THE PROGRAMME · WEEK 47").
+**Type.** Display: **Fraunces** SemiBold (headlines, event titles, big dates, prices, section titles). Body: **Inter** (400–700; tabular figures for money and counts). Both are bundled in the shared design package (SIL OFL, `packages/gatepass_ui/assets/fonts/`, static weights subset to Latin + ₹) and used by both apps. `context.serif(size)` for one-off serif numerals; `context.eyebrow` for the letter-spaced ochre line ("THE PROGRAMME · WEEK 47").
 
 **Ornament.** The **jaali** lattice (`JaaliPainter`/`JaaliPanel`) only on ticket headers and hero art. Events without a picture get generated **arch art** (`ArchArt`: an arch under a crescent over the lattice, colours varied per event). Collection cards use the art inks: teal, marigold, maroon.
 

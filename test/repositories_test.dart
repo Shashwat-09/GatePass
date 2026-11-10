@@ -173,22 +173,52 @@ void main() {
     });
 
     test('share by link returns the URL and the sender’s updated ticket', () async {
-      d.backend.json('POST', 'api/ticket/split', {
-        'id': 'tr1', 'direction': 'sent', 'status': 'pending', 'quantity': 2, 'eventTitle': 'Neon Nights', 'method': 'link',
-        'code': 'ABCDEF123456', 'shareUrl': 'https://api.example.org/t/ABCDEF123456', 'delivered': false,
+      d.backend.json('POST', 'api/ticket/share', {
+        'transfers': [
+          {'id': 'tr1', 'direction': 'sent', 'status': 'pending', 'quantity': 2, 'eventTitle': 'Neon Nights', 'method': 'link',
+            'code': 'ABCDEF123456', 'shareUrl': 'https://api.example.org/t/ABCDEF123456', 'delivered': false},
+        ],
         'ticket': {...ticketJson('t1'), 'quantity': 1, 'qrToken': 'GP2.new'},
       });
       d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
       final r = await sl<TicketRepository>().share(TicketModel.fromJson(ticketJson('t1')), 2);
-      expect(d.backend.callsTo('api/ticket/split').single.body, {'ticketId': 't1', 'quantity': 2});
+      expect(d.backend.callsTo('api/ticket/share').single.body, {'ticketId': 't1', 'recipients': [{'quantity': 2}]});
       expect(r.data!.shareUrl, endsWith('/t/ABCDEF123456'));
       expect(r.data!.ticket.qrPayload, 'GP2.new');
       expect(r.data!.transfer.isPending, isTrue);
+      expect(sl<TicketRepository>().recentRecipients(), isEmpty); // links aren't people
+    });
+
+    test('share with several people at once; they become one-tap recents', () async {
+      d.backend.json('POST', 'api/ticket/share', {
+        'transfers': [
+          {'id': 'a', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'N', 'method': 'phone', 'delivered': true},
+          {'id': 'b', 'status': 'pending', 'quantity': 2, 'eventTitle': 'N', 'method': 'phone', 'delivered': false},
+        ],
+        'ticket': {...ticketJson('t1'), 'quantity': 1},
+      });
+      d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+      final repo = sl<TicketRepository>();
+      final r = await repo.shareMany(TicketModel.fromJson(ticketJson('t1')), const [
+        ShareRecipient(phone: '9876543210', name: 'Riya Shah', quantity: 1),
+        ShareRecipient(phone: '9123456780', quantity: 2),
+      ]);
+      expect(r.data!.shares, hasLength(2));
+      expect(r.data!.delivered, 1);
+      expect(d.backend.callsTo('api/ticket/share').single.body['recipients'], [
+        {'quantity': 1, 'phone': '9876543210'},
+        {'quantity': 2, 'phone': '9123456780'},
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      final recent = repo.recentRecipients();
+      expect(recent.map((x) => x.phone), ['9876543210', '9123456780']);
+      expect(recent.first.label, 'Riya Shah');
+      expect(recent.last.label, '+91 91234 56780');
     });
 
     test('share to a phone sends the number; claim, claim-back and export call the API', () async {
-      d.backend.json('POST', 'api/ticket/split', {
-        'id': 'tr2', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'N', 'method': 'phone', 'delivered': true,
+      d.backend.json('POST', 'api/ticket/share', {
+        'transfers': [{'id': 'tr2', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'N', 'method': 'phone', 'delivered': true}],
         'ticket': ticketJson('t1'),
       });
       d.backend.json('POST', 'api/ticket/claim', {'ticket': ticketJson('t9')});
@@ -197,7 +227,7 @@ void main() {
       d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
       final repo = sl<TicketRepository>();
       expect((await repo.share(TicketModel.fromJson(ticketJson('t1')), 1, phone: '9876543210')).data!.delivered, isTrue);
-      expect(d.backend.callsTo('api/ticket/split').single.body['phone'], '9876543210');
+      expect(d.backend.callsTo('api/ticket/share').single.body['recipients'], [{'quantity': 1, 'phone': '9876543210'}]);
       expect((await repo.claim(' abc123def456 ')).data!.id, 't9');
       expect(d.backend.callsTo('api/ticket/claim').single.body, {'code': 'abc123def456'});
       expect((await repo.claimBack('tr2')).data!.status, 'cancelled');

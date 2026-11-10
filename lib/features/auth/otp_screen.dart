@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
@@ -15,12 +17,41 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen> {
   final _auth = Get.find<AuthController>();
+  final _field = TextEditingController();
+  final _shake = StreamController<ErrorAnimationType>();
   String _code = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _listenForSms();
+  }
+
+  /// Android: fill the code from the SMS as soon as it arrives.
+  Future<void> _listenForSms() async {
+    final code = await OtpAutofill.listen();
+    if (!mounted || code == null) return;
+    _field.text = code; // onCompleted verifies
+  }
+
+  @override
+  void dispose() {
+    OtpAutofill.cancel();
+    _shake.close();
+    _field.dispose();
+    super.dispose();
+  }
 
   Future<void> _verify() async {
     FocusScope.of(context).unfocus();
     final ok = await _auth.verify(_code);
-    if (!ok) return;
+    if (!mounted) return;
+    if (!ok) {
+      Delight.error();
+      _shake.add(ErrorAnimationType.shake);
+      return;
+    }
+    Delight.success();
     // New users (no name yet) complete their profile first.
     Get.offAllNamed(_auth.needsProfile ? Routes.profileSetup : Routes.home);
   }
@@ -47,6 +78,12 @@ class _OtpScreenState extends State<OtpScreen> {
               PinCodeTextField(
                 appContext: context,
                 length: 6,
+                controller: _field,
+                errorAnimationController: _shake,
+                autoDisposeControllers: false, // this screen owns them
+                autoFocus: true,
+                // iOS offers the code from Messages above the keyboard.
+                enablePinAutofill: true,
                 keyboardType: TextInputType.number,
                 animationType: AnimationType.fade,
                 backgroundColor: Colors.transparent,

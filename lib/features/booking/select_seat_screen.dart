@@ -296,7 +296,10 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         button: !booked,
         child: GestureDetector(
           key: Key('seat-${sec.id}-$key'),
-          onTap: booked ? null : () => c.toggleSeat(sec, r, col),
+          onTap: booked ? null : () {
+            Delight.tap();
+            c.toggleSeat(sec, r, col);
+          },
           child: Container(
             width: 32,
             height: 32,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
@@ -16,9 +18,31 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
+  final _field = TextEditingController();
+  final _shake = StreamController<ErrorAnimationType>();
   String _code = '';
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenForSms();
+  }
+
+  /// Android: fill the code from the SMS as soon as it arrives (iOS offers it above the keyboard).
+  Future<void> _listenForSms() async {
+    final code = await OtpAutofill.listen();
+    if (mounted && code != null) _field.text = code;
+  }
+
+  @override
+  void dispose() {
+    OtpAutofill.cancel();
+    _shake.close();
+    _field.dispose();
+    super.dispose();
+  }
 
   Future<void> _verify() async {
     if (_code.length != 6 || _loading) return;
@@ -30,12 +54,15 @@ class _OtpScreenState extends State<OtpScreen> {
     final r = await s.api.login(widget.phone, _code);
     if (!mounted) return;
     if (!r.isOk) {
+      Delight.error();
+      _shake.add(ErrorAnimationType.shake);
       setState(() {
         _loading = false;
         _error = r.error;
       });
       return;
     }
+    Delight.success();
     s.me.value = r.data;
     Get.offAll(() => r.data!.hasAccess ? const VendorHome() : const NoAccessScreen());
   }
@@ -43,6 +70,8 @@ class _OtpScreenState extends State<OtpScreen> {
   Future<void> _resend() async {
     final r = await Session.to.api.sendOtp(widget.phone);
     if (!mounted) return;
+    OtpAutofill.cancel();
+    _listenForSms();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.isOk ? 'Code sent again' : r.error!)));
   }
 
@@ -61,6 +90,10 @@ class _OtpScreenState extends State<OtpScreen> {
                 appContext: context,
                 length: 6,
                 autoFocus: true,
+                controller: _field,
+                errorAnimationController: _shake,
+                autoDisposeControllers: false, // this screen owns them
+                enablePinAutofill: true,
                 keyboardType: TextInputType.number,
                 animationType: AnimationType.fade,
                 backgroundColor: Colors.transparent,

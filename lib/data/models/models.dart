@@ -785,6 +785,26 @@ class TicketShareResult {
   TicketShareResult(this.transfer, this.ticket, this.shareUrl, this.code, this.delivered);
 }
 
+/// Someone to share with: a phone number, or a link when [phone] is null.
+class ShareRecipient {
+  final String? phone;
+  final String? name;
+  final int quantity;
+  const ShareRecipient({this.phone, this.name, this.quantity = 1});
+  ShareRecipient copyWith({int? quantity}) => ShareRecipient(phone: phone, name: name, quantity: quantity ?? this.quantity);
+  Map<String, dynamic> toJson() => {'quantity': quantity, if (phone != null) 'phone': phone};
+  /// "Riya" or "+91 98765 43210".
+  String get label => (name != null && name!.trim().isNotEmpty) ? name!.trim() : (phone == null ? 'Link' : '+91 ${phone!.substring(0, 5)} ${phone!.substring(5)}');
+}
+
+/// Result of sharing with several people at once.
+class MultiShareResult {
+  final List<TicketShareResult> shares;
+  final TicketModel ticket;
+  const MultiShareResult(this.shares, this.ticket);
+  int get delivered => shares.where((s) => s.delivered).length;
+}
+
 /// What a share link contains (before claiming).
 class SharePreview {
   final String status;

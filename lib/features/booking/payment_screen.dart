@@ -48,8 +48,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool get _expired => c.quote.value?.expiresAt != null && _left.isNegative;
 
   Future<void> _onPaid(bool ok) async {
-    if (ok && mounted) {
-      PaymentScreen.goToConfirmation();
+    if (!mounted) return;
+    if (ok) {
+      PaymentScreen.goToConfirmation(); // green check + chime there
+    } else if (c.error.value != null && !c.error.value!.startsWith('Payment cancelled')) {
+      Delight.error();
     }
   }
 

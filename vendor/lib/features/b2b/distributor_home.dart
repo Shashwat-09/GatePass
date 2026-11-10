@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -471,7 +473,13 @@ class _DistributorOrdersScreenState extends State<DistributorOrdersScreen> {
     final r = await Session.to.api.confirmOrder(o.id);
     if (!mounted) return;
     _busy.remove(o.id);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.isOk ? 'Confirmed. Tickets sent.' : r.error!)));
+    if (r.isOk) {
+      final n = o.recipients.length;
+      unawaited(showSuccess(context, title: 'Confirmed', message: 'Tickets sent to $n number${n == 1 ? '' : 's'}.', kind: SuccessKind.sent));
+    } else {
+      Delight.error();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.error!)));
+    }
     _load();
   }
 

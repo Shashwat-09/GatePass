@@ -56,7 +56,24 @@ function ended(e: EventEntity) {
 export class TransfersService {
   constructor(private readonly ds: DataSource) {}
 
+  /** Share to one person (a phone number) or as a link. */
   async split(userId: string, ticketId: string, quantity: number, phone?: string) {
+    const r = await this.shareMany(userId, ticketId, [{ quantity, phone }]);
+    const one = r.transfers[0];
+    return { ...one, code: one.code, shareUrl: one.shareUrl, delivered: one.delivered, ticket: r.ticket };
+  }
+
+  /**
+   * Share units of one ticket with several people in one go (one lock, one
+   * transaction): each recipient gets their own ticket and QR, and the
+   * sender's QR is re-issued once. Recipients with an account get the tickets
+   * at once; pushes go out the moment the transaction commits.
+   */
+  async shareMany(userId: string, ticketId: string, recipients: Array<{ quantity: number; phone?: string | null }>) {
+    if (!recipients.length) throw new ApiError('VALIDATION_ERROR', 'Add someone to share with');
+    const phones = recipients.map((r) => r.phone).filter((p): p is string => !!p);
+    if (new Set(phones).size !== phones.length) throw new ApiError('VALIDATION_ERROR', 'The same number is listed twice');
+
     const out = await this.ds.transaction(async (m) => {
       const t = await m.createQueryBuilder(Ticket, 't').setLock('pessimistic_write')
         .where('t.id = :id AND t."ownerUserId" = :uid', { id: ticketId, uid: userId }).getOne();
@@ -68,50 +85,55 @@ export class TransfersService {
       if (t.parentTicketId && !event.allowResplit) {
         throw new ApiError('VALIDATION_ERROR', 'Tickets you received can’t be passed on for this event');
       }
-      if (event.maxTransfersPerTicket != null && t.transfersOut >= event.maxTransfersPerTicket) {
-        throw new ApiError('VALIDATION_ERROR', `You can share this ticket at most ${event.maxTransfersPerTicket} times`);
+      if (event.maxTransfersPerTicket != null && t.transfersOut + recipients.length > event.maxTransfersPerTicket) {
+        const left = Math.max(0, event.maxTransfersPerTicket - t.transfersOut);
+        throw new ApiError('VALIDATION_ERROR', left ? `You can share this ticket ${left} more time${left === 1 ? '' : 's'}` : `You can share this ticket at most ${event.maxTransfersPerTicket} times`);
       }
       const available = transferableUnits(t);
-      if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
+      const total = recipients.reduce((n, r) => n + r.quantity, 0);
+      if (recipients.some((r) => !Number.isInteger(r.quantity) || r.quantity < 1) || total > available) {
         throw new ApiError('VALIDATION_ERROR', available ? `You can share up to ${available}` : 'No unused tickets left to share', {
           quantity: `1–${available}`,
         });
       }
 
       const sender = await m.findOneByOrFail(User, { id: userId });
-      let recipient: User | null = null;
-      if (phone) {
-        if (phone === sender.phone) throw new ApiError('VALIDATION_ERROR', 'That’s your own number');
-        recipient = await m.findOne(User, { where: { phone, deletedAt: IsNull() } });
-      }
+      if (phones.includes(sender.phone)) throw new ApiError('VALIDATION_ERROR', 'That’s your own number');
+      const users = phones.length ? await m.find(User, { where: { phone: In(phones), deletedAt: IsNull() } }) : [];
 
-      const entries = quantity * entriesPerUnit(t);
-      t.quantity -= quantity;
-      t.entriesTotal -= entries;
-      t.transfersOut += 1;
+      const per = entriesPerUnit(t);
+      t.quantity -= total;
+      t.entriesTotal -= total * per;
+      t.transfersOut += recipients.length;
       t.qrToken = signTicketQr(t.id, t.eventId); // invalidate any copy of the old QR
       if (t.quantity === 0) t.status = 'transferred';
       await m.save(t);
 
-      const id = randomUUID();
-      const code = phone ? null : claimCode(id);
-      const tr = m.create(TicketTransfer, {
-        id, eventId: t.eventId, fromTicketId: t.id, fromUserId: userId, toUserId: null,
-        toPhone: phone ?? null, quantity, entries, status: 'pending',
-        codeHash: code ? sha256(code) : null, createdTicketId: null, claimedAt: null, cancelledAt: null,
-      });
-      await m.save(tr);
-      if (recipient) await this.claimInTx(m, tr, recipient.id);
-      return { transferId: tr.id, code, delivered: !!recipient };
+      const made: Array<{ tr: TicketTransfer; code: string | null; to: User | null }> = [];
+      for (const r of recipients) {
+        const id = randomUUID();
+        const code = r.phone ? null : claimCode(id);
+        const tr = m.create(TicketTransfer, {
+          id, eventId: t.eventId, fromTicketId: t.id, fromUserId: userId, toUserId: null,
+          toPhone: r.phone ?? null, quantity: r.quantity, entries: r.quantity * per, status: 'pending',
+          codeHash: code ? sha256(code) : null, createdTicketId: null, claimedAt: null, cancelledAt: null,
+        });
+        await m.save(tr);
+        const to = r.phone ? users.find((u) => u.phone === r.phone) ?? null : null;
+        if (to) await this.claimInTx(m, tr, to.id, { src: t, sender, receiver: to, eventSlug: event.slug });
+        made.push({ tr, code, to });
+      }
+      return { t, sender, made };
     });
 
-    const view = await this.transferView(out.transferId, userId);
     return {
-      ...view,
-      code: out.code,
-      shareUrl: out.code ? shareUrl(out.code) : null,
-      delivered: out.delivered,
-      ticket: await this.ds.getRepository(Ticket).findOneByOrFail({ id: ticketId }),
+      ticket: out.t,
+      transfers: out.made.map(({ tr, code, to }) => ({
+        ...this.viewOf(tr, out.t, to, userId),
+        code,
+        shareUrl: code ? shareUrl(code) : null,
+        delivered: !!to,
+      })),
     };
   }
 
@@ -152,10 +174,14 @@ export class TransfersService {
     return n;
   }
 
-  private async claimInTx(m: EntityManager, tr: TicketTransfer, userId: string) {
-    const src = await m.findOneByOrFail(Ticket, { id: tr.fromTicketId });
-    const sender = await m.findOneBy(User, { id: tr.fromUserId });
-    const receiver = await m.findOneBy(User, { id: userId });
+  private async claimInTx(
+    m: EntityManager, tr: TicketTransfer, userId: string,
+    pre?: { src: Ticket; sender: User | null; receiver: User | null; eventSlug?: string },
+  ) {
+    const src = pre?.src ?? await m.findOneByOrFail(Ticket, { id: tr.fromTicketId });
+    const sender = pre ? pre.sender : await m.findOneBy(User, { id: tr.fromUserId });
+    const receiver = pre ? pre.receiver : await m.findOneBy(User, { id: userId });
+    const slug = pre?.eventSlug ? { eventSlug: pre.eventSlug } : {};
     const id = randomUUID();
     await m.insert(Ticket, {
       id, bookingId: src.bookingId, ownerUserId: userId, eventId: src.eventId, tierId: src.tierId,
@@ -173,10 +199,10 @@ export class TransfersService {
     await m.save(tr);
     const n = `${tr.quantity} ticket${tr.quantity === 1 ? '' : 's'}`;
     await notify(m, userId, 'ticket_received', 'You received tickets',
-      `${sender?.name ?? 'A friend'} sent you ${n} for ${src.eventTitle}.`, { ticketId: id, eventId: src.eventId });
+      `${sender?.name ?? 'A friend'} sent you ${n} for ${src.eventTitle}.`, { ticketId: id, eventId: src.eventId, ...slug });
     await notify(m, tr.fromUserId, 'transfer_claimed', 'Tickets delivered',
       `${receiver?.name ?? maskPhone(receiver?.phone ?? null) ?? 'Your friend'} now has the ${n} for ${src.eventTitle}.`,
-      { transferId: tr.id, eventId: src.eventId });
+      { transferId: tr.id, eventId: src.eventId, ...slug });
     return id;
   }
 
@@ -236,21 +262,26 @@ export class TransfersService {
     const t = new Map(tickets.map((x) => [x.id, x]));
     const u = new Map(users.map((x) => [x.id, x]));
     return rows.map((r) => {
-      const src = t.get(r.fromTicketId);
       const sent = r.fromUserId === userId;
-      const other = sent ? (r.toUserId ? u.get(r.toUserId) : null) : u.get(r.fromUserId);
-      const isLink = r.codeHash !== null;
-      return {
-        id: r.id, direction: sent ? 'sent' : 'received', status: r.status, quantity: r.quantity,
-        eventId: r.eventId, eventTitle: src?.eventTitle ?? '', startDate: src?.startDate ? src.startDate.toISOString() : null,
-        tierName: src?.tierName ?? '', seatLabel: src?.seatLabel ?? null,
-        method: isLink ? 'link' : 'phone',
-        counterpart: other?.name ?? maskPhone(other?.phone ?? r.toPhone) ?? (isLink ? 'Anyone with the link' : null),
-        // The sender can re-share a pending link at any time.
-        shareUrl: sent && isLink && r.status === 'pending' ? shareUrl(claimCode(r.id)) : null,
-        createdAt: r.createdAt.toISOString(),
-        claimedAt: r.claimedAt ? r.claimedAt.toISOString() : null,
-      };
+      const other = sent ? (r.toUserId ? u.get(r.toUserId) ?? null : null) : u.get(r.fromUserId) ?? null;
+      return this.viewOf(r, t.get(r.fromTicketId), other, userId);
     });
+  }
+
+  /** A transfer as the API shows it (no queries; callers pass what they loaded). */
+  private viewOf(r: TicketTransfer, src: Ticket | undefined, other: User | null, userId: string) {
+    const sent = r.fromUserId === userId;
+    const isLink = r.codeHash !== null;
+    return {
+      id: r.id, direction: sent ? 'sent' : 'received', status: r.status, quantity: r.quantity,
+      eventId: r.eventId, eventTitle: src?.eventTitle ?? '', startDate: src?.startDate ? new Date(src.startDate).toISOString() : null,
+      tierName: src?.tierName ?? '', seatLabel: src?.seatLabel ?? null,
+      method: isLink ? 'link' : 'phone',
+      counterpart: other?.name ?? maskPhone(other?.phone ?? r.toPhone) ?? (isLink ? 'Anyone with the link' : null),
+      // The sender can re-share a pending link at any time.
+      shareUrl: sent && isLink && r.status === 'pending' ? shareUrl(claimCode(r.id)) : null,
+      createdAt: (r.createdAt ?? new Date()).toISOString(),
+      claimedAt: r.claimedAt ? new Date(r.claimedAt).toISOString() : null,
+    };
   }
 }

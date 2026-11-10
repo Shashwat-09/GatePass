@@ -22,6 +22,9 @@ import 'package:gatepass/features/controllers/booking_controller.dart';
 import 'package:gatepass/features/profile/profile_screen.dart';
 import 'package:gatepass/features/tickets/claim_screen.dart';
 import 'package:gatepass/features/tickets/my_tickets_screen.dart';
+import 'package:gatepass/features/tickets/share_ticket_sheet.dart';
+import 'package:gatepass/core/di.dart';
+import 'package:gatepass/services/storage/local_storage.dart';
 import 'package:gatepass/features/tickets/ticket_view_screen.dart';
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -85,9 +88,12 @@ void main() {
   }
 
   testWidgets('Share sheet: send 1 of 2 to a phone number; QR updates', (t) async {
-    d.backend.json('POST', 'api/ticket/split', {
-      'id': 'tr1', 'direction': 'sent', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'Neon Nights', 'method': 'phone',
-      'counterpart': 'Ravi', 'delivered': true, 'ticket': {...ticketJson('t1'), 'quantity': 1, 'entryTotal': 1, 'transferableUnits': 1, 'qrToken': 'GP2.updated'},
+    d.backend.json('POST', 'api/ticket/share', {
+      'transfers': [
+        {'id': 'tr1', 'direction': 'sent', 'status': 'claimed', 'quantity': 1, 'eventTitle': 'Neon Nights', 'method': 'phone',
+          'counterpart': 'Ravi', 'delivered': true},
+      ],
+      'ticket': {...ticketJson('t1'), 'quantity': 1, 'entryTotal': 1, 'transferableUnits': 1, 'qrToken': 'GP2.updated'},
     });
     d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
     t.view.physicalSize = const Size(1080, 2400);
@@ -99,18 +105,64 @@ void main() {
     await t.tap(find.byKey(const Key('share-tickets')));
     await t.pumpAndSettle();
     expect(find.text('Share Tickets'), findsNWidgets(2)); // button + sheet title
-    await t.tap(find.text('Send to Number'));
-    await t.pumpAndSettle();
+    expect(find.text('Add Someone'), findsOneWidget); // nothing to send yet
     await t.enterText(find.byKey(const Key('share-phone')), '9876543210');
     await t.pumpAndSettle();
     await t.tap(find.text('Send 1 Ticket'));
+    await t.pump(); // request
+    await t.pump(const Duration(milliseconds: 400)); // "Sent!" moment
+    expect(find.text('Sent!'), findsOneWidget);
     await t.pumpAndSettle(const Duration(seconds: 5));
-    expect(d.backend.callsTo('api/ticket/split').single.body, {'ticketId': 't1', 'quantity': 1, 'phone': '9876543210'});
+    expect(d.backend.callsTo('api/ticket/share').single.body, {
+      'ticketId': 't1',
+      'recipients': [{'quantity': 1, 'phone': '9876543210'}],
+    });
     expect(find.text('Share Tickets'), findsNothing); // sheet closed
     expect(find.text('Send to a Friend'), findsOneWidget); // one ticket left
     final qr = t.widget<QrImageView>(find.byType(QrImageView));
     expect(qr, isNotNull);
     expect(find.textContaining('ADMIT 1', findRichText: true), findsOneWidget); // admits 1 now
+  });
+
+  testWidgets('Share sheet: several friends at once, recents are one tap, counts can’t exceed what you have', (t) async {
+    sl<LocalStorage>().setJson(StorageKeys.recentRecipients, {
+      'items': [
+        {'phone': '9123456780', 'name': 'Meera Iyer'},
+      ],
+    });
+    d.backend.json('POST', 'api/ticket/share', {
+      'transfers': [
+        {'id': 'a', 'status': 'claimed', 'quantity': 2, 'eventTitle': 'Neon Nights', 'method': 'phone', 'delivered': true},
+        {'id': 'b', 'status': 'pending', 'quantity': 1, 'eventTitle': 'Neon Nights', 'method': 'phone', 'delivered': false},
+      ],
+      'ticket': {...ticketJson('t1'), 'quantity': 1, 'entryTotal': 1, 'transferableUnits': 1},
+    });
+    d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(app(Builder(builder: (ctx) => Scaffold(body: ShareSheet(ticket: TicketModel.fromJson({...ticketJson('t1'), 'quantity': 4, 'entryTotal': 4, 'transferableUnits': 4}))))));
+    await t.pumpAndSettle();
+    expect(find.text('RECENT'), findsOneWidget);
+    await t.tap(find.text('Meera')); // one tap adds a recent person
+    await t.pumpAndSettle();
+    expect(find.text('Meera Iyer'), findsOneWidget);
+    await t.tap(find.byTooltip('Add one').first); // Meera gets 2
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('share-phone')), '9876543210');
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('share-add')));
+    await t.pumpAndSettle();
+    expect(find.text('98765 43210'), findsOneWidget);
+    expect(find.text('1 of 4 left to give'), findsOneWidget);
+    await t.tap(find.text('Send 3 Tickets'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(d.backend.callsTo('api/ticket/share').single.body['recipients'], [
+      {'quantity': 2, 'phone': '9123456780'},
+      {'quantity': 1, 'phone': '9876543210'},
+    ]);
+    await t.pumpAndSettle(const Duration(seconds: 8));
   });
 
   testWidgets('Shared tab lists transfers and claims back a pending one', (t) async {

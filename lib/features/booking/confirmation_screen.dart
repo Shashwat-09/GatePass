@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -7,8 +6,18 @@ import '../../app/theme.dart';
 import '../../widgets/common.dart';
 import '../controllers/booking_controller.dart';
 
-class ConfirmationScreen extends StatelessWidget {
+class ConfirmationScreen extends StatefulWidget {
   const ConfirmationScreen({super.key});
+  @override
+  State<ConfirmationScreen> createState() => _ConfirmationScreenState();
+}
+
+class _ConfirmationScreenState extends State<ConfirmationScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Delight.success();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,18 +31,8 @@ class ConfirmationScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // One short, calm entrance; none when the system asks for reduced motion.
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: MediaQuery.disableAnimationsOf(context) ? 1 : 0.8, end: 1),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                builder: (_, s, child) => Transform.scale(scale: s, child: child),
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: context.colors.success,
-                  child: const Icon(CupertinoIcons.checkmark, color: Colors.white, size: 56),
-                ),
-              ),
+              // The green check pops in and draws itself, with the success chime.
+              SuccessCheck(size: 96, play: !MediaQuery.disableAnimationsOf(context)),
               const SizedBox(height: AppSpacing.lg),
               Text('Booking Confirmed', style: context.text.headlineMedium),
               const SizedBox(height: AppSpacing.sm),

@@ -93,6 +93,31 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     await ctx.ds.getRepository(EventEntity).update({ id: eventId }, { maxTransfersPerTicket: null, allowResplit: true });
   });
 
+  it('shares with several people in one go: one QR each, the sender keeps the rest', async () => {
+    const t = await buy(buyer, 5);
+    const [a, b] = [await login(ctx), await login(ctx)];
+    const newcomer = `9${String(Date.now()).slice(-9)}`;
+    const share = (body: object) => ctx.http.post('/api/ticket/share').set(auth(buyer.token)).send(body);
+    const r = (await share({ ticketId: t.id, recipients: [{ phone: a.phone, quantity: 1 }, { phone: b.phone, quantity: 2 }, { phone: newcomer, quantity: 1 }] }).expect(200)).body.data;
+    expect(r.transfers).toHaveLength(3);
+    expect(r.transfers.map((x: { delivered: boolean }) => x.delivered)).toEqual([true, true, false]);
+    expect(r.ticket).toMatchObject({ quantity: 1, transferableUnits: 1 });
+    expect(r.ticket.qrToken).not.toBe(t.qrToken);
+    expect((await mine(a))[0]).toMatchObject({ quantity: 1 });
+    expect((await mine(b)).find((x: { receivedFrom: string | null }) => x.receivedFrom)).toMatchObject({ quantity: 2 });
+
+    // all-or-nothing: too many, a repeated number or your own number changes nothing
+    const t2 = await buy(buyer, 2);
+    await share({ ticketId: t2.id, recipients: [{ phone: a.phone, quantity: 2 }, { quantity: 1 }] }).expect(400);
+    await share({ ticketId: t2.id, recipients: [{ phone: a.phone, quantity: 1 }, { phone: a.phone, quantity: 1 }] }).expect(400);
+    await share({ ticketId: t2.id, recipients: [{ phone: buyer.phone, quantity: 1 }] }).expect(400);
+    expect((await ctx.ds.getRepository(Ticket).findOneByOrFail({ id: t2.id })).quantity).toBe(2);
+    // a link and a number together
+    const mixed = (await share({ ticketId: t2.id, recipients: [{ quantity: 1 }, { phone: a.phone, quantity: 1 }] }).expect(200)).body.data;
+    expect(mixed.transfers[0].shareUrl).toMatch(/\/t\/[A-Z0-9]{12}$/);
+    expect(mixed.transfers[1]).toMatchObject({ delivered: true, status: 'claimed' });
+  });
+
   it('split to a phone that has no account yet: held, then delivered when they sign in', async () => {
     const t = await buy(buyer, 2);
     const newcomer = `9${String(Date.now()).slice(-9)}`;

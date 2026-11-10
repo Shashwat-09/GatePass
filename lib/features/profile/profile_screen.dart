@@ -9,7 +9,9 @@ import '../../data/repositories/auth_repository.dart';
 import '../../services/analytics/analytics.dart';
 import '../../utils/links.dart';
 import '../../widgets/common.dart';
+import '../../core/constants.dart';
 import '../../core/format.dart';
+import '../../services/storage/local_storage.dart';
 import '../../data/repositories/booking_repository.dart';
 import 'edit_profile_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -38,6 +40,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _auth.fetchProfile();
     final r = await sl<BookingRepository>().coinBalance();
     if (mounted) setState(() => _coins = r.data);
+  }
+
+  Widget _toggle(IconData icon, String title, String subtitle, bool value, ValueChanged<bool> save) {
+    return GroupRow(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      chevron: false,
+      trailing: CupertinoSwitch(
+        value: value,
+        onChanged: (v) {
+          setState(() => save(v));
+          if (v) Delight.tap(); // a sample of what was just switched on
+        },
+      ),
+    );
   }
 
   @override
@@ -86,6 +104,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             GroupRow(icon: CupertinoIcons.gift, title: 'My Vouchers', onTap: () => Get.to(() => const VouchersScreen())),
             GroupRow(icon: CupertinoIcons.person_badge_plus, title: 'My Requests', onTap: () => Get.to(() => const MyRequestsScreen())),
             GroupRow(icon: CupertinoIcons.ticket, title: 'Claim Shared Tickets', onTap: () => Get.to(() => const ClaimScreen())),
+          ]),
+          InsetGroup(header: 'Sounds & Vibration', children: [
+            _toggle(CupertinoIcons.speaker_2, 'Sounds', 'A soft tick on taps and a chime when tickets arrive', Delight.sounds, (v) {
+              Delight.sounds = v;
+              sl<LocalStorage>().setBool(StorageKeys.sounds, v);
+            }),
+            _toggle(CupertinoIcons.waveform, 'Vibration', 'Gentle taps you can feel', Delight.haptics, (v) {
+              Delight.haptics = v;
+              sl<LocalStorage>().setBool(StorageKeys.haptics, v);
+            }),
           ]),
           InsetGroup(children: [
             GroupRow(icon: CupertinoIcons.pencil, title: 'Edit Account Details', onTap: _editProfile),

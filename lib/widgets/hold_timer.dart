@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 
 import '../app/theme.dart';
+import 'common.dart';
 
 /// Countdown for seats held on the server. Calls [onExpired] once at zero.
 class HoldTimer extends StatefulWidget {
@@ -18,6 +19,7 @@ class HoldTimer extends StatefulWidget {
 class _HoldTimerState extends State<HoldTimer> {
   Timer? _t;
   bool _fired = false;
+  bool _warned = false;
 
   @override
   void initState() {
@@ -28,12 +30,17 @@ class _HoldTimerState extends State<HoldTimer> {
   @override
   void didUpdateWidget(HoldTimer old) {
     super.didUpdateWidget(old);
-    if (old.expiresAt != widget.expiresAt) _fired = false;
+    if (old.expiresAt != widget.expiresAt) _fired = _warned = false;
   }
 
   void _tick() {
     if (!mounted) return;
     setState(() {});
+    // One gentle buzz when a minute is left.
+    if (!_warned && _left > Duration.zero && _left <= const Duration(seconds: 60)) {
+      _warned = true;
+      Delight.warning();
+    }
     if (!_fired && _left == Duration.zero) {
       _fired = true;
       widget.onExpired?.call();

@@ -39,7 +39,7 @@ void main() {
   for (final b in Brightness.values) {
     testWidgets('sign in → verify → events (${b.name})', (t) async {
       await boot(t, const LoginScreen(), brightness: b);
-      expect(find.text('GatePass Organiser'), findsOneWidget);
+      expect(find.text('GatePass\nOrganiser'), findsOneWidget);
       await t.enterText(find.byType(TextField), '9000000001');
       await t.pump();
       await t.tap(find.text('Send Code'));

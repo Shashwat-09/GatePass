@@ -1,12 +1,14 @@
 import { EntityManager } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { EventEntity, Notification } from '../db/entities';
+import { kickPushAfterCommit } from '../push/kick';
 
 export type NotificationType = 'booking' | 'ticket_received' | 'transfer_claimed' | 'transfer_returned' | 'event_on_sale' | 'approval' | 'voucher' | 'event_update';
 
 /**
  * Writes an inbox notification (inside the caller's transaction when given).
- * Push delivery happens afterwards from the outbox (PushService).
+ * Push delivery happens from the outbox (PushService), kicked as soon as the
+ * transaction commits.
  */
 export async function notify(
   m: EntityManager,
@@ -22,4 +24,5 @@ export async function notify(
     if (ev) data = { ...data, eventSlug: ev.slug };
   }
   await m.insert(Notification, { userId, type, title, body, data, readAt: null } as QueryDeepPartialEntity<Notification>);
+  kickPushAfterCommit(m); // push it out as soon as it's committed
 }

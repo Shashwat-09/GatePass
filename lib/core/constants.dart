@@ -93,6 +93,7 @@ class Endpoints {
   // post-purchase
   static const myTickets = 'api/ticket/my-tickets';
   static const splitTicket = 'api/ticket/split';
+  static const shareTicket = 'api/ticket/share'; // several recipients at once
   static const claimTicket = 'api/ticket/claim';
   static const claimBack = 'api/ticket/claim-back';
   static const transfers = 'api/ticket/transfers';
@@ -119,4 +120,7 @@ class StorageKeys {
   static const pendingEvent = 'pending_event_slug';
   static const attribution = 'attribution'; // last marketing touch {source,…,capturedAt}
   static const deviceId = 'device_id'; // random per install, sent as the device-id header
+  static const sounds = 'pref_sounds'; // tap + success sounds
+  static const haptics = 'pref_haptics'; // vibration feedback
+  static const recentRecipients = 'recent_recipients'; // people you shared with {items:[{phone,name}]}
 }

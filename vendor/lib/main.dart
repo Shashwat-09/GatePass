@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:gatepass_ui/widgets.dart' show Delight;
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'app/session.dart';
@@ -36,5 +38,10 @@ Future<void> main() async {
     store = FileGateStore();
   }
   Get.put(Session(api: api, store: store), permanent: true);
+  // Sounds and vibration (Account › Sounds & Vibration).
+  final prefs = await SharedPreferences.getInstance();
+  Delight.sounds = prefs.getBool('pref_sounds') ?? true;
+  Delight.haptics = prefs.getBool('pref_haptics') ?? true;
+  Delight.warmUp();
   runApp(const OrganiserApp());
 }

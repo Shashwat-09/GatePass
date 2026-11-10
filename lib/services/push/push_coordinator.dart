@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../core/di.dart';
 import '../../data/repositories/notification_repository.dart';
+import '../../data/repositories/ticket_repository.dart';
+import '../../features/tickets/my_tickets_screen.dart';
+import '../../widgets/common.dart';
 import 'notification_router.dart';
 import 'push_service.dart';
 
@@ -44,6 +48,16 @@ class PushCoordinator {
   }
 
   void _showInApp(PushMessageData m) {
+    final type = m.data['type']?.toString();
+    // Tickets just arrived from a friend (or a booking/B2B order confirmed):
+    // chime, and refresh the ticket list right away.
+    if (type == 'ticket_received' || type == 'booking') {
+      Delight.success();
+      if (Get.isRegistered<MyTicketsController>()) Get.find<MyTicketsController>().refreshAll();
+      unawaited(sl<TicketRepository>().syncOffline());
+    } else if (type == 'transfer_claimed') {
+      Delight.tap();
+    }
     final ctx = Get.context;
     if (ctx == null || (m.title == null && m.body == null)) return;
     ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(SnackBar(
