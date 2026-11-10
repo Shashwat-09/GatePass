@@ -33,9 +33,11 @@ jobs:
           - name: GatePass (customer)
             dir: .
             artifact: gatepass-ios
+            demo_defines: --dart-define=USE_MOCK=true --dart-define=PHASE2=true --dart-define=BASE_URL=https://api.staging.example.org/
           - name: GatePass Organiser
             dir: vendor
             artifact: gatepass-organiser-ios
+            demo_defines: --dart-define=USE_MOCK=true
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
@@ -70,6 +72,21 @@ jobs:
           name: ${{ matrix.artifact }}-unsigned
           path: ${{ matrix.dir }}/${{ matrix.artifact }}-unsigned.ipa
           retention-days: 7
+
+      # Demo build: built-in sample data, no server needed. For sideloading onto
+      # your own iPhone with a free Apple ID (Sideloadly / AltStore re-sign it).
+      - name: Demo build (sample data) for sideloading
+        run: |
+          flutter build ios --release --no-codesign ${{ matrix.demo_defines }}
+          rm -rf Payload && mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr ${{ matrix.artifact }}-demo.ipa Payload
+          du -h ${{ matrix.artifact }}-demo.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-demo
+          path: ${{ matrix.dir }}/${{ matrix.artifact }}-demo.ipa
+          retention-days: 30
 
       # ── TestFlight (only when the secrets exist) ──
       - name: App Store Connect key
