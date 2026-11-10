@@ -7,7 +7,7 @@ import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { signPath } from '../common/signing';
-import { EventEntity, EventSurvey, Ticket, User } from '../db/entities';
+import { Booking, EventEntity, EventSurvey, Ticket, User } from '../db/entities';
 import { RateLimit } from '../infra/rate-limit.guard';
 import { TransfersService, transferableUnits } from '../transfers/transfers.service';
 
@@ -38,13 +38,18 @@ export class TicketsController {
     const events = new Map((evIds.length ? await this.events.findBy({ id: In(evIds) }) : []).map((e) => [e.id, e]));
     const fromIds = [...new Set(rows.map((t) => t.receivedFromUserId).filter((x): x is string => !!x))];
     const from = new Map((fromIds.length ? await this.users.findBy({ id: In(fromIds) }) : []).map((u) => [u.id, u]));
+    const bookingIds = [...new Set(rows.map((t) => t.bookingId).filter((x): x is string => !!x))];
+    const bookings = new Map((bookingIds.length ? await this.events.manager.findBy(Booking, { id: In(bookingIds) }) : []).map((b) => [b.id, b]));
     const surveys = new Set((evIds.length ? await this.events.manager.findBy(EventSurvey, { eventId: In(evIds), isActive: true }) : []).map((x) => x.eventId));
     return rows.map((t) => {
       const e = events.get(t.eventId);
       const canShare = !!e && e.allowTransfers && t.status === 'active' && (!t.parentTicketId || e.allowResplit)
         && (e.maxTransfersPerTicket == null || t.transfersOut < e.maxTransfersPerTicket);
       return {
-        id: t.id, bookingId: t.bookingId, eventId: t.eventId, eventTitle: t.eventTitle, venueName: t.venueName,
+        id: t.id, bookingId: t.bookingId, eventId: t.eventId,
+        bookingCode: t.bookingId ? bookings.get(t.bookingId)?.code ?? null : null,
+        // What the buyer paid for the whole booking; not shown to people who received a share.
+        paidPaise: t.receivedFromUserId || !t.bookingId ? null : bookings.get(t.bookingId)?.totalPaise ?? null, eventTitle: t.eventTitle, venueName: t.venueName,
         tierName: t.tierName, seatLabel: t.seatLabel,
         startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
         qrToken: t.qrToken, status: t.status, quantity: t.quantity,

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Type } from 'class-transformer';
 import {
-  IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min,
+  ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min, ValidateNested,
 } from 'class-validator';
 import { randomBytes } from 'crypto';
 import { DataSource, In, IsNull, Not } from 'typeorm';
@@ -14,6 +15,11 @@ import { notify } from '../notifications/notify';
 
 const https = { protocols: ['https'], require_protocol: true };
 
+class ScheduleItemDto {
+  @IsString() @Length(1, 20) time!: string;
+  @IsString() @Length(1, 80) title!: string;
+  @IsOptional() @IsString() @Length(0, 160) subtitle?: string;
+}
 class EventDto {
   @IsOptional() @IsString() @Length(3, 120) title?: string;
   @IsOptional() @Matches(/^[a-z0-9-]{3,80}$/) slug?: string;
@@ -35,6 +41,8 @@ class EventDto {
   @IsOptional() @IsString() @Length(0, 2000) ticketNotes?: string;
   @IsOptional() @IsInt() @Min(0) @Max(25) ageLimit?: number;
   @IsOptional() @IsBoolean() allowTransfers?: boolean;
+  /** The evening's running order (shown as "The programme"). */
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ScheduleItemDto) schedule?: ScheduleItemDto[];
   @IsOptional() @IsBoolean() isWebOnly?: boolean;
   @IsOptional() @IsUrl(https) externalUrl?: string;
   /** Admin only: hand the event to an organiser account (phone). */
@@ -85,7 +93,7 @@ class IssueDto {
 
 const EDITABLE: (keyof EventDto)[] = [
   'title', 'description', 'cityId', 'venueName', 'venueAddress', 'mapLink', 'genre', 'language', 'cardImageUrl', 'bannerUrl',
-  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl',
+  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl', 'schedule',
 ];
 const DATES: (keyof EventDto)[] = ['startDate', 'endDate', 'opensAt', 'closesAt'];
 
@@ -105,7 +113,7 @@ function eventView(e: EventEntity) {
     endDate: e.endDate?.toISOString() ?? null, opensAt: e.opensAt?.toISOString() ?? null, closesAt: e.closesAt?.toISOString() ?? null,
     genre: e.genre, language: e.language, cardImageUrl: e.cardImageUrl, bannerUrl: e.bannerUrl, maxPerUser: e.maxPerUser, terms: e.terms,
     ticketNotes: e.ticketNotes, ageLimit: e.ageLimit, allowTransfers: e.allowTransfers, isWebOnly: e.isWebOnly, externalUrl: e.externalUrl,
-    hasSeatMap: e.hasSeatMap, organiserId: e.organiserId,
+    hasSeatMap: e.hasSeatMap, organiserId: e.organiserId, schedule: e.schedule ?? [],
   };
 }
 

@@ -173,12 +173,15 @@ class FilterOption {
   final String label;
   final int? min;
   final int? max;
-  const FilterOption(this.key, this.label, {this.min, this.max});
+  /// How many events are in this category (explore categories), when known.
+  final int? count;
+  const FilterOption(this.key, this.label, {this.min, this.max, this.count});
   factory FilterOption.fromJson(Map<String, dynamic> j) => FilterOption(
         (j['key'] ?? '').toString(),
         (j['label'] ?? '').toString(),
         min: (j['min'] as num?)?.toInt(),
         max: (j['max'] as num?)?.toInt(),
+        count: ((j['totalEvents'] ?? j['count']) as num?)?.toInt(),
       );
 }
 
@@ -433,6 +436,20 @@ class LabelValue {
   const LabelValue(this.label, this.value);
 }
 
+/// One line of an event's running order ("The programme").
+class ScheduleItem {
+  final String time;
+  final String title;
+  final String? subtitle;
+  const ScheduleItem(this.time, this.title, [this.subtitle]);
+  factory ScheduleItem.fromJson(Map<String, dynamic> j) {
+    final sub = j['subtitle']?.toString();
+    return ScheduleItem((j['time'] ?? '').toString(), (j['title'] ?? '').toString(), sub == null || sub.isEmpty ? null : sub);
+  }
+  /// Breaks (intervals) are drawn quieter.
+  bool get isBreak => RegExp(r'^(interval|intermission|break)\b', caseSensitive: false).hasMatch(title);
+}
+
 List<EventModel> _events(dynamic list) =>
     (list as List?)?.map((e) => EventModel.fromJson(e as Map<String, dynamic>)).toList() ?? const [];
 List<String> _strings(dynamic list) => (list as List?)?.map((e) => e.toString()).toList() ?? const [];
@@ -464,6 +481,11 @@ class EventModel {
   final List<String> tags;
   final List<String> highlights;
   final List<LabelValue> guide;
+  /// The evening's running order; empty when the organiser hasn't added one.
+  final List<ScheduleItem> schedule;
+  final int? durationMinutes;
+  /// e.g. "16+"; null or "0" means all ages.
+  final String? ageLimit;
   final List<String> prohibited;
   final List<LabelValue> faqs;
   final String? terms;
@@ -505,6 +527,9 @@ class EventModel {
     this.tags = const [],
     this.highlights = const [],
     this.guide = const [],
+    this.schedule = const [],
+    this.durationMinutes,
+    this.ageLimit,
     this.prohibited = const [],
     this.faqs = const [],
     this.terms,
@@ -558,6 +583,9 @@ class EventModel {
       guide: ((j['guide'] as List?) ?? const [])
           .map((g) => LabelValue((g['label'] ?? '').toString(), (g['value'] ?? '').toString()))
           .toList(),
+      schedule: ((j['schedule'] as List?) ?? const []).map((x) => ScheduleItem.fromJson(Map<String, dynamic>.from(x as Map))).where((x) => x.title.isNotEmpty).toList(),
+      durationMinutes: (j['durationMinutes'] as num?)?.toInt(),
+      ageLimit: j['ageLimit']?.toString(),
       prohibited: _strings(j['prohibited']),
       faqs: ((j['faqs'] as List?) ?? const []).map((f) => LabelValue((f['q'] ?? '').toString(), (f['a'] ?? '').toString())).toList(),
       terms: j['terms']?.toString(),
@@ -604,6 +632,10 @@ class TicketModel {
   bool get isSeason => passType == 'season';
   /// Post-event feedback is open for this event.
   final bool surveyAvailable;
+  /// Booking reference printed on the ticket ("GP-9R2T-77LC").
+  final String? bookingCode;
+  /// What the buyer paid for the booking (null for tickets received from a friend).
+  final int? paidPaise;
 
   TicketModel({
     required this.id,
@@ -628,6 +660,8 @@ class TicketModel {
     this.surveyAvailable = false,
     this.validFrom,
     this.validTo,
+    this.bookingCode,
+    this.paidPaise,
   }) : entryTotal = entryTotal ?? quantity;
 
   int get entriesLeft => (entryTotal - entryUsed).clamp(0, 1 << 30);
@@ -652,6 +686,8 @@ class TicketModel {
         notes: j['notes']?.toString(),
         mapLink: j['mapLink']?.toString(),
         passType: (j['passType'] ?? 'single').toString(),
+        bookingCode: j['bookingCode']?.toString(),
+        paidPaise: (j['paidPaise'] as num?)?.toInt(),
         surveyAvailable: j['surveyAvailable'] == true,
         validFrom: j['validFrom']?.toString(),
         validTo: j['validTo']?.toString(),
@@ -682,6 +718,8 @@ class TicketModel {
         'surveyAvailable': surveyAvailable,
         'validFrom': validFrom,
         'validTo': validTo,
+        'bookingCode': bookingCode,
+        'paidPaise': paidPaise,
       };
 }
 

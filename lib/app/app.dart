@@ -13,8 +13,8 @@ class GatePassApp extends StatelessWidget {
     return GetMaterialApp(
       title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: GatePassTheme.light(),
+      darkTheme: GatePassTheme.dark(),
       themeMode: ThemeMode.system,
       initialRoute: Routes.splash,
       getPages: Routes.pages,

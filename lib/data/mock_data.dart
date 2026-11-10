@@ -43,6 +43,14 @@ class MockData {
       genre: 'Comedy',
       gallery: const [],
       hasSeatMap: true,
+      durationMinutes: 120,
+      ageLimit: '18+',
+      schedule: const [
+        ScheduleItem('8:00 PM', 'Doors and warm-up', 'Your host sets the room'),
+        ScheduleItem('8:20 PM', 'Three new voices', 'Ten minutes each'),
+        ScheduleItem('9:00 PM', 'Interval', 'Bar open in the foyer'),
+        ScheduleItem('9:20 PM', 'Headline set', 'Forty minutes of all-new material'),
+      ],
       tiers: [
         TierModel(id: 't2a', name: 'Silver', pricePaise: 49900, remaining: 80),
         TierModel(id: 't2b', name: 'Gold', pricePaise: 79900, remaining: 40),
@@ -79,6 +87,22 @@ class MockData {
       status: 'active',
       date: DateTime.now().add(const Duration(days: 7)),
       quantity: 2,
+      tierName: 'Early Bird',
+      bookingCode: 'GP-9R2T-77LC',
+      paidPaise: 164594,
+    ),
+    TicketModel(
+      id: 'TKT-0002',
+      eventTitle: 'Standup Central — Comedy Showcase',
+      venueName: 'The Laugh House',
+      qrPayload: 'EVENTA|TKT-0002|demo',
+      status: 'active',
+      date: DateTime.now().add(const Duration(days: 3)),
+      quantity: 1,
+      tierName: 'Gold',
+      seatLabel: 'Gold · Row D Seat 4 · Gate 1',
+      bookingCode: 'GP-4K8M-21QX',
+      paidPaise: 82297,
     ),
   ];
 

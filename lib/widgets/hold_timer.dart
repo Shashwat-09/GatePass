@@ -56,17 +56,22 @@ class _HoldTimerState extends State<HoldTimer> {
     final l = _left;
     final time = '${l.inMinutes}:${(l.inSeconds % 60).toString().padLeft(2, '0')}';
     final pill = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: context.colors.warning.withValues(alpha: 0.15),
+        color: context.colors.accentSoft,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(CupertinoIcons.timer, size: 16, color: context.colors.warning),
-        const SizedBox(width: 4),
-        Text(widget.compact ? time : 'Seats held for $time',
-            style: TextStyle(color: context.colors.warning, fontWeight: FontWeight.w700)),
-      ]),
+      child: Semantics(
+        liveRegion: false,
+        label: 'Seats held for ${l.inMinutes} minutes ${l.inSeconds % 60} seconds',
+        excludeSemantics: true,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(CupertinoIcons.clock, size: 16, color: context.colors.accentText),
+          const SizedBox(width: 6),
+          Text(widget.compact ? time : 'Seats held for $time',
+              style: context.text.titleSmall!.copyWith(color: context.colors.accentText, fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()])),
+        ]),
+      ),
     );
     if (widget.compact) return pill;
     return Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: Align(alignment: Alignment.centerLeft, child: pill));

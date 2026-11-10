@@ -51,6 +51,9 @@ Future<void> _loadFonts() async {
     await family(name, roboto);
   }
   await family('MaterialIcons', ['$_fontDir/MaterialIcons-Regular.otf']);
+  // Brand fonts bundled with the app (pubspec fonts aren't loaded in tests).
+  await family('Fraunces', ['SemiBold', 'SemiBoldItalic', 'Bold'].map((w) => 'assets/fonts/Fraunces-$w.ttf').toList());
+  await family('Inter', ['Regular', 'Medium', 'SemiBold', 'Bold'].map((w) => 'assets/fonts/Inter-$w.ttf').toList());
   final cupertino = Directory('${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev').listSync().whereType<Directory>().where((d) => d.path.contains('cupertino_icons-')).last;
   await family('packages/cupertino_icons/CupertinoIcons', ['${cupertino.path}/assets/CupertinoIcons.ttf']);
 }
@@ -105,8 +108,8 @@ void main() {
       key: key,
       child: GetMaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
+        theme: GatePassTheme.light(),
+        darkTheme: GatePassTheme.dark(),
         themeMode: mode,
         getPages: Routes.pages,
         initialRoute: route,
@@ -133,6 +136,19 @@ void main() {
 
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('home ${mode.name}', (t) => shoot(t, 'home', () => const SizedBox(), mode: mode, route: Routes.home));
+    testWidgets('event-seated ${mode.name}', (t) => shoot(t, 'event-seated', () => const SizedBox(), mode: mode, route: Routes.home, before: () async {
+          Get.toNamed(Routes.eventDetails, arguments: 'standup-central');
+        }));
+    testWidgets('event-seated-lower ${mode.name}', (t) => shoot(t, 'event-seated-lower', () => const SizedBox(), mode: mode, route: Routes.home, before: () async {
+          Get.toNamed(Routes.eventDetails, arguments: 'standup-central');
+          await t.pumpAndSettle();
+          await t.drag(find.byType(CustomScrollView).last, const Offset(0, -520));
+        }));
+    testWidgets('ticket-seated ${mode.name}', (t) {
+      final j = Map<String, dynamic>.from((fx('my_tickets')['data']['items'] as List).first as Map);
+      j['seatLabel'] = 'Stalls · Row D Seat 4 · Gate 1';
+      return shoot(t, 'ticket-seated', () => TicketViewScreen(ticket: TicketModel.fromJson(j)), mode: mode);
+    });
     testWidgets('event ${mode.name}', (t) => shoot(t, 'event', () => const SizedBox(), mode: mode, route: Routes.home, args: null, before: () async {
           Get.toNamed(Routes.eventDetails, arguments: 'neon-nights');
         }));

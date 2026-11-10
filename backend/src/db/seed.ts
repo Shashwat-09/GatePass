@@ -52,6 +52,12 @@ export async function seedDatabase(ds: DataSource): Promise<boolean> {
       highlights: ['Five comics, all-new material'], ageLimit: '16+', durationMinutes: 120,
       prohibited: ['Recording the show'], organizerName: 'Laugh House Live', viewCount: 860,
       faqs: [{ q: 'Is seating reserved?', a: 'Yes, pick your seat while booking.' }],
+      schedule: [
+        { time: '8:00 PM', title: 'Doors and warm-up', subtitle: 'Your host sets the room' },
+        { time: '8:20 PM', title: 'Three new voices', subtitle: 'Ten minutes each' },
+        { time: '9:00 PM', title: 'Interval', subtitle: 'Bar open in the foyer' },
+        { time: '9:20 PM', title: 'Headline set', subtitle: 'Forty minutes of all-new material' },
+      ],
     });
     const citadel = await ev({
       slug: 'citadel-arena-tour', title: 'Citadel Arena Tour',

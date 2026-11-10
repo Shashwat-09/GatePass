@@ -110,47 +110,52 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         body: _loading ? const StateView.loading() : StateView.error(_error ?? 'Event not found', onRetry: _load),
       );
     }
-    final hint = Theme.of(context).hintColor;
-    final dateStr = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM yyyy · h:mm a').format(e.date!);
+    final hint = context.colors.secondaryLabel;
     final canBook = !_loading && _error == null && e.badge.isBookable && (e.hasSeatMap || e.tiers.isNotEmpty);
     final images = e.images;
+    final heroH = (MediaQuery.sizeOf(context).width * 0.95).clamp(260.0, 440.0);
+    final eyebrow = [
+      if ((e.genre ?? '').isNotEmpty) e.genre!,
+      if (e.hasSeatMap) 'Seated',
+      if (e.ageLimit == null || e.ageLimit == '0' || e.ageLimit!.isEmpty) 'All ages' else e.ageLimit!,
+    ].join(' · ').toUpperCase();
 
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _load,
         child: CustomScrollView(slivers: [
           SliverAppBar(
-            expandedHeight: 240,
+            expandedHeight: heroH,
             pinned: true,
+            backgroundColor: context.colors.canvas,
+            automaticallyImplyLeading: false,
+            leading: Padding(padding: const EdgeInsets.only(left: 8), child: _circle(CupertinoIcons.chevron_left, 'Back', () => Get.back())),
             actions: [
-              if (e.date != null)
-                IconButton(tooltip: 'Add to calendar', icon: const Icon(CupertinoIcons.calendar_badge_plus), onPressed: () => _addToCalendar(e)),
-              if (e.shareUrl != null) IconButton(tooltip: 'Share', icon: const Icon(CupertinoIcons.square_arrow_up), onPressed: () => _share(e)),
+              if (e.date != null) _circle(CupertinoIcons.calendar_badge_plus, 'Add to calendar', () => _addToCalendar(e)),
+              if (e.shareUrl != null) ...[const SizedBox(width: 8), _circle(CupertinoIcons.square_arrow_up, 'Share', () => _share(e))],
+              const SizedBox(width: 12),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: GestureDetector(
                 onTap: images.isEmpty ? null : () => Get.to(() => GalleryViewer(images: images)),
-                child: EventArt(images.isEmpty ? '' : images.first, radius: 0, memCacheWidth: 1080),
+                child: EventArt(images.isEmpty ? '' : images.first, radius: 0, memCacheWidth: 1080, seed: e.id),
               ),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  EventBadgeChip(e.badge),
-                  if (e.genre != null) _pill(e.genre!),
-                  ...e.tags.take(3).map(_pill),
-                  if (e.viewCount > 0) Text('${NumberFormat.compact().format(e.viewCount)} views', style: context.text.bodySmall),
-                ]),
-                const SizedBox(height: AppSpacing.sm),
-                Text(e.title, style: context.text.headlineMedium),
-                if (e.organizer != null) Text('By ${e.organizer}', style: context.text.bodyMedium!.copyWith(color: hint)),
-                const SizedBox(height: AppSpacing.md),
-                _row(CupertinoIcons.calendar, dateStr),
+                if (eyebrow.isNotEmpty) Text(eyebrow, style: context.eyebrow),
                 const SizedBox(height: 6),
-                _row(CupertinoIcons.location_solid, [e.venueName, e.city].where((s) => s.isNotEmpty).join(', ')),
+                Semantics(header: true, child: Text(e.title, style: context.serif(30, height: 1.12))),
+                if (e.organizer != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('By ${e.organizer}', style: context.text.bodyMedium!.copyWith(color: hint))),
+                if (!e.badge.isBookable || e.badge.key != 'open') ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  EventBadgeChip(e.badge),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                _infoCard(e),
                 if (e.badge.note != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   _notice(CupertinoIcons.info_circle, e.badge.note!),
@@ -161,37 +166,35 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: AppSpacing.md),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(_error!, style: TextStyle(color: context.colors.danger)),
                   TextButton(onPressed: _load, child: const Text('Try Again')),
                 ],
-                if (e.guide.isNotEmpty) ...[_header('Event Guide'), _guide(e.guide)],
+                if (e.schedule.isNotEmpty) ...[_header('The programme'), _programme(e.schedule)],
+                if (e.tiers.isNotEmpty) ...[_header(e.hasSeatMap ? 'Seating & prices' : 'Tickets & prices'), _prices(e)],
                 if (e.artists.isNotEmpty) ...[_header('Lineup'), _artists(e.artists)],
                 _header('About'),
                 ReadMore(text: e.description),
                 if (e.highlights.isNotEmpty) ...[
                   _header('Highlights'),
-                  ...e.highlights.map((h) => _bullet(CupertinoIcons.star_fill, h)),
+                  ...e.highlights.map((h) => _bullet(CupertinoIcons.star_fill, h, color: context.colors.accent)),
                 ],
+                if (e.guide.isNotEmpty) ...[_header('Event guide'), _guide(e.guide)],
                 if (e.videoUrl != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   OutlinedButton.icon(onPressed: () => openLink(e.videoUrl!), icon: const Icon(CupertinoIcons.play_circle), label: const Text('Watch Video')),
                 ],
                 if (e.gallery.isNotEmpty) ...[_header('Gallery'), _gallery(e)],
-                _header('Venue'),
-                Text(e.venueName, style: context.text.titleMedium),
-                if ((e.venueAddress ?? '').isNotEmpty) Text(e.venueAddress!, style: context.text.bodyMedium!.copyWith(color: hint)),
-                Wrap(spacing: 8, children: [
-                  if (e.mapLink != null)
-                    TextButton.icon(onPressed: () => openLink(e.mapLink!), icon: const Icon(CupertinoIcons.map), label: const Text('Directions')),
-                  if (e.layoutImageUrl != null)
-                    TextButton.icon(
+                if (e.layoutImageUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: TextButton.icon(
                       onPressed: () => Get.to(() => GalleryViewer(images: [e.layoutImageUrl!], caption: 'Seating / ground layout (for reference only)')),
                       icon: const Icon(CupertinoIcons.square_grid_2x2),
                       label: const Text('Venue Layout'),
                     ),
-                ]),
+                  ),
                 if (e.prohibited.isNotEmpty) ...[
-                  _header('Not Allowed'),
+                  _header('Not allowed'),
                   ...e.prohibited.map((p) => _bullet(CupertinoIcons.nosign, p, color: context.colors.danger)),
                 ],
                 if (e.faqs.isNotEmpty) ...[
@@ -207,27 +210,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 if ((e.terms ?? '').isNotEmpty)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(CupertinoIcons.doc_text),
+                    leading: Icon(CupertinoIcons.doc_text, color: context.colors.tint),
                     title: const Text('Terms & Conditions'),
                     trailing: Icon(CupertinoIcons.chevron_right, size: 16, color: context.colors.tertiaryLabel),
                     onTap: () => _showTerms(e.terms!),
                   ),
                 if (e.sponsors.isNotEmpty) ...[_header('Sponsors'), _sponsors(e.sponsors)],
                 if (e.otherEvents.isNotEmpty) ...[
-                  _header('You May Also Like'),
+                  _header('You may also like'),
                   SizedBox(
                     height: EventCard.railHeight(context, width: 200),
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: e.otherEvents.length,
                       itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(right: 14),
-                        child: EventCard(
-                        event: e.otherEvents[i],
-                        width: 200,
-                        onTap: () => Get.to(() => const EventDetailsScreen(),
-                            arguments: e.otherEvents[i], preventDuplicates: false),
-                      )),
+                          padding: const EdgeInsets.only(right: 14),
+                          child: EventCard(
+                            event: e.otherEvents[i],
+                            width: 200,
+                            onTap: () => Get.to(() => const EventDetailsScreen(), arguments: e.otherEvents[i], preventDuplicates: false),
+                          )),
                     ),
                   ),
                 ],
@@ -241,6 +243,127 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  /// White round button over the art (back, calendar, share).
+  Widget _circle(IconData icon, String label, VoidCallback onTap) => Tooltip(
+      message: label,
+      excludeFromSemantics: true,
+      child: Semantics(
+        button: true,
+        label: label,
+        excludeSemantics: true,
+        child: Center(
+          child: Material(
+            color: UtsavArt.paper,
+            shape: const CircleBorder(),
+            elevation: 0,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20, color: UtsavArt.ink)),
+            ),
+          ),
+        ),
+      ));
+
+  String? _duration(int? m) {
+    if (m == null || m <= 0) return null;
+    final h = m ~/ 60, r = m % 60;
+    if (h == 0) return 'About $r minutes';
+    return 'About $h ${h == 1 ? 'hour' : 'hours'}${r >= 15 ? ' $r min' : ''}';
+  }
+
+  /// Date and venue, the two facts people check twice.
+  Widget _infoCard(EventModel e) {
+    final c = context.colors;
+    final dateStr = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM yyyy · h:mm a').format(e.date!);
+    final addr = e.venueAddress ?? '';
+    // Don't repeat the city when the address already ends with it.
+    final place = [addr, if (!addr.toLowerCase().contains(e.city.toLowerCase())) e.city].where((x) => x.isNotEmpty).join(', ');
+    Widget row(IconData icon, String title, String? sub, {Widget? trailing}) => Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(children: [
+            Icon(icon, color: c.tint, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: context.text.titleMedium),
+                if (sub != null && sub.isNotEmpty) Text(sub, style: context.text.bodySmall),
+              ]),
+            ),
+            if (trailing != null) trailing,
+          ]),
+        );
+    return Container(
+      decoration: BoxDecoration(color: c.cell, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: c.separator)),
+      child: Column(children: [
+        row(CupertinoIcons.calendar, dateStr, _duration(e.durationMinutes)),
+        Divider(height: 1, color: c.separator),
+        row(CupertinoIcons.placemark, e.venueName, place,
+            trailing: e.mapLink == null
+                ? null
+                : TextButton(
+                    onPressed: () => openLink(e.mapLink!),
+                    child: Text('Directions', style: context.text.titleSmall!.copyWith(color: c.tint, decoration: TextDecoration.underline, decorationColor: c.tint)),
+                  )),
+      ]),
+    );
+  }
+
+  /// Running order: time, a rule, then what's on.
+  Widget _programme(List<ScheduleItem> items) {
+    final c = context.colors;
+    final timeW = textBlockHeight(context, context.text.titleSmall) * 4.2;
+    return Column(children: [
+      for (final it in items)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: timeW, child: Text(it.time, style: context.text.titleSmall!.copyWith(color: c.tint, fontWeight: FontWeight.w700))),
+              Container(width: 2, margin: const EdgeInsets.only(right: 14), color: it.isBreak ? c.separator : c.tint),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(it.title, style: context.text.titleMedium),
+                  if (it.subtitle != null) Text(it.subtitle!, style: context.text.bodySmall),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+    ]);
+  }
+
+  /// One card per ticket type: colour dot, name, price in the display serif.
+  Widget _prices(EventModel e) {
+    const dots = [UtsavArt.tealMid, UtsavArt.saffron, UtsavArt.maroon, UtsavArt.teal, UtsavArt.marigoldDeep];
+    final c = context.colors;
+    final tiers = e.tiers;
+    Widget card(int i) {
+      final t = tiers[i];
+      final soldOut = t.remaining <= 0;
+      return Container(
+        constraints: const BoxConstraints(minWidth: 104),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: c.cell, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: c.separator)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 12, height: 12, decoration: BoxDecoration(color: dots[i % dots.length], shape: BoxShape.circle)),
+          const SizedBox(height: 10),
+          Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleSmall),
+          Text(soldOut ? 'Sold out' : (t.pricePaise > 0 ? formatPaise(t.pricePaise) : 'Free'),
+              style: soldOut ? context.text.bodyMedium!.copyWith(color: c.secondaryLabel) : context.serif(22, height: 1.2)),
+        ]),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(children: [
+        for (var i = 0; i < tiers.length; i++) ...[if (i > 0) const SizedBox(width: 10), card(i)],
+      ]),
+    );
+  }
+
   Widget _bottomBar(BuildContext context, EventModel e, bool canBook) {
     final soon = e.badge.key == 'opening_soon' && !e.isWebOnly;
     final web = e.isWebOnly && e.externalUrl != null && WebViewScreen.isAllowed(e.externalUrl!);
@@ -251,7 +374,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             : soon
                 ? (e.notifyMe ? 'You’ll Be Notified' : 'Notify Me')
                 : e.badge.isBookable
-                    ? 'Get Tickets'
+                    ? (e.hasSeatMap ? 'Select Seats' : 'Get Tickets')
                     : e.badge.label;
     return Container(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
@@ -264,7 +387,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         child: Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text('From', style: context.text.bodySmall),
-            Text(e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free', style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
+            Text(e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free', style: context.serif(26, height: 1.1)),
           ]),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
@@ -276,12 +399,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   : soon
                       ? () => _toggleNotify(e)
                       : canBook && !e.isWebOnly
-                      ? () => Get.to(() => e.hasSeatMap
-                          ? SelectSeatScreen(event: e)
-                          : e.isMultiSession
-                              ? SelectSessionScreen(event: e)
-                              : SelectTicketScreen(event: e))
-                      : null,
+                          ? () => Get.to(() => e.hasSeatMap
+                              ? SelectSeatScreen(event: e)
+                              : e.isMultiSession
+                                  ? SelectSessionScreen(event: e)
+                                  : SelectTicketScreen(event: e))
+                          : null,
             ),
           ),
         ]),
@@ -336,8 +459,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall!.copyWith(color: context.colors.label, fontWeight: FontWeight.w600)),
-                  if (a.isHeadliner)
-                    Text('Headliner', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall!.copyWith(color: context.colors.secondaryLabel)),
+                  if (a.isHeadliner) Text('Headliner', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelSmall!.copyWith(color: context.colors.secondaryLabel)),
                 ]),
               ),
             );
@@ -383,13 +505,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: UtsavArt.paper,
                                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                                  border: Border.all(color: Theme.of(context).dividerColor),
+                                  border: Border.all(color: context.colors.separator),
                                 ),
-                                child: s.logoUrl.isEmpty
-                                    ? Text(s.name, style: const TextStyle(color: Colors.black))
-                                    : CachedNetworkImage(imageUrl: s.logoUrl, height: 36, fit: BoxFit.contain),
+                                child: s.logoUrl.isEmpty ? Text(s.name, style: const TextStyle(color: UtsavArt.ink)) : CachedNetworkImage(imageUrl: s.logoUrl, height: 36, fit: BoxFit.contain),
                               ),
                             ))
                         .toList(),
@@ -416,17 +536,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       );
 
   Widget _header(String t) => Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
-        child: Semantics(header: true, child: Text(t, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700))),
+        padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm + 4),
+        child: Semantics(header: true, child: Text(t, style: context.serif(24))),
       );
-
-  Widget _pill(String text) => TagPill(text);
-
-  Widget _row(IconData icon, String text) => Row(children: [
-        Icon(icon, size: 20, color: context.colors.secondaryLabel),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: context.text.bodyLarge)),
-      ]);
 
   Widget _bullet(IconData icon, String text, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),

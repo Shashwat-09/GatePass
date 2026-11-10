@@ -1,5 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../app/theme.dart';
@@ -7,20 +7,19 @@ import '../core/format.dart';
 import '../data/models/models.dart';
 import 'common.dart';
 import 'event_badge.dart';
+import 'utsav_art.dart';
 
-/// Event art with a neutral placeholder (color lives in the content layer).
+/// Event art; events without a picture (or while it loads) get generated
+/// arch-and-lattice art, varied by [seed], instead of a grey box.
 class EventArt extends StatelessWidget {
-  const EventArt(this.url, {super.key, this.radius = AppRadius.md, this.memCacheWidth = 720});
+  const EventArt(this.url, {super.key, this.radius = AppRadius.md, this.memCacheWidth = 720, this.seed});
   final String url;
   final double radius;
   final int memCacheWidth;
+  final String? seed;
   @override
   Widget build(BuildContext context) {
-    final ph = Container(
-      color: context.colors.fill,
-      alignment: Alignment.center,
-      child: Icon(CupertinoIcons.ticket, color: context.colors.tertiaryLabel, size: 28),
-    );
+    final ph = ArchArt(seed: seed ?? url);
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: url.isEmpty
@@ -62,7 +61,7 @@ class EventCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(children: [
-                AspectRatio(aspectRatio: _imageRatio, child: EventArt(event.imageUrl)),
+                AspectRatio(aspectRatio: _imageRatio, child: EventArt(event.imageUrl, seed: event.id)),
                 Positioned(left: 8, top: 8, child: EventBadgeChip(event.badge, dense: true, onImage: true)),
               ]),
               const SizedBox(height: 10),

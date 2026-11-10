@@ -55,8 +55,13 @@ void main() {
         await t.pumpWidget(app(TicketViewScreen(ticket: TicketModel.fromJson(ticketJson('t1'))), mode: mode));
         await t.pumpAndSettle();
         expect(find.byType(QrImageView), findsOneWidget);
-        expect(find.text('View Invoice'), findsOneWidget);
         expect(find.text('Share Tickets'), findsOneWidget);
+        // Invoice and other extras live in the "More" menu.
+        await t.tap(find.byTooltip('More'));
+        await t.pumpAndSettle();
+        expect(find.text('View Invoice'), findsOneWidget);
+        await t.tapAt(const Offset(10, 300));
+        await t.pumpAndSettle();
         expect(t.takeException(), isNull);
       });
 
@@ -105,7 +110,7 @@ void main() {
     expect(find.text('Send to a Friend'), findsOneWidget); // one ticket left
     final qr = t.widget<QrImageView>(find.byType(QrImageView));
     expect(qr, isNotNull);
-    expect(find.text('ADMIT 1'), findsOneWidget); // admits 1 now
+    expect(find.textContaining('ADMIT 1', findRichText: true), findsOneWidget); // admits 1 now
   });
 
   testWidgets('Shared tab lists transfers and claims back a pending one', (t) async {
@@ -345,9 +350,10 @@ void main() {
     d.backend.json('POST', 'api/payment/book-ticket', quoteJson());
     await t.pumpWidget(app(SelectSeatScreen(event: ev)));
     await t.pumpAndSettle();
-    for (final text in ['STAGE', 'Gate 1', 'A', 'B', 'C', 'Standing · 3 places left']) {
+    for (final text in ['STAGE', 'A', 'B', 'C', 'Standing · 3 places left']) {
       expect(find.text(text), findsWidgets, reason: text);
     }
+    expect(find.textContaining('Gate 1'), findsWidgets); // "₹1,499 · Gate 1" beside the section name
     expect(find.byKey(const Key('seat-s-silver-0-2')), findsNothing); // aisle
     expect(find.byIcon(Icons.accessible), findsWidgets);
 
@@ -501,8 +507,10 @@ void main() {
     await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
     await t.pumpAndSettle();
     expect(find.text('Carry a photo ID.'), findsOneWidget);
-    expect(find.text('Buy More'), findsOneWidget);
     expect(find.text('Directions'), findsOneWidget);
+    await t.tap(find.byTooltip('More'));
+    await t.pumpAndSettle();
+    expect(find.text('Buy More'), findsOneWidget);
   });
 
   testWidgets('My tickets: error state retries', (t) async {
@@ -538,8 +546,8 @@ void main() {
     Get.toNamed(Routes.eventDetails, arguments: 'neon-nights');
     await t.pumpAndSettle();
     expect(find.text('Neon Nights'), findsOneWidget);
-    expect(find.text('Get Tickets'), findsOneWidget);
-    await t.tap(find.text('Get Tickets'));
+    expect(find.text('Select Seats'), findsOneWidget); // seated events say what happens next
+    await t.tap(find.text('Select Seats'));
     await t.pumpAndSettle();
     expect(find.byType(SelectSeatScreen), findsOneWidget);
     expect(d.backend.callsTo('api/event').single.path, 'api/event');
@@ -573,9 +581,9 @@ void main() {
       'shareUrl': 'https://api.example/e/neon-nights',
     });
     await openEvent(t);
-    for (final text in ['Filling fast', 'By Neon Live', 'Event Guide', '18+', 'Lineup', 'DJ Aurora', 'Headliner',
+    for (final text in ['Filling fast', 'By Neon Live', 'Event guide', '18+', 'Lineup', 'DJ Aurora', 'Headliner',
         'Three stages', 'Sharp objects', 'Is there parking?', 'Directions', 'Venue Layout', 'Title Sponsor', 'Volt',
-        'You May Also Like', 'Other Show', 'Sold out', 'Terms & Conditions', 'Get Tickets']) {
+        'You may also like', 'Other Show', 'Sold out', 'Terms & Conditions', 'Get Tickets']) {
       expect(find.text(text), findsWidgets, reason: text);
     }
     expect(find.byTooltip('Share'), findsOneWidget);

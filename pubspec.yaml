@@ -50,6 +50,7 @@ dependencies:
   file_picker: ^13.3.2
   firebase_messaging: ^17.0.1
   webview_flutter: ^4.14.1
+  screen_brightness: ^2.1.11
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +61,28 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Brand type (SIL Open Font License; licences in assets/fonts/). Static weights,
+  # subset to Latin + ₹, generated from the Google Fonts variable fonts.
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Fraunces-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/Fraunces-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 # Placeholder brand assets (assets/brand) — replace with final artwork, then run:
 #   dart run flutter_launcher_icons && dart run flutter_native_splash:create

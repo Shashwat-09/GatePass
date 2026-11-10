@@ -226,6 +226,8 @@ void main() {
       'successTitle': 'Thank you!', 'successMessage': 'See you soon', 'ctaLabel': 'See upcoming events', 'ctaUrl': 'https://gatepass.example/events'}});
     await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
     await t.pumpAndSettle();
+    await t.tap(find.byTooltip('More'));
+    await t.pumpAndSettle();
     await t.tap(find.text('Share Feedback'));
     await t.pumpAndSettle();
     expect(find.byType(SurveyScreen), findsOneWidget);

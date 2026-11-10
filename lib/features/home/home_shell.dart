@@ -43,23 +43,69 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // System tab bar (`tab-bars.md`): navigation only, always visible, single-word
-    // labels, filled symbol for the selected tab, tint only on the selection.
     return Scaffold(
       body: IndexedStack(index: _index, children: _tabs),
-      bottomNavigationBar: CupertinoTabBar(
-        currentIndex: _index,
+      bottomNavigationBar: UtsavTabBar(
+        index: _index,
         onTap: (i) => setState(() => _index = i),
-        activeColor: context.colors.tint,
-        inactiveColor: context.colors.secondaryLabel,
-        backgroundColor: context.colors.canvas.withValues(alpha: MediaQuery.highContrastOf(context) ? 1 : 0.94),
-        border: Border(top: BorderSide(color: context.colors.separator, width: 0.0)),
-        iconSize: 26,
         items: const [
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.compass), activeIcon: Icon(CupertinoIcons.compass_fill), label: 'Discover'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.ticket), activeIcon: Icon(CupertinoIcons.ticket_fill), label: 'Tickets'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.person), activeIcon: Icon(CupertinoIcons.person_fill), label: 'Profile'),
+          (CupertinoIcons.compass, CupertinoIcons.compass_fill, 'Discover'),
+          (CupertinoIcons.ticket, CupertinoIcons.ticket_fill, 'Tickets'),
+          (CupertinoIcons.person, CupertinoIcons.person_fill, 'Profile'),
         ],
+      ),
+    );
+  }
+}
+
+/// Tab bar on paper: the selected tab's symbol sits in a filled teal disc,
+/// its label in teal; the others are quiet outlines. Navigation only.
+class UtsavTabBar extends StatelessWidget {
+  const UtsavTabBar({super.key, required this.index, required this.onTap, required this.items});
+  final int index;
+  final ValueChanged<int> onTap;
+  final List<(IconData, IconData, String)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return DecoratedBox(
+      decoration: BoxDecoration(color: c.canvas, border: Border(top: BorderSide(color: c.separator, width: 0.5))),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 62,
+          child: Row(children: [
+            for (var i = 0; i < items.length; i++)
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: i == index,
+                  label: '${items[i].$3} tab',
+                  excludeSemantics: true,
+                  child: InkResponse(
+                    onTap: () => onTap(i),
+                    radius: 36,
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      AnimatedContainer(
+                        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180),
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(color: i == index ? c.tintFill : Colors.transparent, shape: BoxShape.circle),
+                        child: Icon(i == index ? items[i].$2 : items[i].$1, size: i == index ? 18 : 24, color: i == index ? Colors.white : c.secondaryLabel),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(items[i].$3,
+                          style: context.text.labelMedium!.copyWith(
+                            color: i == index ? c.tint : c.secondaryLabel,
+                            fontWeight: i == index ? FontWeight.w700 : FontWeight.w500,
+                          )),
+                    ]),
+                  ),
+                ),
+              ),
+          ]),
+        ),
       ),
     );
   }

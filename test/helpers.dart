@@ -91,8 +91,8 @@ Future<Deps> setUpDeps({bool loggedIn = true, PushService? push}) async {
 
 /// Pumps [child] inside the real app shell (routes + theme) in light or dark mode.
 Widget app(Widget child, {ThemeMode mode = ThemeMode.light}) => GetMaterialApp(
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: GatePassTheme.light(),
+      darkTheme: GatePassTheme.dark(),
       themeMode: mode,
       home: child,
       getPages: Routes.pages,

@@ -27,6 +27,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.success,
     required this.warning,
     required this.danger,
+    required this.accent,
+    required this.accentText,
+    required this.accentSoft,
   });
 
   /// Plain screens (`systemBackground`).
@@ -52,6 +55,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color success;
   final Color warning;
   final Color danger;
+  /// Second brand colour for highlights and ornament (never as text on light backgrounds).
+  final Color accent;
+  /// Accent as text: eyebrows, dates (≥ 4.5:1 on canvas and grouped canvas).
+  final Color accentText;
+  /// Soft accent background (timer pills, notices).
+  final Color accentSoft;
 
   static const light = AppPalette(
     canvas: Color(0xFFFFFFFF),
@@ -68,6 +77,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     success: Color(0xFF1F7A3A),
     warning: Color(0xFFB43C00),
     danger: Color(0xFFD70015),
+    accent: Color(0xFFFF9500),
+    accentText: Color(0xFFB43C00),
+    accentSoft: Color(0xFFFFF1DE),
   );
 
   static const dark = AppPalette(
@@ -85,6 +97,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     success: Color(0xFF30D158),
     warning: Color(0xFFFF9F0A),
     danger: Color(0xFFFF453A),
+    accent: Color(0xFFFF9F0A),
+    accentText: Color(0xFFFFB340),
+    accentSoft: Color(0xFF3A2A12),
   );
 
   @override
@@ -109,6 +124,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       success: l(success, other.success),
       warning: l(warning, other.warning),
       danger: l(danger, other.danger),
+      accent: l(accent, other.accent),
+      accentText: l(accentText, other.accentText),
+      accentSoft: l(accentSoft, other.accentSoft),
     );
   }
 }
@@ -167,18 +185,27 @@ class AppSpacing {
 ///   bodyLarge      Body 17 · bodyMedium Subhead 15 · bodySmall Footnote 13 ·
 ///   labelLarge     Button 17 semibold · labelMedium Caption 1 12 medium ·
 ///   labelSmall     Caption 2 11 medium
+///
+/// With a [displayFont] (a serif, say), display, headline and titleLarge use it
+/// (semibold); everything else uses [bodyFont] or the platform font.
 class AppTypography {
-  static TextTheme textTheme(Color label, Color secondary) {
-    TextStyle s(double size, FontWeight w, double height, {double spacing = 0, Color? color}) =>
-        TextStyle(fontSize: size, fontWeight: w, height: height / size, letterSpacing: spacing, color: color ?? label);
+  static TextTheme textTheme(Color label, Color secondary, {String? bodyFont, String? displayFont}) {
+    TextStyle s(double size, FontWeight w, double height, {double spacing = 0, Color? color, bool display = false}) => TextStyle(
+          fontFamily: display && displayFont != null ? displayFont : bodyFont,
+          fontSize: size,
+          fontWeight: display && displayFont != null ? FontWeight.w600 : w,
+          height: height / size,
+          letterSpacing: display && displayFont != null ? spacing / 2 : spacing,
+          color: color ?? label,
+        );
     return TextTheme(
-      displayLarge: s(40, FontWeight.w700, 46, spacing: -0.4),
-      displayMedium: s(36, FontWeight.w700, 42, spacing: -0.4),
-      displaySmall: s(34, FontWeight.w700, 41, spacing: -0.4),
-      headlineLarge: s(34, FontWeight.w700, 41, spacing: -0.4),
-      headlineMedium: s(28, FontWeight.w700, 34, spacing: -0.3),
-      headlineSmall: s(22, FontWeight.w700, 28, spacing: -0.2),
-      titleLarge: s(20, FontWeight.w600, 25),
+      displayLarge: s(40, FontWeight.w700, 46, spacing: -0.4, display: true),
+      displayMedium: s(36, FontWeight.w700, 42, spacing: -0.4, display: true),
+      displaySmall: s(34, FontWeight.w700, 41, spacing: -0.4, display: true),
+      headlineLarge: s(34, FontWeight.w700, 41, spacing: -0.4, display: true),
+      headlineMedium: s(28, FontWeight.w700, 34, spacing: -0.3, display: true),
+      headlineSmall: s(22, FontWeight.w700, 28, spacing: -0.2, display: true),
+      titleLarge: s(20, FontWeight.w600, 25, display: true),
       titleMedium: s(17, FontWeight.w600, 22),
       titleSmall: s(15, FontWeight.w600, 20),
       bodyLarge: s(17, FontWeight.w400, 22),
@@ -192,10 +219,18 @@ class AppTypography {
 }
 
 class AppTheme {
-  static ThemeData light() => _base(Brightness.light, AppPalette.light);
-  static ThemeData dark() => _base(Brightness.dark, AppPalette.dark);
+  static ThemeData light() => build(Brightness.light, AppPalette.light);
+  static ThemeData dark() => build(Brightness.dark, AppPalette.dark);
 
-  static ThemeData _base(Brightness b, AppPalette p) {
+  /// A theme from any palette; apps can bring their own fonts and button shape.
+  static ThemeData build(
+    Brightness b,
+    AppPalette p, {
+    String? bodyFont,
+    String? displayFont,
+    double buttonRadius = AppRadius.md,
+    double buttonHeight = 50,
+  }) {
     final isDark = b == Brightness.dark;
     final scheme = ColorScheme(
       brightness: b,
@@ -223,13 +258,14 @@ class AppTheme {
     );
     // Apple sizes on the platform's own font family (SF Pro on iOS, Roboto on Android).
     final platform = Typography.material2021(platform: defaultTargetPlatform);
-    final text = (isDark ? platform.white : platform.black).merge(AppTypography.textTheme(p.label, p.secondaryLabel));
-    final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md));
+    final text = (isDark ? platform.white : platform.black)
+        .merge(AppTypography.textTheme(p.label, p.secondaryLabel, bodyFont: bodyFont, displayFont: displayFont));
+    final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadius));
     final prominent = ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.fill : p.tintFill),
       foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.secondaryLabel : Colors.white),
       overlayColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.12)),
-      minimumSize: const WidgetStatePropertyAll(Size(64, 50)),
+      minimumSize: WidgetStatePropertyAll(Size(64, buttonHeight)),
       padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20)),
       elevation: const WidgetStatePropertyAll(0),
       shape: WidgetStatePropertyAll(buttonShape),
@@ -239,6 +275,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: b,
+      fontFamily: bodyFont,
       colorScheme: scheme,
       extensions: [p],
       // Platform font: SF Pro on iOS, Roboto on Android.
@@ -392,7 +429,23 @@ class AppTheme {
         shape: const Border(),
         collapsedShape: const Border(),
       ),
-      cupertinoOverrideTheme: CupertinoThemeData(brightness: b, primaryColor: p.tint),
+      cupertinoOverrideTheme: CupertinoThemeData(
+        brightness: b,
+        primaryColor: p.tint,
+        textTheme: CupertinoTextThemeData(
+          primaryColor: p.tint,
+          // Large titles in the display face when the app has one.
+          navLargeTitleTextStyle: TextStyle(
+            fontFamily: displayFont ?? bodyFont,
+            fontSize: 34,
+            fontWeight: displayFont != null ? FontWeight.w600 : FontWeight.w700,
+            letterSpacing: displayFont != null ? -0.2 : -0.4,
+            color: p.label,
+          ),
+          navTitleTextStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, fontWeight: FontWeight.w600, color: p.label),
+          textStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, color: p.label),
+        ),
+      ),
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
     );

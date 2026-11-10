@@ -182,17 +182,28 @@ All data screens implement loading / loaded / empty / error-retry.
 ### Organiser console (web, v0.8)
 - `/organiser` (OTP sign-in, organiser/admin accounts): events table → event page with status buttons (Publish / Unpublish / Postpone / Cancel with a message to holders), details form, sales cards (tickets, revenue, online, box office, complimentary, checked in, requests waiting), attendee report download, ticket types (inline price / quantity / on-sale edits + add), shows (add / hide), complimentary & box-office issuing, and the requests queue (approve / reject with reason). Light and dark follow the system.
 
-## 5.6 Design tokens (from `lib/app/theme.dart`)
-Semantic colors come from the `AppPalette` theme extension: `context.colors.<token>`. Never use inline hex or `Colors.*` in screens; white is allowed only on the tint, on images, and behind a QR code.
+## 5.6 Design tokens — "Utsav" (design direction H, Nov 2026)
+The customer app wears the **Utsav** brand: ivory paper, deep peacock teal and saffron, a serif display face, like a premium printed programme. The tokens live in `lib/app/theme.dart` (`UtsavPalette`, `UtsavArt`, `GatePassTheme`) on top of the shared `packages/gatepass_ui` system. The Organiser app keeps the neutral default palette.
 
-| Token | Light | Dark |
+| Token | Light | Dark ("Utsav night") |
 |---|---|---|
-| canvas / grouped | #FFFFFF / #F2F2F7 | #000000 / #000000 |
-| cell | #FFFFFF | #1C1C1E |
-| label / secondary / tertiary | #000 / #636366 / #8E8E93 | #FFF / #AEAEB2 / #8E8E93 |
-| tint (text) / tintFill (buttons) | #5B3DF5 / #5B3DF5 | #9D8CFF / #6A50FF |
-| success / warning / danger | #1F7A3A / #B43C00 / #D70015 | #30D158 / #FF9F0A / #FF453A |
+| canvas (paper) / groupedCanvas | #FAF6ED / #F3EBDE | #0E1513 / #0A100F |
+| cell | #FFFFFF | #18211F |
+| label (ink) / secondary / tertiary | #1D1A15 / #696258 / #8F877A | #F6F0E4 / #B9B0A2 / #8A8277 |
+| tint / tintFill (peacock teal) | #0B4E56 / #0B4E56 | #6CC6C0 / #0F6670 |
+| accent (saffron) / accentText (ochre) / accentSoft | #DF891C / #965404 / #FBE9CF | #E99A2E / #F0B55A / #3A2A12 |
+| success / warning / danger | #1F7A3A / #B43C00 / #C4251C | #4CD77A / #FFA94D / #FF6B5E |
 
-Label, secondary, tint and status text meet WCAG AA (4.5:1) on their backgrounds; tertiary (about 3.3:1) is only for placeholders and decorative glyphs, never for information people need. Colors chosen by organisers (seat sections) pass through `ensureContrast()` to reach 3:1.
-Type (`context.text`), with the Apple scale on the platform font: large title 34 bold, title 28/22, headline 17 w600, body 17, callout 15, footnote 13, caption 12/11. Dynamic Type is respected, and rails grow with the text.
-Radii 8/12/16; spacing 4/8/16/24/32. Motion: one 250 ms easeOut on booking confirmation, skipped when reduced motion is on; the hero carousel never autoplays.
+All text pairs meet WCAG AA (4.5:1) on canvas, grouped canvas and cells; tertiary is decorative only. Never put white text on saffron (2.7:1); use ink on saffron or marigold.
+
+**Type.** Display: **Fraunces** SemiBold (headlines, event titles, big dates, prices, section titles). Body: **Inter** (400–700; tabular figures for money and counts). Both are bundled (SIL OFL, `assets/fonts/`, static weights subset to Latin + ₹). `context.serif(size)` for one-off serif numerals; `context.eyebrow` for the letter-spaced ochre line ("THE PROGRAMME · WEEK 47").
+
+**Ornament.** The **jaali** lattice (`JaaliPainter`/`JaaliPanel`) only on ticket headers and hero art. Events without a picture get generated **arch art** (`ArchArt`: an arch under a crescent over the lattice, colours varied per event). Collection cards use the art inks: teal, marigold, maroon.
+
+**Signature screens** (match the direction PDF):
+- *Discover:* city pin, round search + bell; eyebrow + "Good evening, Asha." (name in teal italic); Editor's Choice card with a date block; Collections cards; "Coming up" list with big serif dates; Trending rail; Artists.
+- *Event:* full-bleed art with round paper buttons; eyebrow (genre · seated · age); serif title; date/venue card with duration and underlined Directions; "The programme" timeline; "Seating & prices" cards; bottom bar "From ₹…" + Select Seats / Get Tickets.
+- *Seat map:* title + event line; saffron hold-timer pill; teal stage arc; section dot, name and "₹ · Gate"; 32 pt seats (available outlined in section colour, yours teal with a check, taken beige); legend; "2 seats · D4, D5" with the total.
+- *Ticket:* paper ticket with a teal jaali header and crescent; Section / Row / Seat; QR on white; "ADMIT n · Enter by Gate · x of n checked in"; tear line; Booking code and Paid; Send to a Friend + Directions. Screen brightness goes to full while it's open.
+
+Radii 8/12/16 (ticket 22); spacing 4/8/16/24/32; buttons 54 pt with radius 14. Motion stays short and respects Reduce Motion.

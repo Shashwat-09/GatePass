@@ -262,7 +262,7 @@ export class EventsController {
       badge: eventBadge(e, stock),
       cardImageUrl: e.cardImageUrl, bannerUrl: e.bannerUrl, videoUrl: e.videoUrl, gallery: e.gallery,
       genre: e.genre, language: e.language, tags: e.tags, highlights: e.highlights, guide: this.guide(e),
-      prohibited: e.prohibited, ageLimit: e.ageLimit, durationMinutes: e.durationMinutes,
+      prohibited: e.prohibited, ageLimit: e.ageLimit, durationMinutes: e.durationMinutes, schedule: e.schedule ?? [],
       city: city ? { id: city.id, name: city.name } : null,
       venue: {
         id: `v-${e.id}`, name: e.venueName, address: e.venueAddress, lat: null, lng: null,

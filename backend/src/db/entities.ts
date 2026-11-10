@@ -112,6 +112,8 @@ export class EventEntity {
   /** Quick facts, e.g. [{label:'Age', value:'18+'}, {label:'Duration', value:'4 hours'}]. */
   @Column({ type: 'jsonb', default: () => "'[]'" }) guide!: { label: string; value: string }[];
   @Column({ type: 'jsonb', default: () => "'[]'" }) prohibited!: string[];
+  /** The evening's running order, e.g. [{time:'7:00 PM', title:'Raag Yaman', subtitle:'Vocal'}]. */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) schedule!: { time: string; title: string; subtitle?: string | null }[];
   @Column({ type: 'jsonb', default: () => "'[]'" }) tags!: string[];
   @Column({ type: 'varchar', nullable: true }) ageLimit!: string | null;
   @Column({ type: 'int', nullable: true }) durationMinutes!: number | null;

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../core/di.dart';
@@ -113,7 +114,11 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Seats'),
+        toolbarHeight: 64,
+        title: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Select Seats'),
+          Text(_eventLine(), maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+        ]),
         actions: [
           Obx(() => c.hold.value == null
               ? const SizedBox.shrink()
@@ -142,12 +147,31 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         );
       }),
       bottomNavigationBar: Obx(() => CheckoutBar(
-            caption: '${c.totalQty} selected',
+            caption: _caption(),
             amount: formatPaise(c.subtotalPaise),
             button: PrimaryButton(label: 'Continue', loading: c.loading.value, onPressed: c.totalQty > 0 && !c.loading.value ? _continue : null),
           )),
     );
   }
+
+  String _eventLine() {
+    final e = widget.event;
+    final short = e.title.split(RegExp(r'[:—–-]')).first.trim();
+    return e.date == null ? short : '$short · ${DateFormat('EEE d MMM, h:mm a').format(e.date!)}';
+  }
+
+  /// "2 seats · D4, D5" (plus standing places), so people can check before paying.
+  String _caption() {
+    final seats = c.seats;
+    final standing = c.totalQty - seats.length;
+    final parts = <String>[
+      if (seats.isNotEmpty) '${seats.length} seat${seats.length == 1 ? '' : 's'} · ${seats.map((s) => s.label).join(', ')}',
+      if (standing > 0) '$standing standing',
+    ];
+    return parts.isEmpty ? 'No seats selected' : parts.join(' · ');
+  }
+
+  Color get _taken => Theme.of(context).brightness == Brightness.dark ? UtsavArt.seatTakenDark : UtsavArt.seatTakenLight;
 
   Color _color(SeatSectionModel s) {
     final hex = s.color;
@@ -155,27 +179,39 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
     return context.colors.tint;
   }
 
-  Widget _stage() => Container(
-        margin: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.sm)),
-        child: Center(child: Text('STAGE', style: context.text.labelMedium!.copyWith(letterSpacing: 4, color: context.colors.secondaryLabel))),
+  /// A gentle arc with the word STAGE under it.
+  Widget _stage() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+        child: SizedBox(
+          height: 40,
+          child: CustomPaint(
+            painter: _StageArc(context.colors.tint),
+            child: Align(
+              alignment: const Alignment(0, 0.35),
+              child: Text('STAGE', style: context.text.labelMedium!.copyWith(letterSpacing: 4, color: context.colors.tint, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ),
       );
 
+  /// Colour dot and name; price and gate on the right ("₹999 · Gate 1").
   Widget _header(SeatSectionModel s, Color color, String trailing) => Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Row(children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${s.name} · ${formatPaise(s.pricePaise)}', style: context.text.titleMedium),
+              Text(s.name, style: context.text.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
               if (s.description.isNotEmpty) Text(s.description, style: context.text.bodySmall),
             ]),
           ),
-          if (s.gate != null)
-            Padding(padding: const EdgeInsets.only(left: 8, right: 8), child: TagPill(s.gate!)),
-          Text(trailing, style: context.text.bodySmall),
+          const SizedBox(width: 8),
+          Text([formatPaise(s.pricePaise), if (s.gate != null) s.gate!, if (trailing.isNotEmpty) trailing].join(' · '),
+              style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel, fontFeatures: const [FontFeature.tabularFigures()])),
         ]),
       );
 
@@ -223,7 +259,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(sec, color, '${sec.remaining} left'),
+        _header(sec, color, ''),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Column(children: [
@@ -253,7 +289,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
       final booked = sec.booked.contains(key) && !mine;
       final selected = c.isSelected(sec.id, r, col);
       // Shape as well as color: available = outlined, taken = solid grey, selected = tinted with a check.
-      final bg = booked ? context.colors.fill : (selected ? context.colors.tintFill : Colors.transparent);
+      final bg = booked ? _taken : (selected ? context.colors.tintFill : Colors.transparent);
       final border = booked || selected ? null : Border.all(color: ensureContrast(color, context.colors.canvas, context.colors.label), width: 1.5);
       return Semantics(
         label: '${sec.name} row ${sec.rowLabel(r)} seat ${sec.seatNumber(r, col)}${booked ? ', taken' : ''}${accessible ? ', accessible' : ''}',
@@ -269,7 +305,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
             child: selected
                 ? const Icon(CupertinoIcons.checkmark, size: 16, color: Colors.white)
                 : accessible
-                    ? Icon(Icons.accessible, size: 16, color: booked ? context.colors.tertiaryLabel : context.colors.label)
+                    ? Icon(Icons.accessible, size: 18, color: booked ? context.colors.secondaryLabel : ensureContrast(color, context.colors.canvas, context.colors.label))
                     : null,
           ),
         ),
@@ -283,8 +319,8 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
         runSpacing: AppSpacing.sm,
         children: [
           _legendItem(null, 'Available', outline: context.colors.secondaryLabel),
-          _legendItem(context.colors.tintFill, 'Selected'),
-          _legendItem(context.colors.fill, 'Taken'),
+          _legendItem(context.colors.tintFill, 'Yours'),
+          _legendItem(_taken, 'Taken'),
           Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.accessible, size: 16), const SizedBox(width: 6), Text('Accessible', style: context.text.bodySmall)]),
         ],
       );
@@ -301,4 +337,24 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
           Text(label, style: context.text.bodySmall),
         ],
       );
+}
+
+class _StageArc extends CustomPainter {
+  _StageArc(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..moveTo(size.width * 0.04, size.height * 0.55)
+      ..quadraticBezierTo(size.width / 2, -size.height * 0.35, size.width * 0.96, size.height * 0.55);
+    canvas.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_StageArc old) => old.color != color;
 }

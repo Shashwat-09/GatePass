@@ -206,7 +206,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `POST api/payment/webhook` (Razorpay → server): `X-Razorpay-Signature` HMAC over the raw body; `payment.captured` / `order.paid` confirm the booking; deduplicated by `X-Razorpay-Event-Id`. Configure this URL in the Razorpay dashboard.
 
 **Tickets, invoices, QR**
-- `GET api/ticket/my-tickets?scope=upcoming|history&page&limit` is paginated in SQL; an event is "upcoming" until it ends. Items add `bookingId, eventId, tierName, seatLabel, invoiceUrl`.
+- `GET api/ticket/my-tickets?scope=upcoming|history&page&limit` is paginated in SQL; an event is "upcoming" until it ends. Items add `bookingId, bookingCode, paidPaise (booking total; null on tickets received from a friend), eventId, tierName, seatLabel ("Stalls · Row D Seat 4 · Gate 1"), invoiceUrl`.
 - `qrToken`: superseded by the Ed25519 `GP2` format — see §8.11.
 - `GET api/invoices/<bookingId>.pdf?exp&sig` → tax invoice PDF. Links are HMAC-signed (`URL_SIGNING_SECRET`) and valid 7 days; they are re-issued with every ticket list.
 
@@ -249,7 +249,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 
 ## 8.12 As built (v0.4) — event page parity (legacy B1)
 - Every event card and detail has `badge: {key, label, isBookable, opensAt, closesAt, note}` — keys `open, filling_fast (≤10% stock), opening_soon (before opensAt), sold_out, sale_ended (after closesAt), live_now, rescheduled, postponed, cancelled, finished, draft`. `book-ticket` refuses non-bookable events with a specific message. Lists include `live`, `postponed` and `rescheduled` events.
-- `GET api/event?slug=` adds `highlights, guide[{label,value}] (incl. age/duration/language), prohibited, tags, ageLimit, durationMinutes, videoUrl, venue.layoutImageUrl, venue.directionsUrl, organizer, viewCount (incremented per view), artists[{slug,name,imageUrl,isHeadliner,…}], sponsors[{tier,tierLabel,name,logoUrl,link}] (Title → Presented by → Powered by → Co-Powered by → Associate → Partner), otherEvents (same city), shareUrl (…/e/<slug>), notifyMe` (when a Bearer token is sent).
+- `GET api/event?slug=` adds `highlights, guide[{label,value}] (incl. age/duration/language), prohibited, tags, ageLimit, durationMinutes, schedule[{time,title,subtitle?}] (the evening's running order, shown as "The programme"; organisers set it with `PUT api/organiser/events/:id {schedule}`, ≤20 items), videoUrl, venue.layoutImageUrl, venue.directionsUrl, organizer, viewCount (incremented per view), artists[{slug,name,imageUrl,isHeadliner,…}], sponsors[{tier,tierLabel,name,logoUrl,link}] (Title → Presented by → Powered by → Co-Powered by → Associate → Partner), otherEvents (same city), shareUrl (…/e/<slug>), notifyMe` (when a Bearer token is sent).
 - `POST api/event/{id}/notify-me {on}` (auth) — a job notifies watchers (`event_on_sale`) once sales open.
 - `GET api/artists?q=&page=`, `GET api/artists/{slug|id}` → profile + `upcomingEvents`, `pastEvents`. Search also matches artist names.
 - `GET /e/<slug>` → web landing page that opens `gatepass://event/<slug>`.

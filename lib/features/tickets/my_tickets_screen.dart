@@ -206,16 +206,17 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
         child: GestureDetector(
           onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
           child: TicketStub(
+            ornate: true,
             background: c.groupedCanvas,
             notch: 10,
             header: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(when.toUpperCase(), style: context.text.labelMedium!.copyWith(color: c.tint, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+                Text(when.toUpperCase(), style: context.text.labelMedium!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                 const SizedBox(height: 4),
-                Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium),
-                Text(t.venueName, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
-                if (t.receivedFrom != null) Text('From ${t.receivedFrom}', style: context.text.bodySmall),
+                Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.serif(20, color: Colors.white, height: 1.15)),
+                Text(t.venueName, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall!.copyWith(color: Colors.white.withValues(alpha: 0.88))),
+                if (t.receivedFrom != null) Text('From ${t.receivedFrom}', style: context.text.bodySmall!.copyWith(color: Colors.white.withValues(alpha: 0.88))),
               ]),
             ),
             stub: Padding(
