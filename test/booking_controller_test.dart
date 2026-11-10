@@ -66,6 +66,39 @@ void main() {
     expect(c.quote.value, isNull);
   });
 
+  test('YouPI: paid by UPI, the app waits for the bank instead of failing, then shows tickets', () async {
+    pendingPoll = const Duration(milliseconds: 5);
+    pendingWait = const Duration(seconds: 2);
+    d.backend.json('POST', 'api/payment/book-ticket', {...quoteJson(gateway: 'youpi'), 'checkoutUrl': 'https://pay.example/checkout/p1'});
+    var asks = 0;
+    d.backend.on('POST', 'api/payment/process-order', (_) async => ++asks < 3
+        ? FakeBackend.err('PAYMENT_PENDING', 'Waiting for the bank to confirm your UPI payment', 202)
+        : FakeBackend.ok({'bookingStatus': 'confirmed', 'tickets': [ticketJson('t1')], 'invoiceUrl': null}));
+    d.payments.next = const PaymentSucceeded({'youpi': true});
+    c.inc(ev.tiers.first);
+    await c.createOrder();
+    expect(c.quote.value!.checkoutUrl, 'https://pay.example/checkout/p1');
+    expect(await c.pay(), isTrue);
+    expect(asks, 3);
+    expect(c.waitingForBank.value, isFalse);
+    expect(c.tickets.single.id, 't1');
+  });
+
+  test('YouPI: if the bank is slow, the order is kept and nobody is told to pay again', () async {
+    pendingPoll = const Duration(milliseconds: 5);
+    pendingWait = const Duration(milliseconds: 40);
+    d.backend.json('POST', 'api/payment/book-ticket', quoteJson(gateway: 'youpi'));
+    d.backend.on('POST', 'api/payment/process-order', (_) async => FakeBackend.err('PAYMENT_PENDING', 'Waiting', 202));
+    d.payments.next = const PaymentSucceeded({'youpi': true});
+    c.inc(ev.tiers.first);
+    await c.createOrder();
+    expect(await c.pay(), isFalse);
+    expect(c.errorCode.value, 'PAYMENT_PENDING');
+    expect(c.error.value, contains('Don’t pay again'));
+    expect(c.quote.value, isNotNull); // still ours: the webhook confirms it later
+    expect(c.payState.value, PayState.idle);
+  });
+
   test('sold out at checkout surfaces the server message', () async {
     d.backend.on('POST', 'api/payment/book-ticket', (_) async => FakeBackend.err('SOLD_OUT', 'General is sold out', 409));
     c.inc(ev.tiers.first);

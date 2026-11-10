@@ -37,6 +37,7 @@
 			<string>phonepe</string>
 			<string>paytmmp</string>
 			<string>upi</string>
+			<string>credpay</string>
 		</array>
 		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>

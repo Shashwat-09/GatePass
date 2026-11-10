@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:gatepass_ui/widgets.dart' show UpiCheckoutResult, UpiCheckoutScreen;
+import 'package:get/get.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../core/constants.dart';
@@ -26,14 +28,46 @@ class PaymentFailed extends PaymentOutcome {
 }
 
 /// Opens the payment gateway's checkout for a server-created order.
+/// [isPaid] (optional) asks the server whether the payment has landed; hosted
+/// checkouts (YouPI) use it to close themselves as soon as it has.
 abstract class PaymentLauncher {
-  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email});
+  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email, Future<bool> Function()? isPaid});
+}
+
+/// Picks the checkout for the gateway the server chose for this order.
+class GatewayLauncher implements PaymentLauncher {
+  GatewayLauncher({PaymentLauncher? razorpay, PaymentLauncher? youpi})
+      : _razorpay = razorpay ?? RazorpayLauncher(),
+        _youpi = youpi ?? YouPiLauncher();
+  final PaymentLauncher _razorpay;
+  final PaymentLauncher _youpi;
+
+  @override
+  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email, Future<bool> Function()? isPaid}) =>
+      (quote.gateway == 'youpi' ? _youpi : _razorpay).pay(quote, description: description, phone: phone, email: email, isPaid: isPaid);
+}
+
+/// YouPI: our own UPI gateway's hosted page (QR + GPay/PhonePe/Paytm buttons).
+/// The server confirms the payment when YouPI sees the bank's credit alert.
+class YouPiLauncher implements PaymentLauncher {
+  @override
+  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email, Future<bool> Function()? isPaid}) async {
+    final url = quote.checkoutUrl;
+    final ctx = Get.context;
+    if (url == null || ctx == null) return const PaymentFailed('Couldn’t open the payment page. Please try again.');
+    final r = await UpiCheckoutScreen.open(ctx, url: url, title: 'Pay ${AppConfig.appName}', returnUrlPrefix: '${AppConfig.baseUrl}pay/done', isPaid: isPaid);
+    return switch (r) {
+      UpiCheckoutResult.cancelled => const PaymentCancelled(),
+      // The server checks with YouPI either way; nothing here is proof of payment.
+      _ => const PaymentSucceeded({'youpi': true}),
+    };
+  }
 }
 
 /// Razorpay Standard Checkout (UPI, cards, netbanking, wallets).
 class RazorpayLauncher implements PaymentLauncher {
   @override
-  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email}) {
+  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email, Future<bool> Function()? isPaid}) {
     final rp = Razorpay();
     final done = Completer<PaymentOutcome>();
     void finish(PaymentOutcome o) {

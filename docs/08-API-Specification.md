@@ -365,3 +365,13 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
   - The order view has `{id, code, status, quantity, unitPricePaise, totalPaise, listPricePaise, recipients, utr, expiresAt, issuedAt, paidAt, payTo{upiId, payeeName, upiUri}}`. `upiUri` is `upi://pay?pa=…&pn=…&am=…&cu=INR&tn=GatePass <code>`.
 - **Tickets from B2B** are confirmed bookings with gateway `b2b`. Ticket views add `paidPaise`, `listPricePaise` and `soldBy` (seller name) for the "You saved" line.
 - **Jobs.** The jobs tick also expires unpaid B2B orders and returns their stock.
+
+## 8.23 As built (v0.12) — sharing to many, instant push, YouPI
+- `POST api/ticket/share {ticketId, recipients[{phone?, quantity}] (1–50)}` → `{transfers[{…transfer view, code, shareUrl, delivered}], ticket}`.
+  - One transaction: each recipient gets their own ticket and QR, and the sender's QR is re-issued once.
+  - All-or-nothing on errors: too many tickets, a repeated number, your own number, the per-event share cap.
+  - `POST api/ticket/split` is the one-recipient form (same response as before).
+  - The `split` rate-limit bucket is 60 per minute.
+- Pushes are sent the moment the writing transaction commits, so a shared ticket reaches the friend's phone within about a second. Previously they waited for the worker interval or the jobs tick.
+- New error code `PAYMENT_PENDING` (HTTP 202): paid, waiting for the bank's confirmation (YouPI). Retry `process-order`; nothing is lost.
+- YouPI: see docs/15 for the quote's `checkoutUrl`, `POST api/payment/youpi/webhook`, `GET /pay/done`, `POST api/reseller/orders/:id/pay`, `GET api/reseller/orders/:id`, and the order view's `autoConfirm` / `payTo.checkoutUrl`.

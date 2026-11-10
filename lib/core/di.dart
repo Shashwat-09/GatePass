@@ -36,7 +36,7 @@ Future<void> setupLocator() async {
     storage: storage,
     api: ApiService(tokens, appVersion: info.version),
     analytics: analytics,
-    payments: RazorpayLauncher(),
+    payments: GatewayLauncher(),
     push: push,
   );
 }

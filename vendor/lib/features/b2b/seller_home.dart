@@ -348,6 +348,39 @@ class _PayScreenState extends State<PayScreen> {
     });
   }
 
+  /// YouPI: pay on the gateway's page; the order confirms itself when the money lands.
+  Future<void> _payOnline() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final api = Session.to.api;
+    final fresh = await api.paySession(_o.id); // a new page if the last one timed out
+    if (!mounted) return;
+    setState(() => _busy = false);
+    final url = fresh.data?.checkoutUrl ?? _o.checkoutUrl;
+    if (!fresh.isOk || url == null) {
+      Delight.error();
+      setState(() => _error = fresh.error ?? 'Couldn’t open the payment page. Pay by QR below instead.');
+      return;
+    }
+    await UpiCheckoutScreen.open(
+      context,
+      url: url,
+      title: 'Pay ${o.payeeName ?? 'Your Distributor'}',
+      isPaid: () async => (await api.sellerOrder(_o.id)).data?.status == OrderStatus.paid,
+    );
+    if (!mounted) return;
+    final now = await api.sellerOrder(_o.id);
+    if (!mounted || !now.isOk) return;
+    setState(() => _o = now.data!);
+    if (_o.status == OrderStatus.paid) {
+      showSuccess(context, title: 'Paid', message: 'Tickets sent to ${_o.recipients.length} number${_o.recipients.length == 1 ? '' : 's'}.', kind: SuccessKind.sent);
+    }
+  }
+
+  B2bOrderView get o => _o;
+
   Future<void> _cancel() async {
     final r = await Session.to.api.cancelOrderAsSeller(_o.id);
     if (!mounted) return;
@@ -370,6 +403,18 @@ class _PayScreenState extends State<PayScreen> {
         Center(child: Text(formatPaise(o.totalPaise), style: context.text.displaySmall)),
         Center(child: Text('${o.quantity} × ${o.tierName} · ${o.eventTitle}', textAlign: TextAlign.center, style: context.text.bodyMedium!.copyWith(color: c.secondaryLabel))),
         const SizedBox(height: AppSpacing.md),
+        if (waiting && o.autoConfirm) ...[
+          // YouPI watches the distributor's UPI: no UTR, no waiting for a manual check.
+          PrimaryButton(key: const Key('pay-online'), label: 'Pay ${formatPaise(o.totalPaise)}', loading: _busy, onPressed: _busy ? null : _payOnline),
+          const SizedBox(height: 6),
+          Center(
+            child: Text('Any UPI app. Tickets go out the moment the payment lands.',
+                textAlign: TextAlign.center, style: context.text.bodySmall!.copyWith(color: c.secondaryLabel)),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('PAID ANOTHER WAY?', style: context.eyebrow),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         if (waiting && o.upiUri != null) ...[
           Center(
             child: Semantics(

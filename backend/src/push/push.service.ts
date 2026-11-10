@@ -25,6 +25,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
   private again = false;
+  private closed = false;
 
   constructor(private readonly ds: DataSource, @Inject(PushSender) private readonly sender: PushSender | null) {}
 
@@ -35,7 +36,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     // Instant delivery: services kick the worker right after they commit.
-    onPushKick(() => void this.flush().catch((e) => this.log.error(e)));
+    onPushKick(() => void this.flush().catch((e) => !this.closed && this.log.error(e)));
     if (!this.ds.subscribers.some((x) => x instanceof PushKickSubscriber)) this.ds.subscribers.push(new PushKickSubscriber());
     if (p.driver === 'fcm' && config().jobs.mode === 'timers') {
       this.timer = setInterval(() => void this.flush().catch((e) => this.log.error(e)), p.intervalMs);
@@ -43,12 +44,13 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
     }
   }
   onModuleDestroy() {
+    this.closed = true;
     onPushKick(null);
     if (this.timer) clearInterval(this.timer);
   }
 
   async flush(limit = 100): Promise<number> {
-    if (!this.sender) return 0;
+    if (!this.sender || this.closed) return 0;
     if (this.running) {
       this.again = true; // a kick arrived mid-flush: run once more afterwards
       return 0;

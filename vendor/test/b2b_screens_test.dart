@@ -165,4 +165,17 @@ void main() {
     expect(terms.commissionPct, 8);
     expect(terms.compFree, 25);
   });
+
+  testWidgets('distributor on YouPI: the seller just taps Pay; QR + UTR stay as a fallback', (t) async {
+    const order = B2bOrderView(
+      id: 'o1', code: 'B2B-AUTO', status: OrderStatus.awaitingPayment, quantity: 2, unitPricePaise: 85000, totalPaise: 170000,
+      eventTitle: 'Sunset Sessions', tierName: 'General Admission', upiUri: 'upi://pay?pa=owner@okaxis&am=1700.00', upiId: 'owner@okaxis',
+      payeeName: 'Owner', checkoutUrl: 'https://pay.example/checkout/p1', autoConfirm: true,
+    );
+    await boot(t, const PayScreen(order: order), role: Role.reseller);
+    expect(find.byKey(const Key('pay-online')), findsOneWidget);
+    expect(find.text('Pay ₹1,700'), findsOneWidget);
+    expect(find.text('PAID ANOTHER WAY?'), findsOneWidget);
+    expect(find.byKey(const Key('utr')), findsOneWidget);
+  });
 }

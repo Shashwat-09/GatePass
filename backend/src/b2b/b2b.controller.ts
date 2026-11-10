@@ -9,6 +9,7 @@ import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { parsePage } from '../common/pagination';
 import { DistributorPriceChange, DistributorProfile, Reseller, Tier, User } from '../db/entities';
+import { PayReturnController, YouPiWebhookController } from '../payments/youpi.controller';
 import { B2bService } from './b2b.service';
 
 class ProfileDto {
@@ -183,7 +184,25 @@ export class ResellerController {
   cancel(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.b2b.cancel(req.userId!, id, false);
   }
+
+  /** YouPI: the payment page for this order (a fresh session if the last one lapsed). */
+  @Post('orders/:id/pay')
+  @HttpCode(200)
+  pay(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.b2b.paySession(req.userId!, id);
+  }
+
+  /** Has the payment arrived? (YouPI) — confirms the order if it has. */
+  @Get('orders/:id')
+  one(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.b2b.checkPayment(req.userId!, id);
+  }
 }
 
-@Module({ imports: [BookingModule], controllers: [DistributorController, ResellerController], providers: [B2bService], exports: [B2bService] })
+@Module({
+  imports: [BookingModule],
+  controllers: [DistributorController, ResellerController, YouPiWebhookController, PayReturnController],
+  providers: [B2bService],
+  exports: [B2bService],
+})
 export class B2bModule {}

@@ -15,7 +15,7 @@ import { istDate } from '../common/ist';
 import { FormResponseInput, FormsService } from '../forms/forms.service';
 import { notify } from '../notifications/notify';
 import { issueBookingVouchers } from '../vouchers/voucher-core';
-import { PaymentGateway } from '../payments/gateway';
+import { PaymentGateway, YouPiGateway } from '../payments/gateway';
 
 export interface CheckoutOptions {
   promoCode?: string;
@@ -192,16 +192,26 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Create the gateway order outside the transaction (network call, no locks held).
+    let checkoutUrl: string | undefined;
     try {
-      const order = await this.gateway.createOrder(booking.id, booking.payablePaise);
+      const [ev, user] = await Promise.all([
+        this.ds.getRepository(EventEntity).findOne({ where: { id: booking.eventId }, select: ['id', 'title'] }),
+        this.ds.getRepository(User).findOne({ where: { id: userId }, select: ['id', 'name', 'phone'] }),
+      ]);
+      const order = await this.gateway.createOrder(booking.id, booking.payablePaise, {
+        code: booking.code, description: ev ? `${ev.title} · ${booking.code}` : booking.code,
+        phone: user?.phone, name: user?.name ?? undefined,
+      });
       booking.orderRef = order.orderRef;
+      checkoutUrl = order.checkoutUrl;
       await this.ds.getRepository(Booking).update({ id: booking.id }, { orderRef: order.orderRef });
     } catch (e) {
       this.log.error(`createOrder failed for ${booking.id}: ${(e as Error).message}`);
       await this.fail(booking.id, 'Gateway order creation failed');
       throw new ApiError('PAYMENT_FAILED', 'Could not start payment. Please try again.');
     }
-    return this.quote(booking);
+    // YouPI: the hosted checkout page the app opens.
+    return { ...this.quote(booking), ...(checkoutUrl ? { checkoutUrl } : {}) };
   }
 
   /** Price preview for the summary screen — same rules as checkout, nothing held. */
@@ -747,6 +757,10 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       this.log.error(`verify failed for ${b.id}: ${(e as Error).message}`);
       throw new ApiError('SERVER_ERROR', 'Could not confirm payment yet. If you were charged, your tickets will appear shortly.');
     }
+    if (!result.ok && result.pending) {
+      // Paid but not confirmed by the bank yet (YouPI): keep the booking and let the app ask again.
+      throw new ApiError('PAYMENT_PENDING', result.reason);
+    }
     if (!result.ok) {
       this.log.warn(`Payment verification failed booking=${b.id}: ${result.reason}`);
       await this.fail(b.id, result.reason);
@@ -760,7 +774,11 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   async cancel(userId: string, bookingId: string) {
     const b = await this.ds.getRepository(Booking).findOne({ where: { id: bookingId, userId } }).catch(() => null);
     if (!b) throw new ApiError('NOT_FOUND', 'Booking not found');
-    if (b.status === 'pending') await this.fail(b.id, 'Cancelled by user');
+    if (b.status === 'pending') {
+      await this.fail(b.id, 'Cancelled by user');
+      // YouPI serves one payer per UPI ID at a time: free the slot for the next person now.
+      if (this.gateway instanceof YouPiGateway && b.orderRef) void this.gateway.client.cancel(b.orderRef);
+    }
     return { bookingStatus: b.status === 'pending' ? 'failed' : b.status };
   }
 

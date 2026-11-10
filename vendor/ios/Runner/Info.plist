@@ -10,6 +10,11 @@
 	<array>
 		<string>https</string>
 		<string>mailto</string>
+		<string>upi</string>
+		<string>tez</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>credpay</string>
 	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>

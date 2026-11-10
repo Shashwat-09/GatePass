@@ -51,7 +51,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (!mounted) return;
     if (ok) {
       PaymentScreen.goToConfirmation(); // green check + chime there
-    } else if (c.error.value != null && !c.error.value!.startsWith('Payment cancelled')) {
+    } else if (c.error.value != null && !c.error.value!.startsWith('Payment cancelled') && c.errorCode.value != 'PAYMENT_PENDING') {
       Delight.error();
     }
   }
@@ -103,9 +103,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     child: Text(c.error.value!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ),
                 if (c.payState.value == PayState.verifying)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: Text('Confirming your payment… please don\'t close the app.'),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Row(children: [
+                      const CupertinoActivityIndicator(),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(c.waitingForBank.value
+                            ? 'Waiting for your bank to confirm the UPI payment. This usually takes a few seconds.'
+                            : 'Confirming your payment… please don\'t close the app.'),
+                      ),
+                    ]),
                   ),
                 if (q.gateway == 'mock') ..._testMode(busy) else
                   PrimaryButton(
@@ -117,7 +125,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(CupertinoIcons.lock, size: 14, color: context.colors.secondaryLabel),
                   const SizedBox(width: 4),
-                  Text('Secure payment · UPI, cards, netbanking', style: context.text.bodySmall),
+                  Text(q.gateway == 'youpi' ? 'Secure UPI payment · GPay, PhonePe, Paytm, any UPI app' : 'Secure payment · UPI, cards, netbanking',
+                      style: context.text.bodySmall),
                 ]),
               ],
             );

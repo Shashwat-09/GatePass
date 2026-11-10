@@ -8,6 +8,7 @@ import {
   B2bOrder, DistributorPrice, DistributorPriceChange, DistributorProfile, EventEntity, Reseller, Tier, User, UserRole,
 } from '../db/entities';
 import { notify } from '../notifications/notify';
+import { YouPiClient, youpiOutcome } from '../payments/gateway';
 import { commercialOf } from '../organiser/settlement';
 
 export interface Recipient { phone: string; name?: string | null; email?: string | null; qty: number; salePricePaise?: number | null }
@@ -28,6 +29,8 @@ const pct = (amount: number, p: number) => Math.round((amount * p) / 100);
 export class B2bService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger('B2B');
   private timer?: NodeJS.Timeout;
+  private youpiDistributorId: string | null | undefined;
+  readonly youpiClient = config().payment.youpiB2b ? new YouPiClient(config().payment.youpiB2b!) : null;
 
   constructor(private readonly ds: DataSource, private readonly booking: BookingService) {}
 
@@ -39,6 +42,21 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
   }
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * The distributor whose UPI is watched by YouPI (YOUPI_B2B_*): their
+   * sellers pay through YouPI's checkout and orders confirm themselves.
+   */
+  async youpiFor(distributorId: string): Promise<YouPiClient | null> {
+    const b2b = config().payment.youpiB2b;
+    if (!b2b || !this.youpiClient) return null;
+    if (this.youpiDistributorId === undefined) {
+      const u = await this.ds.getRepository(User).findOne({ where: { phone: b2b.distributorPhone, deletedAt: IsNull() }, select: ['id'] });
+      if (u) this.youpiDistributorId = u.id; // until then, look again next time
+      else return null;
+    }
+    return this.youpiDistributorId === distributorId ? this.youpiClient : null;
   }
 
   // ───────────── prices ─────────────
@@ -157,7 +175,7 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
   // ───────────── orders ─────────────
 
   async createOrder(userId: string, dto: { tierId: string; quantity: number; recipients: Recipient[] }) {
-    return this.ds.transaction(async (m) => {
+    const made = await this.ds.transaction(async (m) => {
       const seller = await this.sellerOf(m, userId);
       const tier = await m.createQueryBuilder(Tier, 't').setLock('pessimistic_write').where('t.id = :id', { id: dto.tierId }).getOne();
       if (!tier || tier.b2bPricePaise == null) throw new ApiError('VALIDATION_ERROR', 'This ticket type isn’t available to B2B sellers');
@@ -188,8 +206,89 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       const who = seller.displayName ?? 'A seller';
       await notify(m, seller.distributorId, 'booking', seller.trusted ? 'Tickets issued, payment due' : 'New B2B order',
         `${who}: ${dto.quantity} × ${tier.name} for ${event.title} · ${this.rupees(order.totalPaise)} (${order.code})`, { eventId: event.id });
-      return this.orderView(order, event, tier, profile);
+      return { order, event, tier, profile, sellerName: who };
     });
+    let { order } = made;
+    // Distributor on YouPI: open a payment session so the money confirms itself.
+    const youpi = order.status === 'awaiting_payment' ? await this.youpiFor(order.distributorId) : null;
+    if (youpi) {
+      try {
+        const sellerUser = await this.ds.getRepository(User).findOne({ where: { id: userId }, select: ['id', 'phone', 'name'] });
+        const p = await youpi.createPayment({
+          orderId: order.code, amountPaise: order.totalPaise,
+          description: `${made.event.title} · ${order.quantity} × ${made.tier.name} · ${order.code}`,
+          customer: { name: made.sellerName, phoneNumber: sellerUser?.phone },
+          metadata: { kind: 'b2b', orderId: order.id },
+        });
+        await this.ds.getRepository(B2bOrder).update({ id: order.id }, { gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
+        order = Object.assign(order, { gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
+      } catch (e) {
+        // YouPI down: the seller can still pay the UPI ID and enter the UTR.
+        this.log.warn(`YouPI session for ${order.code} failed: ${(e as Error).message}`);
+      }
+    }
+    return this.orderView(order, made.event, made.tier, made.profile);
+  }
+
+  /**
+   * YouPI saw the seller's payment arrive in the distributor's account
+   * (signed webhook, or the seller's app asking): issue the tickets.
+   */
+  async confirmByGateway(paymentId: string, amountPaise: number, utr?: string | null) {
+    const o = await this.ds.getRepository(B2bOrder).findOneBy({ gatewayRef: paymentId });
+    if (!o) {
+      this.log.warn(`YouPI payment ${paymentId} matches no B2B order`);
+      return null;
+    }
+    if (amountPaise !== o.totalPaise) {
+      this.log.error(`YouPI amount mismatch order=${o.code} paid=${amountPaise} expected=${o.totalPaise}`);
+      return null;
+    }
+    if (o.status === 'paid' || o.status === 'cancelled') return o;
+    if (utr && !o.utr) await this.ds.getRepository(B2bOrder).update({ id: o.id }, { utr });
+    await this.confirm(o.distributorId, o.id);
+    await this.ds.transaction((m) => notify(m, o.distributorId, 'booking', 'Payment received',
+      `Order ${o.code}: ${this.rupees(o.totalPaise)} reached your UPI${utr ? ` (ref ${utr})` : ''}. Tickets sent automatically.`, { eventId: o.eventId }));
+    return o;
+  }
+
+  /**
+   * The seller opens the payment page: reuse the live YouPI session, or start
+   * a fresh one if the last one lapsed (YouPI gives each payer 5 minutes).
+   */
+  async paySession(userId: string, orderId: string) {
+    const o = await this.ds.getRepository(B2bOrder).findOneBy({ id: orderId, resellerId: userId });
+    if (!o) throw new ApiError('NOT_FOUND', 'Order not found');
+    const youpi = await this.youpiFor(o.distributorId);
+    if (youpi && ['awaiting_payment', 'payment_submitted'].includes(o.status)) {
+      const last = o.gatewayRef ? await youpi.getPayment(o.gatewayRef).catch(() => null) : null;
+      const outcome = last ? youpiOutcome(last.status, config().payment.youpiAccept) : 'failed';
+      if (outcome === 'paid') return this.checkPayment(userId, orderId);
+      if (outcome === 'failed') {
+        const p = await youpi.createPayment({
+          orderId: o.code, amountPaise: o.totalPaise, description: `GatePass B2B · ${o.quantity} tickets · ${o.code}`,
+          metadata: { kind: 'b2b', orderId: o.id }, attempt: Date.now(),
+        });
+        await this.ds.getRepository(B2bOrder).update({ id: o.id }, { gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
+      }
+    }
+    const fresh = await this.ds.getRepository(B2bOrder).findOneByOrFail({ id: o.id });
+    const profile = await this.ds.getRepository(DistributorProfile).findOneBy({ userId: fresh.distributorId });
+    return this.orderView(fresh, null, null, profile);
+  }
+
+  /** The seller's app asks whether YouPI has seen the payment yet. */
+  async checkPayment(userId: string, orderId: string) {
+    const o = await this.ds.getRepository(B2bOrder).findOneBy({ id: orderId, resellerId: userId });
+    if (!o) throw new ApiError('NOT_FOUND', 'Order not found');
+    const youpi = o.gatewayRef ? await this.youpiFor(o.distributorId) : null;
+    if (youpi && ['awaiting_payment', 'payment_submitted', 'expired'].includes(o.status)) {
+      const p = await youpi.getPayment(o.gatewayRef!).catch(() => null);
+      if (p && youpiOutcome(p.status, config().payment.youpiAccept) === 'paid') await this.confirmByGateway(p.paymentId, p.amountPaise);
+    }
+    const fresh = await this.ds.getRepository(B2bOrder).findOneByOrFail({ id: o.id });
+    const profile = await this.ds.getRepository(DistributorProfile).findOneBy({ userId: fresh.distributorId });
+    return this.orderView(fresh, null, null, profile);
   }
 
   private cleanRecipients(list: Recipient[], quantity: number, listPricePaise: number): Recipient[] {
@@ -293,6 +392,7 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       await this.release(m, o);
       o.status = 'cancelled';
       await m.save(o);
+      if (o.gatewayRef) void this.youpiClient?.cancel(o.gatewayRef); // free the payer slot
       return this.orderView(o);
     });
   }
@@ -357,7 +457,9 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       quantity: o.quantity, unitPricePaise: o.unitPricePaise, totalPaise: o.totalPaise, listPricePaise: o.listPricePaise,
       recipients: o.recipients, utr: o.utr, createdAt: o.createdAt?.toISOString() ?? null, expiresAt: o.expiresAt?.toISOString() ?? null,
       issuedAt: o.issuedAt?.toISOString() ?? null, paidAt: o.paidAt?.toISOString() ?? null,
-      payTo: profile ? { upiId: profile.upiId, payeeName: profile.payeeName, upiUri: pay } : undefined,
+      payTo: profile ? { upiId: profile.upiId, payeeName: profile.payeeName, upiUri: pay, checkoutUrl: o.checkoutUrl ?? null } : undefined,
+      /** Payment confirms itself (YouPI watches the distributor's UPI). */
+      autoConfirm: !!o.gatewayRef,
     };
   }
 

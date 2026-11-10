@@ -79,9 +79,9 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.11)
+## 9. Current status (v0.12)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
-- ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Mock gateway is dev-only (refused in production).
+- ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Or YouPI (self-hosted UPI, docs/15). Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
 - ✅ Tickets: unique Ed25519-signed QR (`GP2…`, re-issued on share); invoice PDFs via signed links.
 - ✅ Offline entry: app keeps all upcoming tickets on the phone; `/gate` is a PWA that downloads the event list (QR hashes + public key), scans offline, and syncs idempotently with conflict review.
@@ -96,11 +96,22 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ iOS (v0.10): `.github/workflows/ios.yml` builds both apps unsigned on macOS runners; TestFlight upload once App Store Connect secrets are set (docs/RELEASE.md §iOS). Info.plist permission texts + push entitlement added.
 - ✅ B2B and roles (v0.11, docs/14): one account can hold several roles (`extraRoles`); per-event commercial terms set by admin (commission, box office, B2B %, free comps + fee); comp allowance with requests/approval; organiser B2B switch + trade rate per ticket type; distributor prices (default + per seller, change log), sellers (trusted = issue before payment), seller orders paid to the distributor's UPI (QR + UTR, hold + expiry), tickets to any number with "You saved"; distributor books and event settlement. Organiser app tabs per role (Events / Distribute / Sell).
 - ✅ Utsav look (v0.11): customer app redesign (ivory, peacock teal, saffron, Fraunces + Inter, jaali, ornate ticket stub, seat map with hold timer).
+- ✅ v0.12: **instant sharing**:
+  - share with several people in one tap (`api/ticket/share`), with recents and contacts;
+  - pushes sent on commit (about 1 s to the friend's phone), about 14 ms server time;
+  - recipient's app chimes and refreshes.
+- ✅ v0.12: **feel layer** (`gatepass_ui` Delight):
+  - haptics plus synthesised tap, success, send and error sounds, respecting silent mode, with switches in Account;
+  - green SuccessCheck / showSuccess;
+  - OTP autofill (Android SMS User Consent, iOS one-time code);
+  - scanner chime and buzz.
+- ✅ v0.12: Utsav brand moved into `packages/gatepass_ui` (palette, Fraunces + Inter, jaali) and applied to the Organiser app.
+- ✅ v0.12: **YouPI payments** (docs/15): `PAYMENT_GATEWAY=youpi` for customer checkout (hosted UPI page, `PAYMENT_PENDING` while the bank confirms, signed webhook), and `YOUPI_B2B_*` so seller payments to the distributor's UPI confirm themselves. Razorpay is still switchable. Read docs/15's limits before going live.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 159 (unit + e2e on real Postgres), organiser app 42 + 54 screenshot renders + live organiser and B2B flows, client 77 (repositories, controller, widgets light/dark) + 36 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 164 (unit + e2e on real Postgres, incl. a fake YouPI), organiser app 43 + 54 screenshot renders + live organiser and B2B flows, client 82 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: Google Cloud Run deploy (Mumbai), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).

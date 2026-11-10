@@ -1,16 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { config } from '../config/config';
+import { config, YouPiMerchant } from '../config/config';
 
 export interface GatewayOrder {
   orderRef: string;
   /** Public value the client SDK needs (Razorpay key id). Never a secret. */
   publicKey: string;
+  /** Hosted checkout page to open (YouPI). */
+  checkoutUrl?: string;
 }
 
 export type VerifyResult =
   | { ok: true; paymentId: string }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; pending?: boolean };
 
 export interface BookingForPayment {
   id: string;
@@ -20,7 +22,7 @@ export interface BookingForPayment {
 
 export abstract class PaymentGateway {
   abstract readonly name: string;
-  abstract createOrder(bookingId: string, amountPaise: number): Promise<GatewayOrder>;
+  abstract createOrder(bookingId: string, amountPaise: number, info?: { code?: string; description?: string; phone?: string; name?: string }): Promise<GatewayOrder>;
   /** Verify the client SDK result against the gateway (server-to-server). */
   abstract verifyClientPayment(b: BookingForPayment, payload: Record<string, unknown>): Promise<VerifyResult>;
   abstract verifyWebhook(rawBody: Buffer, signature: string | undefined): boolean;
@@ -145,6 +147,163 @@ export class MockGateway extends PaymentGateway {
   }
 }
 
+// ───────────────────────────── YouPI ─────────────────────────────
+
+/** A YouPI payment as its merchant API reports it. */
+export interface YouPiPayment {
+  paymentId: string;
+  orderId: string;
+  amountPaise: number;
+  status: string; // INITIATED | ACTIVE | QUEUED | PROCESSING | MANUAL_REVIEW | OBSERVED_SUCCESS | RECONCILED | SUCCESS | FAILED | EXPIRED | CANCELLED
+  verificationLevel?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** What a YouPI status means for us. */
+export function youpiOutcome(status: string, accept: 'observed' | 'reconciled'): 'paid' | 'pending' | 'failed' {
+  const s = status.toUpperCase();
+  if (s === 'RECONCILED') return 'paid';
+  if (s === 'OBSERVED_SUCCESS') return accept === 'observed' ? 'paid' : 'pending';
+  // Plain SUCCESS comes from YouPI's developer simulator / counter modes, never
+  // from a bank alert: only honoured outside production.
+  if (s === 'SUCCESS') return config().isProd ? 'pending' : 'paid';
+  if (['FAILED', 'EXPIRED', 'CANCELLED'].includes(s)) return 'failed';
+  return 'pending';
+}
+
+/**
+ * Server-side client for one YouPI merchant (self-hosted UPI gateway). The
+ * merchant API key never leaves the server; the payer only sees the hosted
+ * checkout page (QR + UPI app buttons). YouPI watches the receiving phone's
+ * bank SMS/email and reports the payment by a signed webhook.
+ */
+export class YouPiClient {
+  private readonly log = new Logger('YouPI');
+  constructor(private readonly m: YouPiMerchant) {}
+
+  private async api<T>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+    const res = await fetch(new URL(path, this.m.apiUrl), {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        'x-merchant-id': this.m.merchantId,
+        'x-merchant-key': this.m.apiKey,
+        ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const json = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
+    if (!res.ok) {
+      this.log.error(`${method} ${path} → ${res.status} ${json?.code ?? ''} ${json?.error ?? ''}`);
+      throw new Error(`YouPI ${res.status}${json?.code ? ` ${json.code}` : ''}`);
+    }
+    return json;
+  }
+
+  async createPayment(p: {
+    orderId: string; amountPaise: number; description: string; returnUrl?: string;
+    customer?: { name?: string | null; phoneNumber?: string | null }; metadata: Record<string, unknown>;
+    /** A new attempt after the last session expired (new idempotency key). */
+    attempt?: number;
+  }) {
+    const r = await this.api<{ paymentId: string; checkoutUrl: string; status: string; queuePosition?: number }>('POST', 'api/v1/payments', {
+      orderId: p.orderId,
+      amount: (p.amountPaise / 100).toFixed(2),
+      currency: 'INR',
+      method: 'UPI',
+      description: p.description.slice(0, 120),
+      ...(p.returnUrl ? { returnUrl: p.returnUrl } : {}),
+      customer: { ...(p.customer?.name ? { name: p.customer.name } : {}), ...(p.customer?.phoneNumber ? { phoneNumber: p.customer.phoneNumber } : {}) },
+      metadata: p.metadata,
+    }, `gatepass-${p.orderId}${p.attempt ? `-${p.attempt}` : ''}`);
+    return r;
+  }
+
+  async getPayment(id: string): Promise<YouPiPayment> {
+    const r = await this.api<{ paymentId: string; orderId: string; amountPaise: string | number; status: string; internalStatus?: string; verificationLevel?: number; metadata?: Record<string, unknown> }>(
+      'GET', `api/v1/payments/${encodeURIComponent(id)}`,
+    );
+    return {
+      paymentId: r.paymentId, orderId: r.orderId, amountPaise: Number(r.amountPaise),
+      status: r.internalStatus ?? r.status, verificationLevel: r.verificationLevel, metadata: r.metadata,
+    };
+  }
+
+  async cancel(id: string) {
+    await this.api('POST', `api/v1/checkout/${encodeURIComponent(id)}/cancel`, {}).catch(() => undefined);
+  }
+
+  /**
+   * Webhook check: X-Gateway-Signature-V2 = "sha256=" + HMAC_SHA256(secret, timestamp + "." + body),
+   * with the timestamp (ms) no more than 10 minutes old.
+   */
+  verifyWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>, now = Date.now()): boolean {
+    const sig = String(headers['x-gateway-signature-v2'] ?? '');
+    const ts = String(headers['x-gateway-timestamp'] ?? '');
+    if (!sig.startsWith('sha256=') || !/^\d{10,16}$/.test(ts)) return false;
+    if (Math.abs(now - Number(ts)) > 10 * 60_000) return false;
+    const expected = hmacHex(this.m.webhookSecret, Buffer.concat([Buffer.from(`${ts}.`), rawBody]));
+    return safeEqualHex(expected, sig.slice(7));
+  }
+}
+
+/**
+ * Customer checkout through YouPI: we create a payment session and the app
+ * opens its hosted page. Tickets are issued when YouPI reports the payment
+ * (signed webhook, or the app asking us to check) for the exact amount.
+ */
+@Injectable()
+export class YouPiGateway extends PaymentGateway {
+  readonly name = 'youpi';
+  private readonly log = new Logger('YouPI');
+  readonly client: YouPiClient;
+
+  constructor() {
+    super();
+    this.client = new YouPiClient(config().payment.youpi!);
+  }
+
+  async createOrder(bookingId: string, amountPaise: number, info: { code?: string; description?: string; phone?: string; name?: string } = {}): Promise<GatewayOrder> {
+    const r = await this.client.createPayment({
+      orderId: info.code ?? bookingId,
+      amountPaise,
+      description: info.description ?? 'GatePass tickets',
+      returnUrl: config().payment.youpiReturnUrl,
+      customer: { name: info.name, phoneNumber: info.phone },
+      metadata: { kind: 'booking', bookingId },
+    });
+    return { orderRef: r.paymentId, publicKey: 'youpi', checkoutUrl: r.checkoutUrl };
+  }
+
+  async verifyClientPayment(b: BookingForPayment): Promise<VerifyResult> {
+    const p = await this.client.getPayment(b.orderRef);
+    if (p.paymentId !== b.orderRef) return { ok: false, reason: 'Payment is for a different order' };
+    const outcome = youpiOutcome(p.status, config().payment.youpiAccept);
+    if (outcome === 'failed') return { ok: false, reason: `Payment ${p.status.toLowerCase()}` };
+    if (p.amountPaise !== b.totalPaise) {
+      this.log.warn(`Amount mismatch booking=${b.id} paid=${p.amountPaise} expected=${b.totalPaise}`);
+      return { ok: false, reason: 'Amount mismatch' };
+    }
+    if (outcome === 'pending') return { ok: false, pending: true, reason: 'Waiting for the bank to confirm your UPI payment' };
+    return { ok: true, paymentId: `youpi_${p.paymentId}` };
+  }
+
+  /** YouPI webhooks come in on their own route (see YouPiWebhookController). */
+  verifyWebhook(): boolean {
+    return false;
+  }
+
+  /** UPI to a bank account has no refund API: the money goes back by a manual UPI transfer. */
+  async refund(paymentId: string, amountPaise: number) {
+    this.log.error(`MANUAL REFUND NEEDED: ${paymentId} ₹${(amountPaise / 100).toFixed(2)} (YouPI has no refund API)`);
+    throw new Error('Manual refund needed');
+  }
+}
+
 export function createGateway(): PaymentGateway {
-  return config().payment.gateway === 'razorpay' ? new RazorpayGateway() : new MockGateway();
+  const g = config().payment.gateway;
+  if (g === 'razorpay') return new RazorpayGateway();
+  if (g === 'youpi') return new YouPiGateway();
+  return new MockGateway();
 }

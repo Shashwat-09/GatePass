@@ -61,7 +61,7 @@ class FakePayments implements PaymentLauncher {
   PaymentOutcome next = const PaymentSucceeded({'razorpay_payment_id': 'pay_1', 'razorpay_order_id': 'order_1', 'razorpay_signature': 'sig'});
   int opened = 0;
   @override
-  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email}) async {
+  Future<PaymentOutcome> pay(BookingQuote quote, {required String description, String? phone, String? email, Future<bool> Function()? isPaid}) async {
     opened++;
     return next;
   }

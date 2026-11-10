@@ -23,6 +23,10 @@ class SelectedSeat {
 
 enum PayState { idle, paying, verifying, done }
 
+/// How often and how long to ask while YouPI waits for the bank (tests shorten these).
+Duration pendingPoll = const Duration(seconds: 3);
+Duration pendingWait = const Duration(minutes: 3);
+
 /// In-progress checkout for one event. Prices shown before the order is
 /// created are estimates; the server quote is the source of truth.
 class BookingController extends GetxController {
@@ -60,6 +64,8 @@ class BookingController extends GetxController {
   final tickets = <TicketModel>[].obs;
   final invoiceUrl = RxnString();
   final payState = PayState.idle.obs;
+  /// Paid by UPI; waiting for the bank's confirmation to reach the gateway.
+  final waitingForBank = false.obs;
   String _idempotencyKey = BookingRepository.newIdempotencyKey();
 
   void start(EventModel e) {
@@ -331,7 +337,9 @@ class BookingController extends GetxController {
     error.value = null;
     payState.value = PayState.paying;
     final user = sl<AuthRepository>().currentUser;
-    final outcome = await _payments.pay(q, description: event.title, phone: user?.phone, email: user?.email);
+    final outcome = await _payments.pay(q, description: event.title, phone: user?.phone, email: user?.email,
+        // Hosted checkout (YouPI) closes itself once the server sees the money.
+        isPaid: () async => (await _repo.processOrder(q, event, const {'youpi': true})).isOk);
     switch (outcome) {
       case PaymentSucceeded(:final payload):
         return confirmWith(payload);
@@ -353,7 +361,22 @@ class BookingController extends GetxController {
     if (q == null) return false;
     payState.value = PayState.verifying;
     error.value = null;
-    final r = await _repo.processOrder(q, event, payload);
+    var r = await _repo.processOrder(q, event, payload);
+    // YouPI: paid, but the bank's credit alert hasn't reached the gateway yet. Keep asking.
+    final until = DateTime.now().add(pendingWait);
+    while (!r.isOk && r.code == 'PAYMENT_PENDING' && DateTime.now().isBefore(until)) {
+      waitingForBank.value = true;
+      await Future<void>.delayed(pendingPoll);
+      r = await _repo.processOrder(q, event, payload);
+    }
+    waitingForBank.value = false;
+    if (!r.isOk && r.code == 'PAYMENT_PENDING') {
+      // Keep the order: the server confirms it the moment the bank does (push + Tickets).
+      payState.value = PayState.idle;
+      errorCode.value = r.code;
+      error.value = 'Your bank hasn’t confirmed yet. If the money left your account, your tickets will appear in Tickets by themselves. Don’t pay again.';
+      return false;
+    }
     if (!r.isOk) {
       payState.value = PayState.idle;
       error.value = r.error;

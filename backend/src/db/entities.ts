@@ -860,6 +860,10 @@ export class B2bOrder {
   @Column({ type: 'timestamptz', nullable: true }) issuedAt!: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) paidAt!: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) expiresAt!: Date | null;
+  /** YouPI payment id when the distributor's UPI is watched by YouPI (payment confirms itself). */
+  @Index() @Column({ type: 'varchar', nullable: true }) gatewayRef!: string | null;
+  /** YouPI hosted checkout page for the seller. */
+  @Column({ type: 'varchar', nullable: true }) checkoutUrl!: string | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 

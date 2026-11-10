@@ -125,7 +125,9 @@ class ApiService {
     } catch (_) {
       decoded = null;
     }
-    if (res.statusCode >= 200 && res.statusCode < 300) {
+    // A 2xx can still carry an error envelope (202 PAYMENT_PENDING: paid, waiting for the bank).
+    final envelopeError = decoded is Map && decoded['success'] == false;
+    if (res.statusCode >= 200 && res.statusCode < 300 && !envelopeError) {
       final data = (decoded is Map && decoded['success'] == true) ? decoded['data'] : decoded;
       return ApiResult.ok(data, statusCode: res.statusCode);
     }

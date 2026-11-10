@@ -370,7 +370,7 @@ class B2bOrderView {
   const B2bOrderView({
     required this.id, required this.code, required this.status, required this.quantity, required this.unitPricePaise, required this.totalPaise,
     this.eventTitle = '', this.tierName = '', this.listPricePaise = 0, this.recipients = const [], this.utr, this.createdAt, this.expiresAt,
-    this.upiUri, this.upiId, this.payeeName, this.sellerName, this.sellerPhone,
+    this.upiUri, this.upiId, this.payeeName, this.sellerName, this.sellerPhone, this.checkoutUrl, this.autoConfirm = false,
   });
   factory B2bOrderView.fromJson(Map j) {
     final pay = j['payTo'] as Map?;
@@ -383,8 +383,13 @@ class B2bOrderView {
       utr: j['utr']?.toString(), createdAt: _date(j['createdAt']), expiresAt: _date(j['expiresAt']),
       upiUri: pay?['upiUri']?.toString(), upiId: pay?['upiId']?.toString(), payeeName: pay?['payeeName']?.toString(),
       sellerName: seller?['name']?.toString(), sellerPhone: seller?['phone']?.toString(),
+      checkoutUrl: pay?['checkoutUrl']?.toString(), autoConfirm: j['autoConfirm'] == true,
     );
   }
+
+  /// YouPI checkout page (the distributor's UPI is watched; payment confirms itself).
+  final String? checkoutUrl;
+  final bool autoConfirm;
   final String id;
   final String code;
   final OrderStatus status;

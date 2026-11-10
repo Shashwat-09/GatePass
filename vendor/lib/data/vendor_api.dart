@@ -70,6 +70,10 @@ abstract class VendorApi {
   Future<ApiResult<Paged<B2bOrderView>>> sellerOrders({String? status, int page = 1});
   Future<ApiResult<B2bOrderView>> submitUtr(String orderId, String utr);
   Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id);
+  /// YouPI: the payment page for an order (a fresh one if the last lapsed).
+  Future<ApiResult<B2bOrderView>> paySession(String orderId);
+  /// One order, checking with YouPI whether the money has arrived.
+  Future<ApiResult<B2bOrderView>> sellerOrder(String orderId);
 }
 
 class HttpVendorApi implements VendorApi {
@@ -282,4 +286,12 @@ class HttpVendorApi implements VendorApi {
   @override
   Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id) async =>
       (await _api.request('api/reseller/orders/$id/cancel', method: Method.post, body: {})).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<B2bOrderView>> paySession(String orderId) async =>
+      (await _api.request('api/reseller/orders/$orderId/pay', method: Method.post, body: {})).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<B2bOrderView>> sellerOrder(String orderId) async =>
+      (await _api.request('api/reseller/orders/$orderId')).map((d) => B2bOrderView.fromJson(d as Map));
 }

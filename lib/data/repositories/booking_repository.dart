@@ -16,8 +16,10 @@ class BookingQuote {
   final int taxPaise;
   final int totalPaise;
   final String orderRef;
-  /// 'razorpay' (live/test keys) or 'mock' (development only).
+  /// 'razorpay', 'youpi' (self-hosted UPI) or 'mock' (development only).
   final String gateway;
+  /// YouPI: the hosted checkout page (QR + UPI app buttons).
+  final String? checkoutUrl;
   /// Public gateway key for the SDK (Razorpay key id) — not a secret.
   final String gatewayKey;
   final DateTime? expiresAt;
@@ -38,6 +40,7 @@ class BookingQuote {
     required this.orderRef,
     required this.gateway,
     required this.gatewayKey,
+    this.checkoutUrl,
     this.discountPaise = 0,
     this.expiresAt,
     PriceBreakdown? price,
@@ -55,6 +58,7 @@ class BookingQuote {
         orderRef: d['orderRef'].toString(),
         gateway: (d['gateway'] ?? 'mock').toString(),
         gatewayKey: (d['gatewayToken'] ?? '').toString(),
+        checkoutUrl: d['checkoutUrl']?.toString(),
         expiresAt: DateTime.tryParse((d['expiresAt'] ?? '').toString())?.toLocal(),
         price: PriceBreakdown.fromJson(d),
         status: (d['bookingStatus'] ?? 'pending').toString(),

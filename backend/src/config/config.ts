@@ -10,7 +10,15 @@ import { Logger } from '@nestjs/common';
  * generate ephemeral random secrets (never a fixed default) and log a warning.
  */
 export type SmsProvider = 'console' | 'msg91' | 'twilio';
-export type PaymentGateway = 'mock' | 'razorpay';
+export type PaymentGateway = 'mock' | 'razorpay' | 'youpi';
+
+/** One merchant on a self-hosted YouPI gateway (github.com/youpi-pg/youpi-pg). */
+export interface YouPiMerchant {
+  apiUrl: string; // trailing slash
+  merchantId: string;
+  apiKey: string;
+  webhookSecret: string;
+}
 
 export interface AppConfig {
   env: string;
@@ -47,6 +55,18 @@ export interface AppConfig {
     razorpayKeySecret?: string;
     razorpayWebhookSecret?: string;
     razorpayApiBase: string;
+    /** Customer checkout through YouPI (PAYMENT_GATEWAY=youpi). */
+    youpi: YouPiMerchant | null;
+    /**
+     * Which YouPI outcomes issue tickets: 'observed' (the bank's credit SMS/email
+     * was seen on the receiving phone — tickets in seconds) or 'reconciled'
+     * (checked against the bank statement — can take hours).
+     */
+    youpiAccept: 'observed' | 'reconciled';
+    /** Where YouPI sends the payer after paying (must be allowlisted on YouPI). */
+    youpiReturnUrl: string;
+    /** B2B: the main distributor's own YouPI merchant (their UPI ID), so seller payments confirm themselves. */
+    youpiB2b: (YouPiMerchant & { distributorPhone: string }) | null;
   };
   pricing: {
     feeType: 'percentage' | 'fixed_per_ticket';
@@ -170,6 +190,16 @@ function ticketKey(isProd: boolean, errors: string[]) {
   return { privateKey, publicKey, publicKeyRaw: spki.subarray(spki.length - 32).toString('base64url') };
 }
 
+/** A YouPI merchant from <PREFIX>_API_URL / _MERCHANT_ID / _MERCHANT_API_KEY / _WEBHOOK_SECRET (all or nothing). */
+function youpiMerchant(prefix: string): YouPiMerchant | null {
+  const apiUrl = str(`${prefix}_API_URL`);
+  const merchantId = str(`${prefix}_MERCHANT_ID`);
+  const apiKey = str(`${prefix}_MERCHANT_API_KEY`);
+  const webhookSecret = str(`${prefix}_WEBHOOK_SECRET`);
+  if (!apiUrl || !merchantId || !apiKey || !webhookSecret) return null;
+  return { apiUrl: ensureSlash(apiUrl), merchantId, apiKey, webhookSecret };
+}
+
 let cached: AppConfig | null = null;
 
 export function loadConfig(): AppConfig {
@@ -216,6 +246,14 @@ export function loadConfig(): AppConfig {
       razorpayKeySecret: str('RAZORPAY_KEY_SECRET'),
       razorpayWebhookSecret: str('RAZORPAY_WEBHOOK_SECRET'),
       razorpayApiBase: str('RAZORPAY_API_BASE', 'https://api.razorpay.com/v1/')!,
+      youpi: youpiMerchant('YOUPI'),
+      youpiAccept: (str('YOUPI_ACCEPT', 'observed') as 'observed' | 'reconciled'),
+      youpiReturnUrl: str('YOUPI_RETURN_URL', `${ensureSlash(str('PUBLIC_BASE_URL', `http://localhost:${num('PORT', 4000)}/`)!)}pay/done`)!,
+      youpiB2b: (() => {
+        const m = youpiMerchant('YOUPI_B2B');
+        const phone = str('YOUPI_B2B_DISTRIBUTOR_PHONE');
+        return m && phone ? { ...m, distributorPhone: phone } : null;
+      })(),
     },
     pricing: {
       feeType: (str('FEE_TYPE', 'percentage') as 'percentage' | 'fixed_per_ticket'),
@@ -269,7 +307,18 @@ export function loadConfig(): AppConfig {
     errors.push('TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM are required for SMS_PROVIDER=twilio');
   }
 
-  if (!['mock', 'razorpay'].includes(cfg.payment.gateway)) errors.push('PAYMENT_GATEWAY must be mock|razorpay');
+  if (!['mock', 'razorpay', 'youpi'].includes(cfg.payment.gateway)) errors.push('PAYMENT_GATEWAY must be mock|razorpay|youpi');
+  if (cfg.payment.gateway === 'youpi' && !cfg.payment.youpi) {
+    errors.push('YOUPI_API_URL, YOUPI_MERCHANT_ID, YOUPI_MERCHANT_API_KEY and YOUPI_WEBHOOK_SECRET are required for PAYMENT_GATEWAY=youpi');
+  }
+  if (!['observed', 'reconciled'].includes(cfg.payment.youpiAccept)) errors.push('YOUPI_ACCEPT must be observed|reconciled');
+  for (const [k, m] of [['YOUPI', cfg.payment.youpi], ['YOUPI_B2B', cfg.payment.youpiB2b]] as const) {
+    if (m && isProd && !m.apiUrl.startsWith('https://')) errors.push(`${k}_API_URL must be https in production`);
+    if (m && m.webhookSecret.length < 16) errors.push(`${k}_WEBHOOK_SECRET looks too short`);
+  }
+  if (str('YOUPI_B2B_API_URL') && !cfg.payment.youpiB2b) {
+    errors.push('YOUPI_B2B_* needs YOUPI_B2B_API_URL, _MERCHANT_ID, _MERCHANT_API_KEY, _WEBHOOK_SECRET and YOUPI_B2B_DISTRIBUTOR_PHONE');
+  }
   if (!['percentage', 'fixed_per_ticket'].includes(cfg.pricing.feeType)) errors.push('FEE_TYPE must be percentage|fixed_per_ticket');
   if (!['fee', 'fee_and_tickets'].includes(cfg.pricing.gstOn)) errors.push('GST_ON must be fee|fee_and_tickets');
   if (isProd && cfg.payment.gateway === 'mock') errors.push('PAYMENT_GATEWAY=mock is not allowed in production');

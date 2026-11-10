@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'PAYMENT_FAILED'
+  | 'PAYMENT_PENDING'
   | 'SOLD_OUT'
   | 'HOLD_EXPIRED'
   | 'SERVER_ERROR';
@@ -21,6 +22,8 @@ const STATUS: Record<ApiErrorCode, number> = {
   CONFLICT: 409,
   RATE_LIMITED: 429,
   PAYMENT_FAILED: 422,
+  /** Paid, but the gateway hasn't confirmed yet (YouPI waits for the bank alert): try again shortly. */
+  PAYMENT_PENDING: 202,
   SOLD_OUT: 409,
   HOLD_EXPIRED: 409,
   SERVER_ERROR: 500,

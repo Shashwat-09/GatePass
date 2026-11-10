@@ -750,4 +750,15 @@ class DemoVendorApi implements VendorApi {
 
   @override
   Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id) => _cancel(id, seller: true);
+
+  // The demo distributor confirms by hand (no YouPI here).
+  @override
+  Future<ApiResult<B2bOrderView>> paySession(String orderId) => sellerOrder(orderId);
+
+  @override
+  Future<ApiResult<B2bOrderView>> sellerOrder(String orderId) async {
+    await _wait();
+    final i = _b2bOrders.indexWhere((o) => o.id == orderId);
+    return i < 0 ? const ApiResult.fail('Order not found', statusCode: 404) : ApiResult.ok(_b2bOrders[i]);
+  }
 }
