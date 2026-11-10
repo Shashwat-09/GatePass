@@ -14,6 +14,9 @@ process.env.SEED_ON_BOOT = 'false';
 process.env.BOOKING_SWEEPER = 'false';
 process.env.RATE_LIMIT_MUTATING_PER_MIN = '100000';
 process.env.RATE_LIMIT_READ_PER_MIN = '100000';
+process.env.RATE_LIMIT_ANON_MUTATING_PER_MIN = '100000';
+process.env.RATE_LIMIT_ANON_READ_PER_MIN = '100000';
+process.env.OTP_PER_IP_PER_10MIN = '10'; // auth.e2e checks the per-IP cap with a small value
 process.env.PUBLIC_BASE_URL = 'http://localhost:4000/';
 // Never let tests pick up a developer's .env file.
 process.env.DOTENV_CONFIG_PATH = '/dev/null';

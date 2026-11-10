@@ -4,17 +4,15 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUUID, Length } from 'class-validator';
 import { Response } from 'express';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
 import { DataSource } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { paged, parsePage } from '../common/pagination';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { signPath, verifyPathSignature } from '../common/signing';
 import { eventFor } from '../common/event-access';
-import { config } from '../config/config';
 import { FormField, FormResponse, FormUpload, RegistrationForm } from '../db/entities';
 import { KvStore } from '../infra/kv.service';
+import { fileStore } from './file-store';
 import { checkFieldDefs } from './form-fields';
 import { FormsService, formView } from './forms.service';
 
@@ -60,9 +58,7 @@ export class FormsController {
     const ext = name.split('.').pop()?.toLowerCase() ?? '';
     if (!SAFE_EXT.includes(ext)) throw new ApiError('VALIDATION_ERROR', `Allowed file types: ${SAFE_EXT.join(', ')}`);
     const row = await this.ds.getRepository(FormUpload).save({ userId: req.userId!, name, mime: file.mimetype || 'application/octet-stream', size: file.size });
-    const dir = resolve(config().uploadDir);
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, row.id), file.buffer);
+    await fileStore().put(row.id, file.buffer, row.mime);
     return { fileId: row.id, name, size: file.size };
   }
 
@@ -72,10 +68,12 @@ export class FormsController {
     if (!verifyPathSignature(`api/forms/files/${id}`, exp, sig)) throw new ApiError('FORBIDDEN', 'Link expired');
     const f = await this.ds.getRepository(FormUpload).findOneBy({ id });
     if (!f) throw new ApiError('NOT_FOUND', 'File not found');
+    const data = await fileStore().get(f.id);
+    if (!data) throw new ApiError('NOT_FOUND', 'File not found');
     res.setHeader('Content-Type', f.mime);
     res.setHeader('Content-Disposition', `attachment; filename="${f.name}"`);
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.sendFile(join(resolve(config().uploadDir), f.id));
+    res.send(data);
   }
 }
 

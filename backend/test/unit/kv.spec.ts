@@ -1,4 +1,5 @@
-import { KvStore, MemoryKv, RedisKv } from '../../src/infra/kv.service';
+import { Pool } from 'pg';
+import { KvStore, MemoryKv, PostgresKv, RedisKv } from '../../src/infra/kv.service';
 
 function suite(name: string, make: () => KvStore | null) {
   describe(name, () => {
@@ -34,3 +35,37 @@ function suite(name: string, make: () => KvStore | null) {
 suite('MemoryKv', () => new MemoryKv());
 // Runs when a Redis is reachable (CI provides one via TEST_REDIS_URL).
 suite('RedisKv', () => (process.env.TEST_REDIS_URL ? new RedisKv(process.env.TEST_REDIS_URL) : null));
+
+// Postgres-backed KV (KV_DRIVER=postgres), against the test database.
+const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL ?? 'postgres://postgres:eventa@localhost:5433/eventa_test', max: 3 });
+beforeAll(() => pool.query('CREATE UNLOGGED TABLE IF NOT EXISTS kv_store (key text PRIMARY KEY, value text NOT NULL, expires_at timestamptz NOT NULL)'));
+afterAll(() => pool.end());
+const pgKv = new PostgresKv({ query: (sql, params) => pool.query(sql, params as unknown[]) });
+suite('PostgresKv', () => pgKv);
+
+describe('PostgresKv extras', () => {
+  const kv = pgKv;
+
+  it('expired keys read as missing, restart their counters, can be set again, and get swept', async () => {
+    const k = `exp:${Date.now()}:${Math.random()}`;
+    await kv.set(k, 'old', 1);
+    await kv.incr(`${k}:c`, 1);
+    await pool.query(`UPDATE kv_store SET expires_at = now() - interval '1 second' WHERE key LIKE $1`, [`${k}%`]);
+    expect(await kv.get(k)).toBeNull();
+    expect(await kv.ttl(k)).toBe(-2);
+    expect(await kv.incr(`${k}:c`, 60)).toBe(1);
+    expect(await kv.setNx(k, 'new', 60)).toBe(true);
+    expect(await kv.get(k)).toBe('new');
+    await kv.set(`${k}:gone`, 'x', 1);
+    await pool.query(`UPDATE kv_store SET expires_at = now() - interval '1 second' WHERE key = $1`, [`${k}:gone`]);
+    expect(await kv.sweep()).toBeGreaterThanOrEqual(1);
+    expect(await kv.ping()).toBe(true);
+  });
+
+  it('counts correctly under concurrency', async () => {
+    const k = `race:${Date.now()}:${Math.random()}`;
+    const n = await Promise.all(Array.from({ length: 50 }, () => kv.incr(k, 60)));
+    expect(new Set(n).size).toBe(50);
+    expect(Math.max(...n)).toBe(50);
+  });
+});

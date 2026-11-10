@@ -12,6 +12,7 @@ import { CitiesModule } from './cities/cities.module';
 import { DbModule } from './db/db.module';
 import { EventsModule } from './events/events.module';
 import { ExtrasModule } from './extras/extras.module';
+import { JobsModule } from './jobs/jobs.controller';
 import { GateModule } from './gate/gate.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
@@ -46,6 +47,7 @@ import { UsersModule } from './users/users.module';
     PushModule,
     AttributionModule,
     OrganiserModule,
+    JobsModule,
   ],
 })
 export class AppModule {}

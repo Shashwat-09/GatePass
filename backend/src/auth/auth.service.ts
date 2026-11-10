@@ -13,7 +13,6 @@ const OTP_TTL_SEC = 300;
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_AFTER_SEC = 30;
 const OTP_PER_PHONE = { limit: 3, windowSec: 600 };
-const OTP_PER_IP = { limit: 10, windowSec: 600 };
 
 export const JWT_ISSUER = 'gatepass-api';
 
@@ -58,10 +57,11 @@ export class AuthService {
         resendAfterSec: cooldown,
       });
     }
-    // API spec §8.3: ≤3 per phone and ≤10 per IP per 10 minutes.
+    // API spec §8.3: ≤3 per phone and ≤OTP_PER_IP_PER_10MIN (default 60) per IP per 10 minutes.
+    // The per-IP cap is generous on purpose: venues and mobile carriers share IPs.
     const perPhone = await this.kv.incr(`rl:otp:phone:${phone}`, OTP_PER_PHONE.windowSec);
-    const perIp = await this.kv.incr(`rl:otp:ip:${ip}`, OTP_PER_IP.windowSec);
-    if (perPhone > OTP_PER_PHONE.limit || perIp > OTP_PER_IP.limit) {
+    const perIp = await this.kv.incr(`rl:otp:ip:${ip}`, 600);
+    if (perPhone > OTP_PER_PHONE.limit || perIp > config().rateLimit.otpPerIp) {
       this.log.warn(`OTP rate limit hit phone=…${phone.slice(-4)} ip=${ip}`);
       throw new ApiError('RATE_LIMITED', 'Too many code requests. Try again in a few minutes.');
     }

@@ -44,6 +44,9 @@ class DemoVendorApi implements VendorApi {
 
   /// Demo switch: gate calls fail as if the phone had no connection.
   bool offline = false;
+
+  /// Test hook: gate scans answer "busy" (HTTP 429) as an overloaded server would.
+  bool busy = false;
   bool _signedIn = false;
   bool _ready = false;
   late SimpleKeyPair _keys;
@@ -273,6 +276,7 @@ class DemoVendorApi implements VendorApi {
   Future<ApiResult<ScanOutcome>> scan(String eventId, String qrToken, int entries) async {
     await _wait();
     if (offline) return _offline;
+    if (busy) return const ApiResult.fail('Too many requests, please slow down', statusCode: 429, code: 'RATE_LIMITED');
     return ApiResult.ok(_apply(eventId, qrToken, entries));
   }
 

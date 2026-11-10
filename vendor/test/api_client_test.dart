@@ -43,6 +43,15 @@ void main() {
     expect(r.data!.items.single.sold, isNull);
   });
 
+  test('busy and server errors count as unavailable; client errors do not', () async {
+    for (final (status, unavailable) in [(429, true), (500, true), (503, true), (400, false), (403, false), (404, false)]) {
+      final api = ApiClient(MemoryTokenStore(), client: MockClient((_) async => json(status, {'success': false, 'error': {'code': 'X', 'message': 'm'}})));
+      final r = await api.request('api/gate/scan', method: Method.post, body: {});
+      expect(r.isUnavailable, unavailable, reason: '$status');
+      expect(r.isNetworkError, isFalse);
+    }
+  });
+
   test('network failure is reported as such (the gate then checks offline)', () async {
     final api = ApiClient(MemoryTokenStore(), client: MockClient((_) async => throw http.ClientException('offline')));
     final r = await api.request('api/gate/scan', method: Method.post, body: {});

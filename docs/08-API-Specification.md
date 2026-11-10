@@ -29,7 +29,7 @@ HTTP status mapping: 200 ok · 201 created · 400 validation · 401 unauth · 40
 ## 8.3 Auth
 
 ### POST `api/otp/send`
-Rate limit: ≤3 per phone per 10 min and ≤10 per IP per 10 min → else 429.
+Rate limit: ≤3 per phone per 10 min and ≤`OTP_PER_IP_PER_10MIN` (default 60) per IP per 10 min → else 429. Global limits count signed-in callers **per account** (60 writes / 300 reads a minute) and anonymous callers per IP (300 / 1,200), so a venue or a mobile carrier sharing one IP isn't throttled together. Gate scan/sync are limited per scanner account only (600 / 120 a minute).
 Request:
 ```json
 { "phone": "9876543210", "countryCode": "+91" }

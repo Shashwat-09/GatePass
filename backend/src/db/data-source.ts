@@ -14,6 +14,7 @@ export function dataSourceOptions(): DataSourceOptions {
     migrations: [__dirname + '/migrations/*.{ts,js}'],
     migrationsTableName: 'migrations',
     synchronize: false,
+    extra: { max: c.dbPoolMax },
   };
 }
 

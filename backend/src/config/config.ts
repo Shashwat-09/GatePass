@@ -63,9 +63,27 @@ export interface AppConfig {
   /** Pre-checkout seat hold (POST booking/seat-reserve). */
   seatHoldSec: number;
   sweeperEnabled: boolean;
+  /**
+   * Background work (expire unpaid holds, "notify me", push, KV cleanup):
+   * `timers` runs it inside each instance; `http` waits for a scheduler to
+   * POST api/internal/jobs/tick (Cloud Run pauses idle instances, so timers
+   * there would stall).
+   */
+  jobs: { mode: 'timers' | 'http'; secret: string };
+  /** Form uploads: local disk (UPLOAD_DIR) or a Cloud Storage bucket (shared by every instance). */
+  storage: { driver: 'local' | 'gcs'; bucket: string };
   /** Push notifications: FCM (service account), `log` (tests/dev), or off. */
   push: { driver: 'fcm' | 'log' | 'none'; intervalMs: number; fcm: { projectId: string; clientEmail: string; privateKey: string } | null };
-  rateLimit: { mutatingPerMin: number; readPerMin: number };
+  /**
+   * Requests per minute. Signed-in callers are counted per account; anonymous
+   * ones per IP (higher, because venue Wi-Fi and mobile carriers put many
+   * people behind one IP). `otpPerIp` is per 10 minutes.
+   */
+  rateLimit: { mutatingPerMin: number; readPerMin: number; anonMutatingPerMin: number; anonReadPerMin: number; otpPerIp: number };
+  /** Shared KV for codes and counters: Redis (REDIS_URL) or Postgres (KV_DRIVER=postgres). */
+  kvDriver: 'redis' | 'postgres' | 'memory';
+  /** Max Postgres connections per API instance (keep instances × this under the database's limit). */
+  dbPoolMax: number;
   invoice: { sellerName: string; sellerAddress: string; gstin: string };
   app: {
     android: { latestVersion: string; minVersion: string; storeUrl: string };
@@ -172,6 +190,8 @@ export function loadConfig(): AppConfig {
     migrateOnBoot: bool('DB_MIGRATE_ON_BOOT', true),
     seedOnBoot: bool('SEED_ON_BOOT', false),
     redisUrl: str('REDIS_URL') ?? null,
+    kvDriver: (str('REDIS_URL') ? 'redis' : str('KV_DRIVER', 'memory')) as 'redis' | 'postgres' | 'memory',
+    dbPoolMax: num('DB_POOL_MAX', 10),
     corsOrigins: (str('CORS_ORIGINS', '') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     trustProxy: bool('TRUST_PROXY', isProd),
     enableSwagger: bool('ENABLE_SWAGGER', !isProd),
@@ -209,11 +229,16 @@ export function loadConfig(): AppConfig {
     bookingHoldSec: num('BOOKING_HOLD_SECONDS', 600),
     uploadDir: process.env.UPLOAD_DIR || 'uploads',
     seatHoldSec: num('SEAT_HOLD_SECONDS', 600),
-    sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test'),
+    sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test') && str('JOBS_MODE', 'timers') !== 'http',
+    jobs: { mode: (str('JOBS_MODE', 'timers') as 'timers' | 'http'), secret: str('JOBS_SECRET', '')! },
+    storage: { driver: (str('STORAGE_DRIVER', 'local') as 'local' | 'gcs'), bucket: str('GCS_BUCKET', '')! },
     push: pushConfig(env, errors),
     rateLimit: {
       mutatingPerMin: num('RATE_LIMIT_MUTATING_PER_MIN', 60),
       readPerMin: num('RATE_LIMIT_READ_PER_MIN', 300),
+      anonMutatingPerMin: num('RATE_LIMIT_ANON_MUTATING_PER_MIN', 300),
+      anonReadPerMin: num('RATE_LIMIT_ANON_READ_PER_MIN', 1200),
+      otpPerIp: num('OTP_PER_IP_PER_10MIN', 60),
     },
     app: {
       android: {
@@ -259,7 +284,12 @@ export function loadConfig(): AppConfig {
   }
 
   if (isProd && !cfg.databaseUrl) errors.push('DATABASE_URL is required in production');
-  if (isProd && !cfg.redisUrl) errors.push('REDIS_URL is required in production');
+  if (!['timers', 'http'].includes(cfg.jobs.mode)) errors.push('JOBS_MODE must be timers|http');
+  if (cfg.jobs.mode === 'http' && cfg.jobs.secret.length < 32) errors.push('JOBS_SECRET (≥32 characters) is required with JOBS_MODE=http');
+  if (!['local', 'gcs'].includes(cfg.storage.driver)) errors.push('STORAGE_DRIVER must be local|gcs');
+  if (cfg.storage.driver === 'gcs' && !cfg.storage.bucket) errors.push('GCS_BUCKET is required with STORAGE_DRIVER=gcs');
+  if (!['redis', 'postgres', 'memory'].includes(cfg.kvDriver)) errors.push('KV_DRIVER must be redis|postgres|memory');
+  if (isProd && cfg.kvDriver === 'memory') errors.push('Production needs a shared KV: set REDIS_URL or KV_DRIVER=postgres');
   if (isProd && !str('PUBLIC_BASE_URL')) errors.push('PUBLIC_BASE_URL is required in production');
 
   // A fixed OTP is a development convenience only — never with a real SMS provider.

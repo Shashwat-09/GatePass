@@ -7,12 +7,12 @@ import { createHash } from 'crypto';
 import { DataSource, MoreThanOrEqual, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 import { verifyTicketQr } from '../common/signing';
 import { eventFor } from '../common/event-access';
 import { config } from '../config/config';
 import { istDate, istDayRange } from '../common/ist';
 import { CheckIn, EventEntity, EventSession, Ticket } from '../db/entities';
-import { RateLimit } from '../infra/rate-limit.guard';
 
 class ScanDto {
   @IsString() @Length(10, 300) qrToken!: string;
@@ -109,6 +109,8 @@ export class GateController {
 
   @Post('scan')
   @HttpCode(200)
+  // Per scanner account (10 a second), not shared by every gate on the venue Wi-Fi.
+  @SkipGlobalRateLimit()
   @RateLimit({ bucket: 'gate-scan', limit: 600, windowSec: 60 })
   async scan(@Req() req: AuthedRequest, @Body() dto: ScanDto) {
     await this.access(req, dto.eventId);
@@ -123,6 +125,7 @@ export class GateController {
    */
   @Post('sync')
   @HttpCode(200)
+  @SkipGlobalRateLimit()
   @RateLimit({ bucket: 'gate-sync', limit: 120, windowSec: 60 })
   async sync(@Req() req: AuthedRequest, @Body() dto: SyncDto) {
     await this.access(req, dto.eventId);

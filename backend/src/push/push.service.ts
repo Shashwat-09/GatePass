@@ -32,7 +32,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
       this.log.log('Push notifications are off (set FCM_SERVICE_ACCOUNT to enable)');
       return;
     }
-    if (p.driver === 'fcm') {
+    if (p.driver === 'fcm' && config().jobs.mode === 'timers') {
       this.timer = setInterval(() => void this.flush().catch((e) => this.log.error(e)), p.intervalMs);
       this.timer.unref();
     }

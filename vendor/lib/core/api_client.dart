@@ -25,6 +25,11 @@ class ApiResult<T> {
   /// checking tickets on the device.
   bool get isNetworkError => !isOk && statusCode == 0;
 
+  /// The server couldn't decide right now (offline, overloaded, rate-limited,
+  /// or erroring). A scanner should check the ticket on the phone instead of
+  /// showing "invalid" to a guest with a real ticket.
+  bool get isUnavailable => !isOk && (statusCode == 0 || statusCode == 429 || statusCode >= 500);
+
   ApiResult<R> cast<R>() => ApiResult<R>.fail(error, statusCode: statusCode, code: code);
   ApiResult<R> map<R>(R Function(T data) f) => isOk ? ApiResult.ok(f(data as T), statusCode: statusCode) : cast<R>();
 }

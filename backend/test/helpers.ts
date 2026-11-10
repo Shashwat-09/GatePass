@@ -33,7 +33,7 @@ export function newPhone() {
 
 /** All test traffic shares one IP; reset its OTP/login buckets between logins. */
 export async function resetIpLimits(ctx: Ctx) {
-  for (const ip of ['127.0.0.1', '::1']) await ctx.kv.del(`rl:otp:ip:${ip}`, `rl:login:${ip}`);
+  for (const ip of ['127.0.0.1', '::1']) await ctx.kv.del(`rl:otp:ip:${ip}`, `rl:login:ip:${ip}`);
 }
 
 export async function login(ctx: Ctx, phone = newPhone()) {

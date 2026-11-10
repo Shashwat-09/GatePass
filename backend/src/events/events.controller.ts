@@ -450,7 +450,7 @@ export class EventsController {
 export class EventSharePageController {
   @Get(':slug')
   @SkipGlobalRateLimit()
-  @RateLimit({ bucket: 'event-page', limit: 120, windowSec: 60 })
+  @RateLimit({ bucket: 'event-page', limit: 600, windowSec: 60 })
   page(@Param('slug') _slug: string, @Res() res: Response) {
     res.setHeader('Cache-Control', 'no-store');
     res.sendFile(join(__dirname, '..', '..', 'public', 'share', 'event.html'));

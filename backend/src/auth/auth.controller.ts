@@ -17,7 +17,7 @@ export class AuthController {
 
   @Post('user/login')
   @HttpCode(200)
-  @RateLimit({ bucket: 'login', limit: 20, windowSec: 600 })
+  @RateLimit({ bucket: 'login', limit: 200, windowSec: 600 }) // per IP; wrong codes are capped per phone (5)
   async login(@Body() dto: LoginDto) {
     const { refreshTokenId: _ignored, ...out } = await this.auth.login(dto.phone, dto.otp, dto.deviceToken);
     void _ignored;

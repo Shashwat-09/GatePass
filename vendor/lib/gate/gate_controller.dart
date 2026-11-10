@@ -125,7 +125,7 @@ class GateController extends GetxController {
       final v = r.data!;
       return ScanOutcome(ScanResult.admitted, '${v.label} × ${v.units}', detail: '${v.brandName} · ${v.remaining} left', voucher: true);
     }
-    return ScanOutcome(ScanResult.invalid, r.isNetworkError ? 'Vouchers need a connection to redeem' : r.error!, voucher: true);
+    return ScanOutcome(ScanResult.invalid, r.isUnavailable ? 'Vouchers need a connection to redeem. Try again in a moment.' : r.error!, voucher: true);
   }
 
   Future<ScanOutcome> _ticket(String code, int n) async {
@@ -135,7 +135,7 @@ class GateController extends GetxController {
       unawaited(refreshStats());
       return r.data!;
     }
-    if (!r.isNetworkError) return ScanOutcome(ScanResult.invalid, r.error!);
+    if (!r.isUnavailable) return ScanOutcome(ScanResult.invalid, r.error!);
     online.value = false;
     final out = await validator.check(eventId, manifest.value, code, n);
     if (out.admitted) {
@@ -174,7 +174,7 @@ class GateController extends GetxController {
           ]);
           if (!r.isOk) {
             if (r.isNetworkError) online.value = false;
-            if (r.isNetworkError || r.statusCode >= 500) return; // try again later
+            if (r.isUnavailable) return; // offline, busy or erroring: try again later
             // Refused outright (e.g. access removed): keep the scans for review.
             for (final b in batch) {
               await store.addConflict(_conflict(b, r.error ?? 'Not accepted'));

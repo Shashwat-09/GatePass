@@ -52,6 +52,20 @@ void main() {
     expect((await g.check(s.code, fromCamera: false))!.result, ScanResult.alreadyUsed);
   });
 
+  test('a busy server (429) is treated like no connection, not as an invalid ticket', () async {
+    final (api, g, _) = await setup();
+    final s = (await api.samples(DemoVendorApi.e1)).first;
+    api.busy = true;
+    final r = await g.check(s.code);
+    expect(r!.admitted, isTrue);
+    expect(r.offline, isTrue);
+    expect(g.pending.value, 1);
+    api.busy = false;
+    await g.sync();
+    expect(g.pending.value, 0);
+    expect(g.conflicts, isEmpty);
+  });
+
   test('a ticket used at another gate while offline comes back as a conflict', () async {
     final (api, g, _) = await setup();
     final s = (await api.samples(DemoVendorApi.e1)).first;
@@ -91,6 +105,6 @@ void main() {
     expect(ok.voucher, isTrue);
     expect(ok.title, 'Redeemed');
     api.offline = true;
-    expect((await g.check('GV-DEMO0001', fromCamera: false))!.message, 'Vouchers need a connection to redeem');
+    expect((await g.check('GV-DEMO0001', fromCamera: false))!.message, 'Vouchers need a connection to redeem. Try again in a moment.');
   });
 }

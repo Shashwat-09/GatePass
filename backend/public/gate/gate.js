@@ -57,7 +57,7 @@
     } catch (e) {
       throw new NetError('No connection');
     }
-    if (res.status >= 500) throw new NetError('Server unavailable');
+    if (res.status >= 500 || res.status === 429) throw new NetError('Server busy or unavailable'); // check offline instead
     if (res.status === 401 && token && !retried && (await refresh())) return api(path, opts, true);
     if (opts.raw) return res;
     const body = await res.json().catch(() => ({}));
