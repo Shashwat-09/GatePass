@@ -34,6 +34,42 @@ abstract class VendorApi {
 
   Future<ApiResult<IssueResult>> issue(String eventId, IssueRequest req);
   Future<ApiResult<Uint8List>> report(String eventId);
+
+  // ── organiser: B2B, comps, settlement ──
+  Future<ApiResult<void>> setB2bEnabled(String eventId, bool enabled);
+  /// Rate and cap for B2B sellers; null rate = not offered to B2B.
+  Future<ApiResult<void>> setTierB2b(String tierId, {int? ratePaise, int? quota});
+  Future<ApiResult<CompsInfo>> comps(String eventId);
+  Future<ApiResult<void>> requestComps(String eventId, int quantity, String note);
+  Future<ApiResult<Settlement>> settlement(String eventId);
+
+  // ── admin ──
+  Future<ApiResult<EventTerms>> terms(String eventId);
+  Future<ApiResult<EventTerms>> setTerms(String eventId, EventTerms terms);
+  Future<ApiResult<List<CompRequestItem>>> compRequests({String status = 'pending'});
+  Future<ApiResult<void>> decideCompRequest(String id, bool approve);
+
+  // ── distributor ──
+  Future<ApiResult<DistributorProfile>> distributorProfile();
+  Future<ApiResult<DistributorProfile>> saveDistributorProfile(DistributorProfile p);
+  Future<ApiResult<List<B2bEvent>>> b2bEvents();
+  /// Seller price for a ticket type: default when [resellerId] is null; null price clears it.
+  Future<ApiResult<void>> setSellerPrice(String tierId, int? pricePaise, {String? resellerId});
+  Future<ApiResult<List<PriceChange>>> priceHistory({String? tierId});
+  Future<ApiResult<List<SellerAccount>>> sellers();
+  Future<ApiResult<SellerAccount>> addSeller(String phone, String name, bool trusted);
+  Future<ApiResult<SellerAccount>> updateSeller(String userId, {bool? trusted, bool? active, String? name});
+  Future<ApiResult<Paged<B2bOrderView>>> distributorOrders({String? status, int page = 1});
+  Future<ApiResult<B2bOrderView>> confirmOrder(String id);
+  Future<ApiResult<B2bOrderView>> cancelOrderAsDistributor(String id);
+  Future<ApiResult<List<DistributorEventReport>>> distributorReport();
+
+  // ── seller ──
+  Future<ApiResult<SellerCatalog>> sellerCatalog();
+  Future<ApiResult<B2bOrderView>> placeOrder(String tierId, int quantity, List<Recipient> recipients);
+  Future<ApiResult<Paged<B2bOrderView>>> sellerOrders({String? status, int page = 1});
+  Future<ApiResult<B2bOrderView>> submitUtr(String orderId, String utr);
+  Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id);
 }
 
 class HttpVendorApi implements VendorApi {
@@ -144,4 +180,106 @@ class HttpVendorApi implements VendorApi {
 
   @override
   Future<ApiResult<Uint8List>> report(String eventId) => _api.download('api/admin/events/$eventId/export.xlsx');
+
+  Future<ApiResult<void>> _void(String path, Method m, [Map<String, dynamic>? body]) async => (await _api.request(path, method: m, body: body ?? {})).map((_) {});
+
+  @override
+  Future<ApiResult<void>> setB2bEnabled(String eventId, bool enabled) => _void('api/organiser/events/$eventId', Method.put, {'b2bEnabled': enabled});
+
+  @override
+  Future<ApiResult<void>> setTierB2b(String tierId, {int? ratePaise, int? quota}) => _void('api/organiser/tiers/$tierId', Method.put, {'b2bPricePaise': ratePaise, 'b2bQuota': quota});
+
+  @override
+  Future<ApiResult<CompsInfo>> comps(String eventId) async => (await _api.request('api/organiser/events/$eventId/comps')).map((d) => CompsInfo.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<void>> requestComps(String eventId, int quantity, String note) =>
+      _void('api/organiser/events/$eventId/comp-requests', Method.post, {'quantity': quantity, if (note.trim().isNotEmpty) 'note': note.trim()});
+
+  @override
+  Future<ApiResult<Settlement>> settlement(String eventId) async => (await _api.request('api/organiser/events/$eventId/settlement')).map((d) => Settlement(d as Map));
+
+  @override
+  Future<ApiResult<EventTerms>> terms(String eventId) async => (await _api.request('api/admin/events/$eventId/terms')).map((d) => EventTerms.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<EventTerms>> setTerms(String eventId, EventTerms terms) async =>
+      (await _api.request('api/admin/events/$eventId/terms', method: Method.put, body: terms.toJson())).map((d) => EventTerms.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<List<CompRequestItem>>> compRequests({String status = 'pending'}) async =>
+      (await _api.request('api/admin/comp-requests', query: {'status': status})).map((d) => [for (final x in ((d as Map)['items'] as List)) CompRequestItem.fromJson(x as Map)]);
+
+  @override
+  Future<ApiResult<void>> decideCompRequest(String id, bool approve) => _void('api/admin/comp-requests/$id/${approve ? 'approve' : 'reject'}', Method.post);
+
+  @override
+  Future<ApiResult<DistributorProfile>> distributorProfile() async => (await _api.request('api/distributor/profile')).map((d) => DistributorProfile.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<DistributorProfile>> saveDistributorProfile(DistributorProfile p) async => (await _api.request('api/distributor/profile',
+          method: Method.put, body: {if (p.upiId != null) 'upiId': p.upiId, if (p.payeeName != null) 'payeeName': p.payeeName, 'holdMinutes': p.holdMinutes}))
+      .map((d) => DistributorProfile.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<List<B2bEvent>>> b2bEvents() async =>
+      (await _api.request('api/distributor/events')).map((d) => [for (final x in ((d as Map)['items'] as List)) B2bEvent.fromJson(x as Map)]);
+
+  @override
+  Future<ApiResult<void>> setSellerPrice(String tierId, int? pricePaise, {String? resellerId}) =>
+      _void('api/distributor/prices', Method.put, {'tierId': tierId, 'pricePaise': pricePaise, if (resellerId != null) 'resellerId': resellerId});
+
+  @override
+  Future<ApiResult<List<PriceChange>>> priceHistory({String? tierId}) async =>
+      (await _api.request('api/distributor/prices/history', query: {if (tierId != null) 'tierId': tierId}))
+          .map((d) => [for (final x in ((d as Map)['items'] as List)) PriceChange.fromJson(x as Map)]);
+
+  @override
+  Future<ApiResult<List<SellerAccount>>> sellers() async =>
+      (await _api.request('api/distributor/sellers')).map((d) => [for (final x in ((d as Map)['items'] as List)) SellerAccount.fromJson(x as Map)]);
+
+  @override
+  Future<ApiResult<SellerAccount>> addSeller(String phone, String name, bool trusted) async =>
+      (await _api.request('api/distributor/sellers', method: Method.post, body: {'phone': phone, if (name.trim().isNotEmpty) 'name': name.trim(), 'trusted': trusted}))
+          .map((d) => SellerAccount.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<SellerAccount>> updateSeller(String userId, {bool? trusted, bool? active, String? name}) async =>
+      (await _api.request('api/distributor/sellers/$userId', method: Method.put, body: {if (trusted != null) 'trusted': trusted, if (active != null) 'active': active, if (name != null) 'name': name}))
+          .map((d) => SellerAccount.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<Paged<B2bOrderView>>> distributorOrders({String? status, int page = 1}) async =>
+      (await _api.request('api/distributor/orders', query: {if (status != null) 'status': status, 'page': '$page', 'limit': '20'})).map((d) => _paged(d, B2bOrderView.fromJson));
+
+  @override
+  Future<ApiResult<B2bOrderView>> confirmOrder(String id) async => (await _api.request('api/distributor/orders/$id/confirm', method: Method.post, body: {})).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<B2bOrderView>> cancelOrderAsDistributor(String id) async =>
+      (await _api.request('api/distributor/orders/$id/cancel', method: Method.post, body: {})).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<List<DistributorEventReport>>> distributorReport() async =>
+      (await _api.request('api/distributor/report')).map((d) => [for (final x in ((d as Map)['items'] as List)) DistributorEventReport.fromJson(x as Map)]);
+
+  @override
+  Future<ApiResult<SellerCatalog>> sellerCatalog() async => (await _api.request('api/reseller/events')).map((d) => SellerCatalog.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<B2bOrderView>> placeOrder(String tierId, int quantity, List<Recipient> recipients) async => (await _api.request('api/reseller/orders',
+          method: Method.post, body: {'tierId': tierId, 'quantity': quantity, 'recipients': [for (final r in recipients) r.toJson()]}))
+      .map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<Paged<B2bOrderView>>> sellerOrders({String? status, int page = 1}) async =>
+      (await _api.request('api/reseller/orders', query: {if (status != null) 'status': status, 'page': '$page', 'limit': '20'})).map((d) => _paged(d, B2bOrderView.fromJson));
+
+  @override
+  Future<ApiResult<B2bOrderView>> submitUtr(String orderId, String utr) async =>
+      (await _api.request('api/reseller/orders/$orderId/utr', method: Method.post, body: {'utr': utr})).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id) async =>
+      (await _api.request('api/reseller/orders/$id/cancel', method: Method.post, body: {})).map((d) => B2bOrderView.fromJson(d as Map));
 }

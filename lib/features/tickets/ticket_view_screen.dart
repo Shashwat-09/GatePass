@@ -245,6 +245,16 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                     ),
                   ),
               ]),
+              if (t.soldBy != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                InsetGroup(margin: EdgeInsets.zero, children: [
+                  GroupRow(title: 'Sold by', value: t.soldBy),
+                  if (t.listPricePaise != null) GroupRow(title: 'Ticket price', value: formatPaise(t.listPricePaise!)),
+                  if (t.paidPaise != null) GroupRow(title: 'You paid', value: formatPaise(t.paidPaise!)),
+                  if (t.paidPaise != null && t.listPricePaise != null && t.listPricePaise! > t.paidPaise!)
+                    GroupRow(title: 'You saved', value: formatPaise(t.listPricePaise! - t.paidPaise!)),
+                ]),
+              ],
               if (t.isSeason || t.entryUsed > 0) ...[
                 const SizedBox(height: AppSpacing.lg),
                 InsetGroup(margin: EdgeInsets.zero, children: [

@@ -5,7 +5,7 @@ import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
 import '../../app/session.dart';
-import '../events/events_screen.dart';
+import '../home/vendor_home.dart';
 import 'login_screen.dart';
 import 'no_access_screen.dart';
 
@@ -35,7 +35,7 @@ class _LaunchScreenState extends State<LaunchScreen> {
     if (!mounted) return;
     if (r.isOk) {
       s.me.value = r.data;
-      Get.offAll(() => r.data!.canScan ? const EventsScreen() : const NoAccessScreen(), transition: Transition.fadeIn);
+      Get.offAll(() => r.data!.hasAccess ? const VendorHome() : const NoAccessScreen(), transition: Transition.fadeIn);
     } else if (r.statusCode == 401) {
       Get.offAll(() => const LoginScreen(), transition: Transition.fadeIn);
     } else {

@@ -151,14 +151,22 @@ class DemoVendorApi implements VendorApi {
     await _wait();
     if (otp != '123456') return const ApiResult.fail('That code is not right. In the demo, use 123456.', statusCode: 400);
     _signedIn = true;
-    return ApiResult.ok(Me(id: 'demo', name: role == Role.staff ? 'Demo Gate Staff' : 'Demo Organiser', phone: phone, role: role));
+    return ApiResult.ok(_me(phone));
   }
 
   @override
   Future<ApiResult<Me>> me() async {
     await _wait();
-    return ApiResult.ok(Me(id: 'demo', name: role == Role.staff ? 'Demo Gate Staff' : 'Demo Organiser', phone: '9000000001', role: role));
+    return ApiResult.ok(_me('9000000001'));
   }
+
+  /// Demo identities: admin is also the distributor (like the owner's account).
+  Me _me(String phone) => switch (role) {
+        Role.admin => Me(id: 'demo', name: 'Demo Admin', phone: phone, role: Role.admin, roles: const [Role.admin, Role.distributor]),
+        Role.reseller => const Me(id: _s1, name: 'Ravi Tickets', phone: '9811100001', role: Role.reseller),
+        Role.staff => Me(id: 'demo', name: 'Demo Gate Staff', phone: phone, role: Role.staff),
+        _ => Me(id: 'demo', name: 'Demo Organiser', phone: phone, role: role),
+      };
 
   @override
   Future<void> logout() async => _signedIn = false;
@@ -181,7 +189,7 @@ class DemoVendorApi implements VendorApi {
     await _wait();
     final x = _events[id];
     if (x == null) return _missing();
-    return ApiResult.ok(EventDetail(event: x.e, tiers: List.of(x.tiers), statusNote: x.note));
+    return ApiResult.ok(EventDetail(event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, b2bEnabled: _b2bOn[id] ?? false, terms: _terms[id] ?? const EventTerms()));
   }
 
   @override
@@ -355,6 +363,14 @@ class DemoVendorApi implements VendorApi {
     x.tiers[i] = TierInfo(
         id: t.id, name: t.name, pricePaise: t.pricePaise, quantity: t.quantity, sold: t.sold + req.quantity, remaining: t.remaining - req.quantity,
         isActive: t.isActive, category: t.category, requiresApproval: t.requiresApproval);
+    if (req.kind == 'comp') {
+      final terms = _terms[eventId] ?? const EventTerms();
+      final used = _compsUsed[eventId] ?? 0;
+      if (terms.compFree != null && terms.compFeePaise == 0 && used + req.quantity > terms.compFree!) {
+        return const ApiResult.fail('This event’s complimentary allowance is used up. Ask GatePass for more.', statusCode: 400);
+      }
+      _compsUsed[eventId] = used + req.quantity;
+    }
     await _mint(eventId, t.name, req.quantity);
     return ApiResult.ok(IssueResult('GP${_code++}', req.kind == 'comp' ? 0 : (req.amountPaise ?? t.pricePaise * req.quantity)));
   }
@@ -364,4 +380,374 @@ class DemoVendorApi implements VendorApi {
     await _wait();
     return const ApiResult.fail('Reports need a live server. They’re not available in the demo.');
   }
+
+  // ───────────── B2B, terms, comps (demo) ─────────────
+
+  static const _s1 = 'seller-ravi';
+  static const _s2 = 'seller-meera';
+  final _b2bOn = <String, bool>{e1: true};
+  final _b2bRate = <String, int>{'t-ga': 50000, 't-vip': 180000};
+  final _b2bQuota = <String, int?>{'t-ga': 100};
+  final _b2bSold = <String, int>{'t-ga': 6, 't-vip': 0};
+  final _terms = <String, EventTerms>{};
+  final _compsUsed = <String, int>{};
+  final _compReqs = <CompRequestItem>[];
+  DistributorProfile _profile = const DistributorProfile(upiId: 'demo.distributor@okaxis', payeeName: 'Demo Distributor', holdMinutes: 30);
+  final _sellers = <SellerAccount>[
+    const SellerAccount(userId: _s1, name: 'Ravi Tickets', phone: '9811100001'),
+    const SellerAccount(userId: _s2, name: 'Meera Events', phone: '9811100002', trusted: true),
+  ];
+  final _prices = <String, int>{'t-ga|*': 60000, 't-vip|*': 210000, 't-ga|$_s2': 57000};
+  final _priceLog = <PriceChange>[];
+  late final _b2bOrders = <B2bOrderView>[
+    _order('B2B-7Q2M', _s1, 't-ga', 2, 60000, OrderStatus.paymentSubmitted, utr: '412345678901',
+        recipients: const [Recipient(phone: '9876500111', name: 'Asha', qty: 1, salePricePaise: 70000), Recipient(phone: '9876500112', qty: 1)]),
+    _order('B2B-3KD9', _s2, 't-ga', 4, 57000, OrderStatus.paid, recipients: const [Recipient(phone: '9876500113', qty: 4)]),
+  ];
+
+  B2bOrderView _order(String code, String seller, String tierId, int qty, int unit, OrderStatus st, {String? utr, List<Recipient> recipients = const []}) {
+    final t = _events[e1]?.tiers.firstWhere((x) => x.id == tierId);
+    final s = _sellers.firstWhere((x) => x.userId == seller);
+    return B2bOrderView(
+      id: code.toLowerCase(), code: code, status: st, quantity: qty, unitPricePaise: unit, totalPaise: unit * qty,
+      eventTitle: 'Sunset Sessions: Live at the Lawn', tierName: t?.name ?? tierId, listPricePaise: t?.pricePaise ?? 0, recipients: recipients, utr: utr,
+      createdAt: DateTime.now().subtract(const Duration(minutes: 25)), sellerName: s.name, sellerPhone: s.phone,
+      upiId: _profile.upiId, payeeName: _profile.payeeName, upiUri: _upi(code, unit * qty),
+      expiresAt: st == OrderStatus.awaitingPayment ? DateTime.now().add(Duration(minutes: _profile.holdMinutes)) : null,
+    );
+  }
+
+  String _upi(String code, int total) =>
+      'upi://pay?pa=${Uri.encodeComponent(_profile.upiId ?? '')}&pn=${Uri.encodeComponent(_profile.payeeName ?? '')}&am=${(total / 100).toStringAsFixed(2)}&cu=INR&tn=${Uri.encodeComponent('GatePass $code')}';
+
+  TierInfo _withB2b(TierInfo t) => TierInfo(
+      id: t.id, name: t.name, pricePaise: t.pricePaise, quantity: t.quantity, sold: t.sold, remaining: t.remaining, isActive: t.isActive,
+      category: t.category, requiresApproval: t.requiresApproval, b2bPricePaise: _b2bRate[t.id], b2bQuota: _b2bQuota[t.id], b2bSold: _b2bSold[t.id] ?? 0);
+
+  String get _sellerId => role == Role.reseller ? _s1 : _s1;
+  int? _priceFor(String tierId, String seller) => _prices['$tierId|$seller'] ?? _prices['$tierId|*'];
+
+  @override
+  Future<ApiResult<void>> setB2bEnabled(String eventId, bool enabled) async {
+    await _wait();
+    _b2bOn[eventId] = enabled;
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<void>> setTierB2b(String tierId, {int? ratePaise, int? quota}) async {
+    await _wait();
+    final t = _events.values.expand((x) => x.tiers).firstWhere((x) => x.id == tierId);
+    if (ratePaise != null && ratePaise > t.pricePaise) return const ApiResult.fail('The B2B rate must be at or below the ticket price', statusCode: 400);
+    if (ratePaise == null) {
+      _b2bRate.remove(tierId);
+    } else {
+      _b2bRate[tierId] = ratePaise;
+    }
+    _b2bQuota[tierId] = quota;
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<CompsInfo>> comps(String eventId) async {
+    await _wait();
+    final t = _terms[eventId] ?? const EventTerms();
+    final used = _compsUsed[eventId] ?? 0;
+    return ApiResult.ok(CompsInfo(used: used, free: t.compFree, feePaise: t.compFeePaise, left: t.compFree == null ? null : (t.compFree! - used).clamp(0, 1 << 30)));
+  }
+
+  @override
+  Future<ApiResult<void>> requestComps(String eventId, int quantity, String note) async {
+    await _wait();
+    if (_compReqs.any((r) => r.eventId == eventId && r.status == 'pending')) return const ApiResult.fail('A request for this event is already waiting for GatePass', statusCode: 409);
+    _compReqs.add(CompRequestItem(id: 'cr${_compReqs.length + 1}', eventId: eventId, quantity: quantity, status: 'pending', eventTitle: _events[eventId]?.e.title ?? '', note: note, createdAt: DateTime.now()));
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<Settlement>> settlement(String eventId) async {
+    final s = await summary(eventId);
+    if (!s.isOk) return s.cast();
+    final d = s.data!;
+    final t = _terms[eventId] ?? const EventTerms();
+    int pct(int v, double p) => (v * p / 100).round();
+    final onlineRev = d.online.revenuePaise;
+    final b2bTickets = _b2bOrders.where((o) => o.ticketsSent).fold<int>(0, (n, o) => n + o.quantity);
+    final b2bOwed = _b2bOrders.where((o) => o.ticketsSent).fold<int>(0, (n, o) => n + (_b2bRate['t-ga'] ?? 0) * o.quantity);
+    final comps = _compsUsed[eventId] ?? d.complimentary.tickets;
+    final chargeable = t.compFree == null ? 0 : (comps - t.compFree!).clamp(0, 1 << 30);
+    final box = pct(d.boxOffice.revenuePaise, t.boxOfficePct);
+    final b2bComm = pct(b2bOwed, t.b2bPct);
+    final pays = onlineRev - pct(onlineRev, t.commissionPct);
+    final owes = box + chargeable * t.compFeePaise + b2bComm;
+    return ApiResult.ok(Settlement({
+      'online': {'tickets': d.online.tickets, 'revenuePaise': onlineRev, 'commissionPaise': pct(onlineRev, t.commissionPct), 'bookingFeesPaise': pct(onlineRev, 3)},
+      'boxOffice': {'tickets': d.boxOffice.tickets, 'revenuePaise': d.boxOffice.revenuePaise, 'commissionPaise': box},
+      'comps': {'tickets': comps, 'free': t.compFree, 'chargeable': chargeable, 'feesPaise': chargeable * t.compFeePaise},
+      'b2b': {'tickets': b2bTickets, 'distributorOwesOrganiserPaise': b2bOwed, 'commissionPaise': b2bComm},
+      'gatepassEarningsPaise': pct(onlineRev, t.commissionPct) + pct(onlineRev, 3) + owes,
+      'gatepassPaysOrganiserPaise': pays,
+      'organiserPaysGatepassPaise': owes,
+      'netToOrganiserPaise': pays - owes,
+    }));
+  }
+
+  @override
+  Future<ApiResult<EventTerms>> terms(String eventId) async {
+    await _wait();
+    return ApiResult.ok(_terms[eventId] ?? const EventTerms());
+  }
+
+  @override
+  Future<ApiResult<EventTerms>> setTerms(String eventId, EventTerms terms) async {
+    await _wait();
+    return ApiResult.ok(_terms[eventId] = terms);
+  }
+
+  @override
+  Future<ApiResult<List<CompRequestItem>>> compRequests({String status = 'pending'}) async {
+    await _wait();
+    return ApiResult.ok(_compReqs.where((r) => r.status == status).toList().reversed.toList());
+  }
+
+  @override
+  Future<ApiResult<void>> decideCompRequest(String id, bool approve) async {
+    await _wait();
+    final i = _compReqs.indexWhere((r) => r.id == id);
+    if (i < 0) return const ApiResult.fail('Request not found', statusCode: 404);
+    final r = _compReqs[i];
+    if (approve) {
+      final t = _terms[r.eventId] ?? const EventTerms();
+      _terms[r.eventId] = t.copyWith(compFree: (t.compFree ?? 0) + r.quantity);
+    }
+    _compReqs[i] = CompRequestItem(id: r.id, eventId: r.eventId, quantity: r.quantity, status: approve ? 'approved' : 'rejected', eventTitle: r.eventTitle, note: r.note, createdAt: r.createdAt);
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<DistributorProfile>> distributorProfile() async {
+    await _wait();
+    return ApiResult.ok(_profile);
+  }
+
+  @override
+  Future<ApiResult<DistributorProfile>> saveDistributorProfile(DistributorProfile p) async {
+    await _wait();
+    if (p.upiId != null && !RegExp(r'^[\w.-]{2,64}@[A-Za-z][\w.]{1,63}$').hasMatch(p.upiId!)) return const ApiResult.fail('Enter a valid UPI ID, like name@bank', statusCode: 400);
+    return ApiResult.ok(_profile = p);
+  }
+
+  B2bTier _b2bTier(TierInfo t) {
+    final quota = _b2bQuota[t.id];
+    final sold = _b2bSold[t.id] ?? 0;
+    return B2bTier(
+      tierId: t.id, name: t.name, listPricePaise: t.pricePaise, b2bRatePaise: _b2bRate[t.id]!, b2bQuota: quota, b2bSold: sold,
+      available: quota == null ? t.remaining : (quota - sold).clamp(0, t.remaining),
+      defaultPricePaise: _prices['${t.id}|*'],
+      sellerPrices: {for (final s in _sellers) if (_prices.containsKey('${t.id}|${s.userId}')) s.userId: _prices['${t.id}|${s.userId}']!},
+    );
+  }
+
+  @override
+  Future<ApiResult<List<B2bEvent>>> b2bEvents() async {
+    await _wait();
+    return ApiResult.ok([
+      for (final x in _events.values)
+        if ((_b2bOn[x.e.id] ?? false) && x.e.status == 'live' && !x.e.isPast)
+          B2bEvent(id: x.e.id, title: x.e.title, venueName: x.e.venueName, startDate: x.e.startDate, b2bPct: (_terms[x.e.id] ?? const EventTerms()).b2bPct,
+              tiers: [for (final t in x.tiers) if (_b2bRate.containsKey(t.id)) _b2bTier(t)]),
+    ]);
+  }
+
+  @override
+  Future<ApiResult<void>> setSellerPrice(String tierId, int? pricePaise, {String? resellerId}) async {
+    await _wait();
+    final t = _events.values.expand((x) => x.tiers).firstWhere((x) => x.id == tierId);
+    if (pricePaise != null && pricePaise > t.pricePaise) return const ApiResult.fail('Seller price can’t be above the ticket price', statusCode: 400);
+    final key = '$tierId|${resellerId ?? '*'}';
+    final old = _prices[key];
+    if (old == pricePaise) return const ApiResult.ok(null);
+    if (pricePaise == null) {
+      _prices.remove(key);
+    } else {
+      _prices[key] = pricePaise;
+    }
+    _priceLog.insert(0, PriceChange(tierName: t.name, resellerId: resellerId, oldPaise: old, newPaise: pricePaise, at: DateTime.now()));
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<List<PriceChange>>> priceHistory({String? tierId}) async {
+    await _wait();
+    final name = tierId == null ? null : _events.values.expand((x) => x.tiers).firstWhere((x) => x.id == tierId).name;
+    return ApiResult.ok(_priceLog.where((c) => name == null || c.tierName == name).toList());
+  }
+
+  @override
+  Future<ApiResult<List<SellerAccount>>> sellers() async {
+    await _wait();
+    return ApiResult.ok(List.of(_sellers));
+  }
+
+  @override
+  Future<ApiResult<SellerAccount>> addSeller(String phone, String name, bool trusted) async {
+    await _wait();
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) return const ApiResult.fail('Enter a valid 10-digit mobile number', statusCode: 400);
+    final s = SellerAccount(userId: 'seller-$phone', name: name.isEmpty ? null : name, phone: phone, trusted: trusted);
+    _sellers.removeWhere((x) => x.phone == phone);
+    _sellers.add(s);
+    return ApiResult.ok(s);
+  }
+
+  @override
+  Future<ApiResult<SellerAccount>> updateSeller(String userId, {bool? trusted, bool? active, String? name}) async {
+    await _wait();
+    final i = _sellers.indexWhere((x) => x.userId == userId);
+    if (i < 0) return const ApiResult.fail('Seller not found', statusCode: 404);
+    final s = _sellers[i];
+    return ApiResult.ok(_sellers[i] = SellerAccount(userId: s.userId, name: name ?? s.name, phone: s.phone, trusted: trusted ?? s.trusted, active: active ?? s.active));
+  }
+
+  bool _matches(B2bOrderView o, String? status) => switch (status) {
+        null || 'all' => true,
+        'open' => o.needsDistributor,
+        'paid' => o.status == OrderStatus.paid,
+        _ => true,
+      };
+
+  @override
+  Future<ApiResult<Paged<B2bOrderView>>> distributorOrders({String? status, int page = 1}) async {
+    await _wait();
+    final list = _b2bOrders.where((o) => _matches(o, status)).toList();
+    return ApiResult.ok(Paged(list, total: list.length));
+  }
+
+  B2bOrderView _with(B2bOrderView o, OrderStatus st, {String? utr}) => B2bOrderView(
+      id: o.id, code: o.code, status: st, quantity: o.quantity, unitPricePaise: o.unitPricePaise, totalPaise: o.totalPaise, eventTitle: o.eventTitle,
+      tierName: o.tierName, listPricePaise: o.listPricePaise, recipients: o.recipients, utr: utr ?? o.utr, createdAt: o.createdAt,
+      expiresAt: st == OrderStatus.awaitingPayment ? o.expiresAt : null, upiUri: o.upiUri, upiId: o.upiId, payeeName: o.payeeName,
+      sellerName: o.sellerName, sellerPhone: o.sellerPhone);
+
+  Future<void> _issueDemo(B2bOrderView o) async {
+    for (final r in o.recipients) {
+      await _mint(e1, o.tierName, r.qty);
+    }
+  }
+
+  @override
+  Future<ApiResult<B2bOrderView>> confirmOrder(String id) async {
+    await _wait();
+    final i = _b2bOrders.indexWhere((o) => o.id == id);
+    if (i < 0) return const ApiResult.fail('Order not found', statusCode: 404);
+    final o = _b2bOrders[i];
+    if (o.status == OrderStatus.cancelled) return const ApiResult.fail('This order was cancelled', statusCode: 409);
+    if (!o.ticketsSent) await _issueDemo(o);
+    return ApiResult.ok(_b2bOrders[i] = _with(o, OrderStatus.paid));
+  }
+
+  Future<ApiResult<B2bOrderView>> _cancel(String id, {required bool seller}) async {
+    await _wait();
+    final i = _b2bOrders.indexWhere((o) => o.id == id);
+    if (i < 0) return const ApiResult.fail('Order not found', statusCode: 404);
+    final o = _b2bOrders[i];
+    if (o.ticketsSent) return const ApiResult.fail('Tickets are already issued; they can’t be cancelled here', statusCode: 409);
+    if (seller && o.status == OrderStatus.paymentSubmitted) return const ApiResult.fail('You’ve marked this as paid. Ask your distributor to cancel it.', statusCode: 409);
+    final tierId = _events[e1]!.tiers.firstWhere((t) => t.name == o.tierName).id;
+    _b2bSold[tierId] = ((_b2bSold[tierId] ?? 0) - o.quantity).clamp(0, 1 << 30);
+    return ApiResult.ok(_b2bOrders[i] = _with(o, OrderStatus.cancelled));
+  }
+
+  @override
+  Future<ApiResult<B2bOrderView>> cancelOrderAsDistributor(String id) => _cancel(id, seller: false);
+
+  @override
+  Future<ApiResult<List<DistributorEventReport>>> distributorReport() async {
+    await _wait();
+    final rate = _b2bRate['t-ga'] ?? 0;
+    final issued = _b2bOrders.where((o) => o.ticketsSent).toList();
+    final tickets = issued.fold<int>(0, (n, o) => n + o.quantity);
+    final owed = issued.fold<int>(0, (n, o) => n + rate * o.quantity);
+    final pct = (_terms[e1] ?? const EventTerms()).b2bPct;
+    final bySeller = <String, List<B2bOrderView>>{};
+    for (final o in issued) {
+      bySeller.putIfAbsent(o.sellerName ?? '', () => []).add(o);
+    }
+    return ApiResult.ok([
+      DistributorEventReport(
+        eventId: e1, title: 'Sunset Sessions: Live at the Lawn', startDate: _events[e1]?.e.startDate, tickets: tickets, owedToOrganiserPaise: owed,
+        gatepassCommissionPaise: (owed * pct / 100).round(), organiserKeepsPaise: owed - (owed * pct / 100).round(),
+        collectedPaise: _b2bOrders.where((o) => o.status == OrderStatus.paid).fold<int>(0, (n, o) => n + o.totalPaise),
+        unpaidBySellersPaise: _b2bOrders.where((o) => o.status == OrderStatus.issuedUnpaid).fold<int>(0, (n, o) => n + o.totalPaise),
+        awaitingConfirmationPaise: _b2bOrders.where((o) => o.status == OrderStatus.paymentSubmitted).fold<int>(0, (n, o) => n + o.totalPaise),
+        marginPaise: issued.fold<int>(0, (n, o) => n + (o.unitPricePaise - rate) * o.quantity),
+        sellers: [
+          for (final e in bySeller.entries)
+            SellerShare(
+              name: e.key, tickets: e.value.fold(0, (n, o) => n + o.quantity), soldPaise: e.value.fold(0, (n, o) => n + o.totalPaise),
+              marginPaise: e.value.fold(0, (n, o) => n + (o.unitPricePaise - rate) * o.quantity),
+              unpaidPaise: e.value.where((o) => o.status == OrderStatus.issuedUnpaid).fold(0, (n, o) => n + o.totalPaise)),
+        ],
+      ),
+    ]);
+  }
+
+  @override
+  Future<ApiResult<SellerCatalog>> sellerCatalog() async {
+    await _wait();
+    final me = _sellers.firstWhere((s) => s.userId == _sellerId);
+    final events = <SellerEvent>[];
+    for (final x in _events.values) {
+      if (!(_b2bOn[x.e.id] ?? false) || x.e.status != 'live' || x.e.isPast) continue;
+      final tiers = [
+        for (final t in x.tiers)
+          if (_b2bRate.containsKey(t.id) && _priceFor(t.id, me.userId) != null)
+            SellerTier(tierId: t.id, name: t.name, listPricePaise: t.pricePaise, yourPricePaise: _priceFor(t.id, me.userId)!, available: _b2bTier(t).available),
+      ];
+      if (tiers.isNotEmpty) events.add(SellerEvent(id: x.e.id, title: x.e.title, venueName: x.e.venueName, startDate: x.e.startDate, tiers: tiers));
+    }
+    return ApiResult.ok(SellerCatalog(upiId: _profile.upiId, payeeName: _profile.payeeName, trusted: me.trusted, events: events));
+  }
+
+  @override
+  Future<ApiResult<B2bOrderView>> placeOrder(String tierId, int quantity, List<Recipient> recipients) async {
+    await _wait();
+    final me = _sellers.firstWhere((s) => s.userId == _sellerId);
+    final t = _events.values.expand((x) => x.tiers).firstWhere((x) => x.id == tierId);
+    final unit = _priceFor(tierId, me.userId);
+    if (unit == null) return const ApiResult.fail('Your distributor hasn’t priced this ticket yet', statusCode: 400);
+    if (recipients.fold<int>(0, (n, r) => n + r.qty) != quantity) return const ApiResult.fail('The tickets per number must add up to the quantity', statusCode: 400);
+    for (final r in recipients) {
+      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(r.phone)) return ApiResult.fail('${r.phone.isEmpty ? 'A number' : r.phone} isn’t a valid 10-digit mobile number', statusCode: 400);
+      if (r.salePricePaise != null && r.salePricePaise! > t.pricePaise) return const ApiResult.fail('Selling price can’t be above the ticket price', statusCode: 400);
+    }
+    final avail = _b2bTier(t).available;
+    if (quantity > avail) return ApiResult.fail('Only $avail ${t.name} left for B2B', statusCode: 409);
+    _b2bSold[tierId] = (_b2bSold[tierId] ?? 0) + quantity;
+    final code = 'B2B-${(_code++).toRadixString(36).toUpperCase().padLeft(4, '0')}';
+    var o = _order(code, me.userId, tierId, quantity, unit, me.trusted ? OrderStatus.issuedUnpaid : OrderStatus.awaitingPayment, recipients: recipients);
+    if (me.trusted) await _issueDemo(o);
+    _b2bOrders.insert(0, o);
+    return ApiResult.ok(o);
+  }
+
+  @override
+  Future<ApiResult<Paged<B2bOrderView>>> sellerOrders({String? status, int page = 1}) async {
+    await _wait();
+    final me = _sellers.firstWhere((s) => s.userId == _sellerId);
+    final list = _b2bOrders.where((o) => o.sellerPhone == me.phone && (status != 'open' || o.needsDistributor)).toList();
+    return ApiResult.ok(Paged(list, total: list.length));
+  }
+
+  @override
+  Future<ApiResult<B2bOrderView>> submitUtr(String orderId, String utr) async {
+    await _wait();
+    if (!RegExp(r'^[A-Za-z0-9]{6,30}$').hasMatch(utr)) return const ApiResult.fail('Enter the UPI reference (UTR) from your payment app', statusCode: 400);
+    final i = _b2bOrders.indexWhere((o) => o.id == orderId);
+    if (i < 0) return const ApiResult.fail('Order not found', statusCode: 404);
+    final o = _b2bOrders[i];
+    return ApiResult.ok(_b2bOrders[i] = _with(o, o.status == OrderStatus.awaitingPayment ? OrderStatus.paymentSubmitted : o.status, utr: utr));
+  }
+
+  @override
+  Future<ApiResult<B2bOrderView>> cancelOrderAsSeller(String id) => _cancel(id, seller: true);
 }

@@ -656,4 +656,17 @@ void main() {
     expect(Get.currentRoute, Routes.login);
     await t.pumpAndSettle(const Duration(seconds: 5)); // let the confirmation snackbar finish
   });
+
+  testWidgets('A ticket bought from a B2B seller shows who sold it and the saving', (t) async {
+    t.view.physicalSize = const Size(1080, 3600);
+    t.view.devicePixelRatio = 2;
+    addTearDown(t.view.reset);
+    final tk = TicketModel.fromJson({...ticketJson('t1'), 'soldBy': 'Ravi Tickets', 'listPricePaise': 120000, 'paidPaise': 100000});
+    await t.pumpWidget(app(TicketViewScreen(ticket: tk)));
+    await t.pumpAndSettle();
+    for (final s in ['Sold by', 'Ravi Tickets', 'You paid', 'You saved']) {
+      expect(find.text(s), findsOneWidget, reason: s);
+    }
+    expect(find.text('₹200'), findsOneWidget);
+  });
 }

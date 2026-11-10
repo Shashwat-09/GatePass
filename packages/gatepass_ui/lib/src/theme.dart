@@ -432,19 +432,21 @@ class AppTheme {
       cupertinoOverrideTheme: CupertinoThemeData(
         brightness: b,
         primaryColor: p.tint,
-        textTheme: CupertinoTextThemeData(
-          primaryColor: p.tint,
-          // Large titles in the display face when the app has one.
-          navLargeTitleTextStyle: TextStyle(
-            fontFamily: displayFont ?? bodyFont,
-            fontSize: 34,
-            fontWeight: displayFont != null ? FontWeight.w600 : FontWeight.w700,
-            letterSpacing: displayFont != null ? -0.2 : -0.4,
-            color: p.label,
-          ),
-          navTitleTextStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, fontWeight: FontWeight.w600, color: p.label),
-          textStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, color: p.label),
-        ),
+        // Apps with their own fonts get large titles in the display face; others keep the system's.
+        textTheme: displayFont == null && bodyFont == null
+            ? null
+            : CupertinoTextThemeData(
+                primaryColor: p.tint,
+                navLargeTitleTextStyle: TextStyle(
+                  fontFamily: displayFont ?? bodyFont,
+                  fontSize: 34,
+                  fontWeight: displayFont != null ? FontWeight.w600 : FontWeight.w700,
+                  letterSpacing: displayFont != null ? -0.2 : -0.4,
+                  color: p.label,
+                ),
+                navTitleTextStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, fontWeight: FontWeight.w600, color: p.label),
+                textStyle: TextStyle(fontFamily: bodyFont, fontSize: 17, color: p.label),
+              ),
       ),
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,

@@ -333,3 +333,35 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `GET api/organiser/events/:id/summary` → `{bookings, ticketsSold, revenuePaise, online{tickets, revenuePaise}, boxOffice{tickets, revenuePaise}, complimentary{tickets}, entries{used, total}, pendingApprovals, tiers[{id, name, quantity, sold, reserved, remaining}]}`.
 - The web console at `/organiser` (same OTP sign-in) covers all of the above plus the approvals queue and the attendee report download.
 
+
+## 8.22 As built (v0.11) — roles, event terms, comps, B2B (docs/14)
+- **Multiple roles per account.** `users.extraRoles` (jsonb). `GET api/user` and the sign-in response return `role` (the highest) and `roles[]`. Guards accept any held role. `npm run user:role -- <phone> admin distributor`.
+- **Event terms (admin).** `GET|PUT api/admin/events/:id/terms {commissionPct, boxOfficePct, b2bPct, compFree (null = no limit), compFeePaise}` → the terms plus `custom`. Organiser event views include `commercial` and `b2bEnabled`.
+- **Comps.**
+  - `GET api/organiser/events/:id/comps` → `{used, free, feePaise, left}`.
+  - Past the allowance with no fee, `POST …/issue {kind: comp}` → `409 COMP_LIMIT`.
+  - `POST api/organiser/events/:id/comp-requests {quantity, note?}` (one pending per event) and `GET …/comp-requests`.
+  - Admin: `GET api/admin/comp-requests?status=pending|approved|rejected`, `POST api/admin/comp-requests/:id/approve|reject`. Approving adds the quantity to `compFree`.
+- **Settlement.** `GET api/organiser/events/:id/settlement` (own events) and `GET api/admin/events/:id/settlement` → `{terms, online{tickets, revenuePaise, commissionPaise, bookingFeesPaise}, boxOffice{tickets, revenuePaise, commissionPaise}, comps{tickets, free, chargeable, feesPaise}, b2b{tickets, distributorOwesOrganiserPaise, commissionPaise}, gatepassEarningsPaise, gatepassPaysOrganiserPaise, organiserPaysGatepassPaise, netToOrganiserPaise}`.
+- **Organiser B2B switches.** `PUT api/organiser/events/:id {b2bEnabled}`. Tiers take `b2bPricePaise` (≤ `pricePaise`, null = not offered) and `b2bQuota` (≥ `b2bSold`, null = no cap). Tier views add `b2bPricePaise, b2bQuota, b2bSold`.
+- **Distributor** (`role: distributor`):
+  - `GET|PUT api/distributor/profile {upiId, payeeName, holdMinutes 5–1440}`.
+  - `GET api/distributor/events` → B2B-enabled live events with tiers `{tierId, name, listPricePaise, b2bRatePaise, available, defaultPricePaise, sellerPrices[]}`.
+  - `PUT api/distributor/prices {tierId, resellerId?, pricePaise|null}`. Omitting `resellerId` sets the default; `null` clears the price.
+  - `GET api/distributor/prices/history?tierId=` → `{items[{tierId, tierName, resellerId, oldPaise, newPaise, at}]}`.
+  - Sellers:
+    - `GET api/distributor/sellers`;
+    - `POST api/distributor/sellers {phone, name?, trusted?}` (creates the account if needed and grants `reseller`);
+    - `PUT api/distributor/sellers/:userId {name?, trusted?, active?}`.
+  - Orders:
+    - `GET api/distributor/orders?status=&eventId=&page=&limit=` (`{items,page,total}`; items include `seller`);
+    - `POST api/distributor/orders/:id/confirm` (issues tickets, or marks a trusted seller's order paid; re-reserves stock if the order expired);
+    - `POST api/distributor/orders/:id/cancel`.
+  - `GET api/distributor/report` → per event: `{owedToOrganiserPaise, gatepassCommissionPaise, organiserKeepsPaise, collectedPaise, unpaidBySellersPaise, awaitingConfirmationPaise, marginPaise, sellers[]}`.
+- **Seller** (`role: reseller`):
+  - `GET api/reseller/events` → `{payTo{upiId, payeeName}, trusted, items[{…, tiers[{tierId, name, listPricePaise, yourPricePaise, available}]}]}`. The organiser's B2B rate is never shown to sellers.
+  - `POST api/reseller/orders {tierId, quantity, recipients[{phone, name?, email?, qty, salePricePaise?}]}`. Recipient quantities must add up to `quantity`. Stock is held until `expiresAt`. Trusted sellers get the tickets issued immediately (`issued_unpaid`).
+  - `GET api/reseller/orders?status=`, `POST api/reseller/orders/:id/utr {utr}`, `POST api/reseller/orders/:id/cancel` (only before marking paid).
+  - The order view has `{id, code, status, quantity, unitPricePaise, totalPaise, listPricePaise, recipients, utr, expiresAt, issuedAt, paidAt, payTo{upiId, payeeName, upiUri}}`. `upiUri` is `upi://pay?pa=…&pn=…&am=…&cu=INR&tn=GatePass <code>`.
+- **Tickets from B2B** are confirmed bookings with gateway `b2b`. Ticket views add `paidPaise`, `listPricePaise` and `soldBy` (seller name) for the "You saved" line.
+- **Jobs.** The jobs tick also expires unpaid B2B orders and returns their stock.

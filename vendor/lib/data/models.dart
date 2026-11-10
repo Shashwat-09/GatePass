@@ -5,34 +5,49 @@ DateTime? _date(dynamic v) => v == null ? null : DateTime.tryParse(v.toString())
 int _int(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
 String _str(dynamic v) => v?.toString() ?? '';
 
-enum Role { customer, staff, organiser, admin }
+enum Role { customer, staff, organiser, admin, distributor, reseller }
+
+Role _role(dynamic v) => Role.values.firstWhere((r) => r.name == v, orElse: () => Role.customer);
 
 class Me {
-  const Me({required this.id, required this.name, required this.phone, required this.role});
-  factory Me.fromJson(Map j) => Me(
-        id: _str(j['id']),
-        name: _str(j['name']),
-        phone: _str(j['phone']),
-        role: Role.values.firstWhere((r) => r.name == j['role'], orElse: () => Role.customer),
-      );
+  const Me({required this.id, required this.name, required this.phone, required this.role, List<Role>? roles}) : _roles = roles;
+  factory Me.fromJson(Map j) {
+    final roles = (j['roles'] as List?)?.map(_role).toList();
+    return Me(id: _str(j['id']), name: _str(j['name']), phone: _str(j['phone']), role: _role(j['role']), roles: roles);
+  }
   final String id;
   final String name;
   final String phone;
+  /// The most powerful role (what most screens check).
   final Role role;
+  final List<Role>? _roles;
+  /// Every role on the account, e.g. admin + distributor.
+  List<Role> get roles => _roles ?? [role];
+  bool has(Role r) => roles.contains(r);
 
+  bool get isAdmin => has(Role.admin);
   /// Sales, ticket types, approvals, comp and box-office tickets.
-  bool get canManage => role == Role.organiser || role == Role.admin;
+  bool get canManage => has(Role.organiser) || isAdmin;
   /// Check-in at the gate.
-  bool get canScan => role != Role.customer;
+  bool get canScan => has(Role.staff) || has(Role.organiser) || isAdmin;
   /// Partner vouchers at the counter.
-  bool get canRedeemVouchers => role == Role.staff || role == Role.admin;
+  bool get canRedeemVouchers => has(Role.staff) || isAdmin;
+  /// B2B: sets seller prices, confirms payments, sees the margin.
+  bool get isDistributor => has(Role.distributor);
+  /// B2B seller: buys from the distributor and sends tickets to customers.
+  bool get isSeller => has(Role.reseller);
+  /// Anything this app is for.
+  bool get hasAccess => canScan || isDistributor || isSeller;
 
-  String get roleLabel => switch (role) {
+  static String labelOf(Role r) => switch (r) {
         Role.admin => 'Admin',
         Role.organiser => 'Organiser',
         Role.staff => 'Gate staff',
+        Role.distributor => 'Distributor',
+        Role.reseller => 'Seller',
         Role.customer => 'Customer',
       };
+  String get roleLabel => roles.where((r) => r != Role.customer).map(labelOf).join(' · ');
   String get displayName => name.trim().isEmpty ? '+91 $phone' : name;
 }
 
@@ -87,6 +102,9 @@ class TierInfo {
     this.isActive = true,
     this.category = '',
     this.requiresApproval = false,
+    this.b2bPricePaise,
+    this.b2bQuota,
+    this.b2bSold = 0,
   });
   factory TierInfo.fromJson(Map j) => TierInfo(
         id: _str(j['id']),
@@ -99,6 +117,9 @@ class TierInfo {
         isActive: j['isActive'] != false,
         category: _str(j['category']),
         requiresApproval: j['requiresApproval'] == true,
+        b2bPricePaise: j['b2bPricePaise'] == null ? null : _int(j['b2bPricePaise']),
+        b2bQuota: j['b2bQuota'] == null ? null : _int(j['b2bQuota']),
+        b2bSold: _int(j['b2bSold']),
       );
   final String id;
   final String name;
@@ -110,18 +131,330 @@ class TierInfo {
   final bool isActive;
   final String category;
   final bool requiresApproval;
+  /// Organiser's rate to B2B sellers; null = not offered to B2B.
+  final int? b2bPricePaise;
+  final int? b2bQuota;
+  final int b2bSold;
 }
 
 class EventDetail {
-  const EventDetail({required this.event, required this.tiers, this.statusNote});
+  const EventDetail({required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms()});
   factory EventDetail.fromJson(Map j) => EventDetail(
         event: OrgEvent.fromJson(j),
         statusNote: j['statusNote']?.toString(),
         tiers: [for (final t in (j['tiers'] as List? ?? const [])) TierInfo.fromJson(t as Map)],
+        b2bEnabled: j['b2bEnabled'] == true,
+        terms: j['commercial'] is Map ? EventTerms.fromJson(j['commercial'] as Map) : const EventTerms(),
       );
   final OrgEvent event;
   final List<TierInfo> tiers;
   final String? statusNote;
+  final bool b2bEnabled;
+  final EventTerms terms;
+}
+
+/// Commercial terms an admin sets per event (organisers read them).
+class EventTerms {
+  const EventTerms({this.commissionPct = 10, this.boxOfficePct = 10, this.b2bPct = 10, this.compFree, this.compFeePaise = 0});
+  factory EventTerms.fromJson(Map j) => EventTerms(
+        commissionPct: (j['commissionPct'] as num?)?.toDouble() ?? 10,
+        boxOfficePct: (j['boxOfficePct'] as num?)?.toDouble() ?? 10,
+        b2bPct: (j['b2bPct'] as num?)?.toDouble() ?? 10,
+        compFree: j['compFree'] == null ? null : _int(j['compFree']),
+        compFeePaise: _int(j['compFeePaise']),
+      );
+  final double commissionPct;
+  final double boxOfficePct;
+  final double b2bPct;
+  /// Free comps; null = no limit.
+  final int? compFree;
+  final int compFeePaise;
+  Map<String, dynamic> toJson() => {'commissionPct': commissionPct, 'boxOfficePct': boxOfficePct, 'b2bPct': b2bPct, 'compFree': compFree, 'compFeePaise': compFeePaise};
+  EventTerms copyWith({double? commissionPct, double? boxOfficePct, double? b2bPct, int? compFree, bool clearCompFree = false, int? compFeePaise}) => EventTerms(
+        commissionPct: commissionPct ?? this.commissionPct,
+        boxOfficePct: boxOfficePct ?? this.boxOfficePct,
+        b2bPct: b2bPct ?? this.b2bPct,
+        compFree: clearCompFree ? null : compFree ?? this.compFree,
+        compFeePaise: compFeePaise ?? this.compFeePaise,
+      );
+}
+
+class CompsInfo {
+  const CompsInfo({required this.used, this.free, this.feePaise = 0, this.left});
+  factory CompsInfo.fromJson(Map j) => CompsInfo(used: _int(j['used']), free: j['free'] == null ? null : _int(j['free']), feePaise: _int(j['feePaise']), left: j['left'] == null ? null : _int(j['left']));
+  final int used;
+  final int? free;
+  final int feePaise;
+  final int? left;
+}
+
+class CompRequestItem {
+  const CompRequestItem({required this.id, required this.eventId, required this.quantity, required this.status, this.eventTitle = '', this.note, this.createdAt});
+  factory CompRequestItem.fromJson(Map j) => CompRequestItem(
+        id: _str(j['id']), eventId: _str(j['eventId']), quantity: _int(j['quantity']), status: _str(j['status']),
+        eventTitle: _str(j['eventTitle']), note: j['note']?.toString(), createdAt: _date(j['createdAt']));
+  final String id;
+  final String eventId;
+  final int quantity;
+  final String status;
+  final String eventTitle;
+  final String? note;
+  final DateTime? createdAt;
+}
+
+/// End-of-event money between the organiser and GatePass.
+class Settlement {
+  const Settlement(this.j);
+  final Map j;
+  int _p(String a, String b) => _int((j[a] as Map?)?[b]);
+  int get onlineTickets => _p('online', 'tickets');
+  int get onlineRevenue => _p('online', 'revenuePaise');
+  int get onlineCommission => _p('online', 'commissionPaise');
+  int get bookingFees => _p('online', 'bookingFeesPaise');
+  int get boxTickets => _p('boxOffice', 'tickets');
+  int get boxRevenue => _p('boxOffice', 'revenuePaise');
+  int get boxCommission => _p('boxOffice', 'commissionPaise');
+  int get compTickets => _p('comps', 'tickets');
+  int get compChargeable => _p('comps', 'chargeable');
+  int get compFees => _p('comps', 'feesPaise');
+  int? get compFree => (j['comps'] as Map?)?['free'] == null ? null : _p('comps', 'free');
+  int get b2bTickets => _p('b2b', 'tickets');
+  int get b2bOwed => _p('b2b', 'distributorOwesOrganiserPaise');
+  int get b2bCommission => _p('b2b', 'commissionPaise');
+  int get gatepassEarnings => _int(j['gatepassEarningsPaise']);
+  int get gatepassPaysOrganiser => _int(j['gatepassPaysOrganiserPaise']);
+  int get organiserPaysGatepass => _int(j['organiserPaysGatepassPaise']);
+  int get net => _int(j['netToOrganiserPaise']);
+}
+
+// ───────────── B2B ─────────────
+
+class DistributorProfile {
+  const DistributorProfile({this.upiId, this.payeeName, this.holdMinutes = 30});
+  factory DistributorProfile.fromJson(Map j) => DistributorProfile(upiId: j['upiId']?.toString(), payeeName: j['payeeName']?.toString(), holdMinutes: j['holdMinutes'] == null ? 30 : _int(j['holdMinutes']));
+  final String? upiId;
+  final String? payeeName;
+  final int holdMinutes;
+  bool get ready => (upiId ?? '').isNotEmpty;
+}
+
+class B2bTier {
+  const B2bTier({
+    required this.tierId, required this.name, required this.listPricePaise, required this.b2bRatePaise, required this.available,
+    this.b2bQuota, this.b2bSold = 0, this.defaultPricePaise, this.sellerPrices = const {},
+  });
+  factory B2bTier.fromJson(Map j) => B2bTier(
+        tierId: _str(j['tierId']), name: _str(j['name']), listPricePaise: _int(j['listPricePaise']), b2bRatePaise: _int(j['b2bRatePaise']),
+        available: _int(j['available']), b2bQuota: j['b2bQuota'] == null ? null : _int(j['b2bQuota']), b2bSold: _int(j['b2bSold']),
+        defaultPricePaise: j['defaultPricePaise'] == null ? null : _int(j['defaultPricePaise']),
+        sellerPrices: {for (final p in (j['sellerPrices'] as List? ?? const [])) _str((p as Map)['resellerId']): _int(p['pricePaise'])},
+      );
+  final String tierId;
+  final String name;
+  final int listPricePaise;
+  /// Organiser's rate: what the distributor owes per ticket.
+  final int b2bRatePaise;
+  final int available;
+  final int? b2bQuota;
+  final int b2bSold;
+  final int? defaultPricePaise;
+  /// Per-seller prices (seller user id → paise).
+  final Map<String, int> sellerPrices;
+}
+
+class B2bEvent {
+  const B2bEvent({required this.id, required this.title, required this.venueName, this.startDate, this.b2bPct = 10, this.tiers = const []});
+  factory B2bEvent.fromJson(Map j) => B2bEvent(
+        id: _str(j['id']), title: _str(j['title']), venueName: _str(j['venueName']), startDate: _date(j['startDate']),
+        b2bPct: (j['b2bPct'] as num?)?.toDouble() ?? 10,
+        tiers: [for (final t in (j['tiers'] as List? ?? const [])) B2bTier.fromJson(t as Map)]);
+  final String id;
+  final String title;
+  final String venueName;
+  final DateTime? startDate;
+  final double b2bPct;
+  final List<B2bTier> tiers;
+}
+
+class SellerAccount {
+  const SellerAccount({required this.userId, this.name, this.phone, this.trusted = false, this.active = true});
+  factory SellerAccount.fromJson(Map j) => SellerAccount(userId: _str(j['userId']), name: j['name']?.toString(), phone: j['phone']?.toString(), trusted: j['trusted'] == true, active: j['active'] != false);
+  final String userId;
+  final String? name;
+  final String? phone;
+  final bool trusted;
+  final bool active;
+  String get label => (name ?? '').trim().isNotEmpty ? name! : '+91 ${phone ?? ''}';
+}
+
+class PriceChange {
+  const PriceChange({required this.tierName, this.resellerId, this.oldPaise, this.newPaise, this.at});
+  factory PriceChange.fromJson(Map j) => PriceChange(
+        tierName: _str(j['tierName']), resellerId: j['resellerId']?.toString(),
+        oldPaise: j['oldPaise'] == null ? null : _int(j['oldPaise']), newPaise: j['newPaise'] == null ? null : _int(j['newPaise']), at: _date(j['at']));
+  final String tierName;
+  final String? resellerId;
+  final int? oldPaise;
+  final int? newPaise;
+  final DateTime? at;
+}
+
+class SellerTier {
+  const SellerTier({required this.tierId, required this.name, required this.listPricePaise, required this.yourPricePaise, required this.available});
+  factory SellerTier.fromJson(Map j) => SellerTier(tierId: _str(j['tierId']), name: _str(j['name']), listPricePaise: _int(j['listPricePaise']), yourPricePaise: _int(j['yourPricePaise']), available: _int(j['available']));
+  final String tierId;
+  final String name;
+  final int listPricePaise;
+  final int yourPricePaise;
+  final int available;
+}
+
+class SellerEvent {
+  const SellerEvent({required this.id, required this.title, required this.venueName, this.startDate, this.tiers = const []});
+  factory SellerEvent.fromJson(Map j) => SellerEvent(
+        id: _str(j['id']), title: _str(j['title']), venueName: _str(j['venueName']), startDate: _date(j['startDate']),
+        tiers: [for (final t in (j['tiers'] as List? ?? const [])) SellerTier.fromJson(t as Map)]);
+  final String id;
+  final String title;
+  final String venueName;
+  final DateTime? startDate;
+  final List<SellerTier> tiers;
+}
+
+class SellerCatalog {
+  const SellerCatalog({this.upiId, this.payeeName, this.trusted = false, this.events = const []});
+  factory SellerCatalog.fromJson(Map j) {
+    final pay = j['payTo'] as Map?;
+    return SellerCatalog(
+      upiId: pay?['upiId']?.toString(), payeeName: pay?['payeeName']?.toString(), trusted: j['trusted'] == true,
+      events: [for (final e in (j['items'] as List? ?? const [])) SellerEvent.fromJson(e as Map)],
+    );
+  }
+  final String? upiId;
+  final String? payeeName;
+  final bool trusted;
+  final List<SellerEvent> events;
+}
+
+class Recipient {
+  const Recipient({required this.phone, required this.qty, this.name, this.email, this.salePricePaise});
+  factory Recipient.fromJson(Map j) => Recipient(
+        phone: _str(j['phone']), qty: _int(j['qty']), name: j['name']?.toString(), email: j['email']?.toString(),
+        salePricePaise: j['salePricePaise'] == null ? null : _int(j['salePricePaise']));
+  final String phone;
+  final int qty;
+  final String? name;
+  final String? email;
+  /// What the customer paid the seller (shows as their saving).
+  final int? salePricePaise;
+  Map<String, dynamic> toJson() => {
+        'phone': phone, 'qty': qty,
+        if (name != null && name!.trim().isNotEmpty) 'name': name!.trim(),
+        if (email != null && email!.trim().isNotEmpty) 'email': email!.trim(),
+        if (salePricePaise != null) 'salePricePaise': salePricePaise,
+      };
+}
+
+enum OrderStatus { awaitingPayment, paymentSubmitted, issuedUnpaid, paid, cancelled, expired }
+
+OrderStatus _orderStatus(String s) => switch (s) {
+      'payment_submitted' => OrderStatus.paymentSubmitted,
+      'issued_unpaid' => OrderStatus.issuedUnpaid,
+      'paid' => OrderStatus.paid,
+      'cancelled' => OrderStatus.cancelled,
+      'expired' => OrderStatus.expired,
+      _ => OrderStatus.awaitingPayment,
+    };
+
+class B2bOrderView {
+  const B2bOrderView({
+    required this.id, required this.code, required this.status, required this.quantity, required this.unitPricePaise, required this.totalPaise,
+    this.eventTitle = '', this.tierName = '', this.listPricePaise = 0, this.recipients = const [], this.utr, this.createdAt, this.expiresAt,
+    this.upiUri, this.upiId, this.payeeName, this.sellerName, this.sellerPhone,
+  });
+  factory B2bOrderView.fromJson(Map j) {
+    final pay = j['payTo'] as Map?;
+    final seller = j['seller'] as Map?;
+    return B2bOrderView(
+      id: _str(j['id']), code: _str(j['code']), status: _orderStatus(_str(j['status'])), quantity: _int(j['quantity']),
+      unitPricePaise: _int(j['unitPricePaise']), totalPaise: _int(j['totalPaise']), eventTitle: _str(j['eventTitle']), tierName: _str(j['tierName']),
+      listPricePaise: _int(j['listPricePaise']),
+      recipients: [for (final r in (j['recipients'] as List? ?? const [])) Recipient.fromJson(r as Map)],
+      utr: j['utr']?.toString(), createdAt: _date(j['createdAt']), expiresAt: _date(j['expiresAt']),
+      upiUri: pay?['upiUri']?.toString(), upiId: pay?['upiId']?.toString(), payeeName: pay?['payeeName']?.toString(),
+      sellerName: seller?['name']?.toString(), sellerPhone: seller?['phone']?.toString(),
+    );
+  }
+  final String id;
+  final String code;
+  final OrderStatus status;
+  final int quantity;
+  final int unitPricePaise;
+  final int totalPaise;
+  final String eventTitle;
+  final String tierName;
+  final int listPricePaise;
+  final List<Recipient> recipients;
+  final String? utr;
+  final DateTime? createdAt;
+  final DateTime? expiresAt;
+  final String? upiUri;
+  final String? upiId;
+  final String? payeeName;
+  final String? sellerName;
+  final String? sellerPhone;
+
+  String get statusLabel => switch (status) {
+        OrderStatus.awaitingPayment => 'Awaiting payment',
+        OrderStatus.paymentSubmitted => 'Paid · to confirm',
+        OrderStatus.issuedUnpaid => 'Sent · payment due',
+        OrderStatus.paid => 'Paid · tickets sent',
+        OrderStatus.cancelled => 'Cancelled',
+        OrderStatus.expired => 'Expired',
+      };
+  bool get needsDistributor => status == OrderStatus.paymentSubmitted || status == OrderStatus.issuedUnpaid || status == OrderStatus.awaitingPayment;
+  bool get ticketsSent => status == OrderStatus.paid || status == OrderStatus.issuedUnpaid;
+}
+
+class SellerShare {
+  const SellerShare({this.name, required this.tickets, required this.soldPaise, required this.marginPaise, required this.unpaidPaise});
+  final String? name;
+  final int tickets;
+  final int soldPaise;
+  final int marginPaise;
+  final int unpaidPaise;
+}
+
+/// The distributor's books for one event.
+class DistributorEventReport {
+  const DistributorEventReport({
+    required this.eventId, required this.title, this.startDate, required this.tickets, required this.owedToOrganiserPaise,
+    required this.gatepassCommissionPaise, required this.organiserKeepsPaise, required this.collectedPaise, required this.unpaidBySellersPaise,
+    required this.awaitingConfirmationPaise, required this.marginPaise, this.sellers = const [],
+  });
+  factory DistributorEventReport.fromJson(Map j) => DistributorEventReport(
+        eventId: _str(j['eventId']), title: _str(j['title']), startDate: _date(j['startDate']), tickets: _int(j['tickets']),
+        owedToOrganiserPaise: _int(j['owedToOrganiserPaise']), gatepassCommissionPaise: _int(j['gatepassCommissionPaise']),
+        organiserKeepsPaise: _int(j['organiserKeepsPaise']), collectedPaise: _int(j['collectedPaise']),
+        unpaidBySellersPaise: _int(j['unpaidBySellersPaise']), awaitingConfirmationPaise: _int(j['awaitingConfirmationPaise']),
+        marginPaise: _int(j['marginPaise']),
+        sellers: [
+          for (final s in (j['sellers'] as List? ?? const []))
+            SellerShare(name: (s as Map)['name']?.toString(), tickets: _int(s['tickets']), soldPaise: _int(s['soldPaise']), marginPaise: _int(s['marginPaise']), unpaidPaise: _int(s['unpaidPaise'])),
+        ],
+      );
+  final String eventId;
+  final String title;
+  final DateTime? startDate;
+  final int tickets;
+  final int owedToOrganiserPaise;
+  final int gatepassCommissionPaise;
+  final int organiserKeepsPaise;
+  final int collectedPaise;
+  final int unpaidBySellersPaise;
+  final int awaitingConfirmationPaise;
+  final int marginPaise;
+  final List<SellerShare> sellers;
 }
 
 class Channel {

@@ -55,6 +55,7 @@ It currently runs on in-app mock data (`AppConfig.useMockData = true`) so the UI
 - [11 — Design review (Apple HIG)](11-Design-Review.md)
 - [12 — GatePass Organiser (vendor app)](12-Organiser-App.md)
 - [13 — Customer app design brief (for design tools)](13-Customer-App-Design-Brief.md)
+- [14 — B2B selling, event terms and roles](14-B2B-and-Roles.md)
 - [Deployment guide](DEPLOYMENT.md)
 - [Release checklist & data safety](RELEASE.md)
 - Legal drafts: [privacy policy](legal/privacy-policy.md), [terms](legal/terms.md)

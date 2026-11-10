@@ -15,6 +15,7 @@ import '../approvals/approvals_screen.dart';
 import '../issue/issue_screen.dart';
 import '../scan/scan_screen.dart';
 import 'events_screen.dart';
+import 'terms_screen.dart';
 
 /// One event: the way into check-in, then (for organisers) today's numbers,
 /// ticket types and the tools that change the event.
@@ -28,6 +29,7 @@ class EventScreen extends StatefulWidget {
 class _EventScreenState extends State<EventScreen> {
   late OrgEvent _event = widget.event;
   EventSummary? _summary;
+  CompsInfo? _comps;
   EventDetail? _detail;
   GateStats? _gate;
   bool _loading = true;
@@ -48,6 +50,8 @@ class _EventScreenState extends State<EventScreen> {
     setState(() => _error = null);
     if (_me.canManage) {
       final rs = await Future.wait([api.summary(_event.id), api.event(_event.id)]);
+      final comps = await api.comps(_event.id);
+      _comps = comps.data;
       if (!mounted) return;
       final s = rs[0];
       final d = rs[1];
@@ -201,7 +205,9 @@ class _EventScreenState extends State<EventScreen> {
         _checkIns(s.entriesUsed, s.entriesTotal),
         _sales(s),
         _tiers(_detail?.tiers ?? s.tiers),
+        if (_detail != null) _b2b(_detail!),
         _actions(s),
+        if (_detail != null) _terms(_detail!),
       ] else
         _checkIns(_gate?.entriesUsed, _gate?.entriesTotal),
     ]);
@@ -283,6 +289,125 @@ class _EventScreenState extends State<EventScreen> {
     );
   }
 
+  /// B2B selling: the organiser's switch, then a rate (and optional cap) per ticket type.
+  Widget _b2b(EventDetail d) {
+    final c = context.colors;
+    return InsetGroup(
+      header: 'B2B selling',
+      footer: d.b2bEnabled
+          ? 'Sellers buy through the distributor at your B2B rate; GatePass takes ${_pct(d.terms.b2bPct)} of it. Leave a rate empty to keep that ticket type out of B2B.'
+          : 'Let B2B sellers sell this event at a rate you set. When off, it sells only through the GatePass app.',
+      children: [
+        GroupRow(
+          title: 'Allow B2B Selling',
+          chevron: false,
+          trailing: Switch.adaptive(key: const Key('b2b-switch'), value: d.b2bEnabled, onChanged: (v) => _setB2b(v)),
+        ),
+        if (d.b2bEnabled)
+          for (final t in d.tiers)
+            GroupRow(
+              key: Key('b2b-${t.id}'),
+              title: t.name,
+              subtitle: t.b2bPricePaise == null
+                  ? 'Not offered to B2B'
+                  : '${t.b2bQuota == null ? 'No cap' : 'Cap ${t.b2bQuota}'} · ${t.b2bSold} through B2B',
+              value: t.b2bPricePaise == null ? 'Off' : formatPaise(t.b2bPricePaise!),
+              onTap: () => _editTierB2b(t),
+            ),
+        if (d.b2bEnabled && d.tiers.every((t) => t.b2bPricePaise == null))
+          Padding(padding: const EdgeInsets.all(AppSpacing.md), child: Text('Set a B2B rate on at least one ticket type.', style: context.text.bodySmall!.copyWith(color: c.warning))),
+      ],
+    );
+  }
+
+  String _pct(double v) => '${v.toStringAsFixed(v % 1 == 0 ? 0 : 1)}%';
+
+  Future<void> _setB2b(bool on) async {
+    final r = await Session.to.api.setB2bEnabled(_event.id, on);
+    if (!mounted) return;
+    if (!r.isOk) _toast(r.error!);
+    _load();
+  }
+
+  Future<void> _editTierB2b(TierInfo t) async {
+    final rate = TextEditingController(text: rupeesInput(t.b2bPricePaise));
+    final cap = TextEditingController(text: t.b2bQuota?.toString() ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${t.name}: B2B'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Ticket price ${formatPaise(t.pricePaise)}', style: ctx.text.bodySmall),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(key: const Key('b2b-rate'), controller: rate, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(prefixText: '₹ ', hintText: 'B2B rate (empty = not offered)')),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(key: const Key('b2b-cap'), controller: cap, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'Most tickets through B2B (empty = no cap)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final r = await Session.to.api.setTierB2b(t.id, ratePaise: rate.text.trim().isEmpty ? null : parseRupees(rate.text), quota: int.tryParse(cap.text.trim()));
+    if (!mounted) return;
+    if (!r.isOk) _toast(r.error!);
+    _load();
+  }
+
+  Future<void> _requestComps() async {
+    final qty = TextEditingController(text: '10');
+    final note = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ask for More Comps'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('GatePass sets this event’s free comp allowance. Ask for more and you’ll be notified when it’s decided.', style: ctx.text.bodyMedium),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(key: const Key('comp-qty'), controller: qty, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'How many')),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(controller: note, decoration: const InputDecoration(hintText: 'Why (optional, e.g. press, sponsors)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send Request')),
+        ],
+      ),
+    );
+    final n = int.tryParse(qty.text.trim());
+    if (ok != true || n == null || n < 1 || !mounted) return;
+    final r = await Session.to.api.requestComps(_event.id, n, note.text);
+    if (!mounted) return;
+    _toast(r.isOk ? 'Request sent to GatePass' : r.error!);
+  }
+
+  /// The commercial terms GatePass set for this event: editable by admins.
+  Widget _terms(EventDetail d) {
+    final t = d.terms;
+    return InsetGroup(
+      header: 'Event terms',
+      footer: _me.isAdmin ? 'You set these for each event. Organisers see them read-only.' : 'Set by GatePass for this event.',
+      children: [
+        GroupRow(title: 'Online commission', value: _pct(t.commissionPct)),
+        GroupRow(title: 'Box office commission', value: _pct(t.boxOfficePct)),
+        GroupRow(title: 'B2B commission', value: _pct(t.b2bPct)),
+        GroupRow(title: 'Free comps', value: t.compFree == null ? 'No limit' : '${t.compFree}'),
+        GroupRow(title: 'Fee per extra comp', value: t.compFeePaise == 0 ? 'Needs approval' : formatPaise(t.compFeePaise)),
+        if (_me.isAdmin)
+          GroupRow(
+            icon: CupertinoIcons.pencil,
+            title: 'Edit Terms',
+            onTap: () async {
+              await Get.to(() => TermsScreen(event: _event, terms: t));
+              _load();
+            },
+          ),
+      ],
+    );
+  }
+
   Widget _actions(EventSummary s) => InsetGroup(children: [
         GroupRow(
           icon: CupertinoIcons.person_crop_circle_badge_checkmark,
@@ -311,5 +436,23 @@ class _EventScreenState extends State<EventScreen> {
           onTap: _exporting ? null : _export,
         ),
         GroupRow(icon: CupertinoIcons.flag, title: 'Event Status', value: statusLabel(_event.status), onTap: _changeStatus),
+        if (_comps != null)
+          GroupRow(
+            icon: CupertinoIcons.tickets,
+            title: 'Complimentary',
+            value: _comps!.free == null ? '${_comps!.used} issued' : '${_comps!.used} of ${_comps!.free}',
+            subtitle: _comps!.free == null
+                ? 'No limit for this event'
+                : _comps!.left == 0
+                    ? (_comps!.feePaise > 0 ? 'Allowance used · extra comps cost ${formatPaise(_comps!.feePaise)} each' : 'Allowance used · ask GatePass for more')
+                    : '${_comps!.left} free comps left',
+            onTap: _comps!.free != null && !_me.isAdmin ? _requestComps : null,
+          ),
+        GroupRow(
+          icon: CupertinoIcons.money_dollar_circle,
+          title: 'Settlement',
+          subtitle: 'What GatePass pays you and what you owe, per channel',
+          onTap: () => Get.to(() => SettlementScreen(event: _event)),
+        ),
       ]);
 }

@@ -12,6 +12,10 @@ import 'package:gatepass_organiser/app/session.dart';
 import 'package:gatepass_organiser/data/demo_api.dart';
 import 'package:gatepass_organiser/data/models.dart';
 import 'package:gatepass_organiser/features/account/account_screen.dart';
+import 'package:gatepass_organiser/features/b2b/distributor_home.dart';
+import 'package:gatepass_organiser/features/b2b/seller_home.dart';
+import 'package:gatepass_organiser/features/events/terms_screen.dart';
+import 'package:gatepass_organiser/features/home/vendor_home.dart';
 import 'package:gatepass_organiser/features/approvals/approvals_screen.dart';
 import 'package:gatepass_organiser/features/auth/login_screen.dart';
 import 'package:gatepass_organiser/features/auth/no_access_screen.dart';
@@ -138,6 +142,31 @@ void main() {
       });
     });
     testWidgets('account ${mode.name}', (t) => shoot(t, 'account', () => const AccountScreen(), mode: mode));
+    testWidgets('home-admin ${mode.name}', (t) => shoot(t, 'home-admin', () => const VendorHome(), mode: mode, role: Role.admin));
+    testWidgets('distribute ${mode.name}', (t) => shoot(t, 'distribute', () => const DistributorHome(), mode: mode, role: Role.admin));
+    testWidgets('dist-prices ${mode.name}', (t) async {
+      final ev = (await DemoVendorApi(latency: Duration.zero).b2bEvents()).data!.first;
+      await shoot(t, 'dist-prices', () => B2bEventScreen(event: ev), mode: mode, role: Role.admin);
+    });
+    testWidgets('dist-orders ${mode.name}', (t) => shoot(t, 'dist-orders', () => const DistributorOrdersScreen(), mode: mode, role: Role.admin));
+    testWidgets('dist-books ${mode.name}', (t) => shoot(t, 'dist-books', () => const DistributorReportScreen(), mode: mode, role: Role.admin));
+    testWidgets('sell ${mode.name}', (t) => shoot(t, 'sell', () => const SellerHome(), mode: mode, role: Role.reseller));
+    testWidgets('sell-buy ${mode.name}', (t) => shoot(t, 'sell-buy', () => const SellerHome(), mode: mode, role: Role.reseller, before: () async {
+          await t.tap(find.byKey(const Key('buy-t-ga')));
+          await t.pumpAndSettle();
+          await t.enterText(find.byKey(const Key('r0-phone')), '9876501234');
+          await t.enterText(find.byKey(const Key('r0-sale')), '700');
+        }));
+    testWidgets('sell-pay ${mode.name}', (t) => shoot(t, 'sell-pay', () => const SellerHome(), mode: mode, role: Role.reseller, before: () async {
+          await t.tap(find.byKey(const Key('buy-t-ga')));
+          await t.pumpAndSettle();
+          await t.enterText(find.byKey(const Key('r0-phone')), '9876501234');
+          await t.tap(find.byKey(const Key('place-order')));
+        }));
+    testWidgets('event-terms ${mode.name}', (t) => shoot(t, 'event-terms', () => const EventScreen(event: tonight), mode: mode, role: Role.admin, before: () async {
+          await t.drag(find.byType(ListView), const Offset(0, -1700));
+        }));
+    testWidgets('settlement ${mode.name}', (t) => shoot(t, 'settlement', () => const SettlementScreen(event: tonight), mode: mode, role: Role.admin));
     testWidgets('no-access ${mode.name}', (t) => shoot(t, 'no-access', () => const NoAccessScreen(), mode: mode));
   }
 }

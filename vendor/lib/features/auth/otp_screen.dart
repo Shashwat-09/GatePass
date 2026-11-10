@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 
 import '../../app/session.dart';
-import '../events/events_screen.dart';
+import '../home/vendor_home.dart';
 import 'no_access_screen.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -37,7 +37,7 @@ class _OtpScreenState extends State<OtpScreen> {
       return;
     }
     s.me.value = r.data;
-    Get.offAll(() => r.data!.canScan ? const EventsScreen() : const NoAccessScreen());
+    Get.offAll(() => r.data!.hasAccess ? const VendorHome() : const NoAccessScreen());
   }
 
   Future<void> _resend() async {

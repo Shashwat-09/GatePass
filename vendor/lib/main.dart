@@ -7,6 +7,7 @@ import 'core/api_client.dart';
 import 'core/config.dart';
 import 'core/token_store.dart';
 import 'data/demo_api.dart';
+import 'data/models.dart';
 import 'data/vendor_api.dart';
 import 'features/auth/login_screen.dart';
 import 'gate/gate_store.dart';
@@ -18,7 +19,8 @@ Future<void> main() async {
   final VendorApi api;
   final GateStore store;
   if (VendorConfig.demo) {
-    api = DemoVendorApi();
+    // The demo opens as the owner's own account: admin and distributor.
+    api = DemoVendorApi(role: Role.admin);
     store = MemoryGateStore();
   } else {
     final tokens = SecureTokenStore();

@@ -11,6 +11,7 @@ import '../../core/format.dart';
 import '../../data/models.dart';
 import '../account/account_screen.dart';
 import 'event_screen.dart';
+import 'terms_screen.dart';
 
 /// Home: the events this account works. Organisers see their own events with
 /// sales; gate staff see the live events they can check in.
@@ -100,6 +101,7 @@ class _EventsScreenState extends State<EventsScreen> {
           ),
         ]),
         CupertinoSliverRefreshControl(onRefresh: _load),
+        if (_me.isAdmin) const SliverToBoxAdapter(child: CompRequestsRow()),
         if (manage)
           SliverToBoxAdapter(
             child: Padding(

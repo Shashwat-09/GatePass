@@ -636,6 +636,10 @@ class TicketModel {
   final String? bookingCode;
   /// What the buyer paid for the booking (null for tickets received from a friend).
   final int? paidPaise;
+  /// Ticket price (B2B tickets: shown next to what the customer paid the seller).
+  final int? listPricePaise;
+  /// The B2B seller who sold this ticket, if any.
+  final String? soldBy;
 
   TicketModel({
     required this.id,
@@ -662,6 +666,8 @@ class TicketModel {
     this.validTo,
     this.bookingCode,
     this.paidPaise,
+    this.listPricePaise,
+    this.soldBy,
   }) : entryTotal = entryTotal ?? quantity;
 
   int get entriesLeft => (entryTotal - entryUsed).clamp(0, 1 << 30);
@@ -688,6 +694,8 @@ class TicketModel {
         passType: (j['passType'] ?? 'single').toString(),
         bookingCode: j['bookingCode']?.toString(),
         paidPaise: (j['paidPaise'] as num?)?.toInt(),
+        listPricePaise: (j['listPricePaise'] as num?)?.toInt(),
+        soldBy: j['soldBy']?.toString(),
         surveyAvailable: j['surveyAvailable'] == true,
         validFrom: j['validFrom']?.toString(),
         validTo: j['validTo']?.toString(),
@@ -720,6 +728,8 @@ class TicketModel {
         'validTo': validTo,
         'bookingCode': bookingCode,
         'paidPaise': paidPaise,
+        'listPricePaise': listPricePaise,
+        'soldBy': soldBy,
       };
 }
 

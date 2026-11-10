@@ -64,7 +64,7 @@ void main() {
       expect(find.text('Revenue'), findsOneWidget);
       await t.scrollUntilVisible(find.text('Ticket Requests'), 200);
       expect(find.text('2 waiting'), findsOneWidget);
-      expect(find.text('VIP Lounge'), findsOneWidget);
+      expect(find.text('VIP Lounge'), findsWidgets); // ticket types and B2B rows
       expect(t.takeException(), isNull);
     });
   }

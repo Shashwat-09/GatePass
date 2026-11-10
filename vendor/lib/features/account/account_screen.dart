@@ -10,6 +10,7 @@ import '../../core/config.dart';
 import '../../data/demo_api.dart';
 import '../../data/models.dart';
 import '../auth/login_screen.dart';
+import '../home/vendor_home.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -110,24 +111,29 @@ class _AccountScreenState extends State<AccountScreen> {
           ),
         ]),
         if (demo != null)
-          InsetGroup(header: 'Demo', footer: 'Try check-in with no connection: scans are checked on the phone and upload when you switch this off.', children: [
+          InsetGroup(header: 'Demo', footer: 'Pretend to be offline to try check-in with no connection. Switch role to see what each person sees.', children: [
             GroupRow(
               title: 'Pretend to Be Offline',
               chevron: false,
               trailing: Switch.adaptive(value: demo.offline, onChanged: (v) => setState(() => demo.offline = v)),
             ),
-            GroupRow(
-              title: 'Gate Staff View',
-              chevron: false,
-              trailing: Switch.adaptive(
-                value: me.role == Role.staff,
-                onChanged: (v) async {
-                  demo.role = v ? Role.staff : Role.organiser;
+            for (final (r, label) in const [
+              (Role.admin, 'Admin + Distributor'),
+              (Role.organiser, 'Organiser'),
+              (Role.reseller, 'B2B Seller'),
+              (Role.staff, 'Gate Staff'),
+            ])
+              GroupRow(
+                key: Key('demo-${r.name}'),
+                title: label,
+                chevron: false,
+                trailing: demo.role == r ? Icon(CupertinoIcons.checkmark_alt, color: context.colors.tint) : null,
+                onTap: () async {
+                  demo.role = r;
                   Session.to.me.value = (await demo.me()).data;
-                  setState(() {});
+                  Get.offAll(() => const VendorHome());
                 },
               ),
-            ),
           ]),
         InsetGroup(children: [GroupRow(title: 'Sign Out', destructive: true, onTap: _signOut)]),
         Center(child: Text('${VendorConfig.appName} 0.1.0', style: context.text.bodySmall)),
