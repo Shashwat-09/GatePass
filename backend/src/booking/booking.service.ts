@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomBytes, randomUUID } from 'crypto';
 import { DataSource, EntityManager, In, IsNull, LessThan, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
+import { commercialOf, compsIssued } from '../organiser/settlement';
 import { signPath, signTicketQr } from '../common/signing';
 import { config } from '../config/config';
 import {
@@ -606,6 +607,8 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   async issueOffline(input: {
     eventId: string; tierId: string; quantity: number; phone: string; name?: string | null;
     kind: 'comp' | 'box_office'; amountPaise?: number; paymentMode?: string | null; note?: string | null; issuedBy: string;
+    /** Admins aren't bound by the event's free comp allowance. */
+    byAdmin?: boolean;
   }) {
     return this.ds.transaction(async (m) => {
       const event = await m.findOneByOrFail(EventEntity, { id: input.eventId });
@@ -615,27 +618,65 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       if (tier.passType === 'bundle') throw new ApiError('VALIDATION_ERROR', 'Bundle passes are sold in the app');
       const left = tier.quantity - tier.sold - tier.reserved;
       if (input.quantity > left) throw new ApiError('SOLD_OUT', left > 0 ? `Only ${left} ${tier.name} left` : `${tier.name} is sold out`);
-      let user = await m.findOne(User, { where: { phone: input.phone, deletedAt: IsNull() } });
-      if (!user) user = await m.save(m.create(User, { phone: input.phone, name: input.name ?? null }));
+      if (input.kind === 'comp' && !input.byAdmin) {
+        // Free comps are capped by the event's terms; beyond that they cost a fee, or need GatePass's approval.
+        await m.createQueryBuilder(EventEntity, 'e').setLock('pessimistic_write').where('e.id = :id', { id: event.id }).getOne();
+        const terms = commercialOf(event);
+        if (terms.compFree != null && terms.compFeePaise === 0) {
+          const used = await compsIssued(m, event.id);
+          if (used + input.quantity > terms.compFree) {
+            const left = Math.max(0, terms.compFree - used);
+            throw new ApiError('VALIDATION_ERROR', left > 0
+              ? `Only ${left} complimentary ticket${left === 1 ? '' : 's'} left in this event's allowance. Ask GatePass for more.`
+              : 'This event\'s complimentary allowance is used up. Ask GatePass for more.', undefined, { code: 'COMP_LIMIT' });
+          }
+        }
+      }
       const unit = currentPrice(tier).pricePaise;
       const total = input.kind === 'comp' ? 0 : input.amountPaise ?? unit * input.quantity;
-      const id = randomUUID();
-      const b = await m.save(m.create(Booking, {
-        id, code: bookingCode(), userId: user.id, eventId: event.id, status: 'confirmed',
-        basePaise: total, discountPaise: 0, offerDiscountPaise: 0, promoDiscountPaise: 0, promoCodeId: null, feePaise: 0, taxPaise: 0,
-        gst: {}, billingState: null, totalPaise: total, coinsPaise: 0, payablePaise: total,
-        gateway: input.kind, orderRef: '', txnId: `${input.kind}_${id}`, idempotencyKey: null,
-        failureReason: input.note ?? null,
-        items: [{ tierId: tier.id, tierName: tier.name, qty: input.quantity, unitPricePaise: input.kind === 'comp' ? 0 : Math.round(total / input.quantity), sessionId: tier.sessionId }],
+      const r = await this.issueChannelTickets(m, {
+        event, tier, phone: input.phone, name: input.name ?? null, quantity: input.quantity, gateway: input.kind,
+        totalPaise: total, note: input.note ?? null, fromReserved: false,
         attribution: { source: input.kind, ...(input.paymentMode ? { medium: input.paymentMode } : {}), issuedBy: input.issuedBy },
-        expiresAt: new Date(), confirmedAt: new Date(),
-      }));
-      await m.increment(Tier, { id: tier.id }, 'sold', input.quantity);
-      await this.issueTickets(m, b, event);
-      await notify(m, user.id, 'booking', input.kind === 'comp' ? 'You have complimentary tickets' : 'Your tickets are ready',
-        `${input.quantity} × ${tier.name} for ${event.title}. Booking ${b.code}.`, { bookingId: b.id, eventId: event.id });
-      return { bookingId: b.id, bookingCode: b.code, userId: user.id, totalPaise: total };
+        title: input.kind === 'comp' ? 'You have complimentary tickets' : 'Your tickets are ready',
+      });
+      return { bookingId: r.booking.id, bookingCode: r.booking.code, userId: r.userId, totalPaise: total };
     });
+  }
+
+  /**
+   * Issues tickets sold outside the app's checkout (comp, box office, B2B) to
+   * a phone number: confirmed booking, tickets with fresh signed QRs, and an
+   * inbox notification. Stock moves from held (`fromReserved`) or free to sold.
+   * Caller holds the tier row lock.
+   */
+  async issueChannelTickets(m: EntityManager, input: {
+    event: EventEntity; tier: Tier; phone: string; name: string | null; quantity: number; gateway: 'comp' | 'box_office' | 'b2b';
+    totalPaise: number; note: string | null; fromReserved: boolean; attribution: Record<string, string>; title: string;
+  }) {
+    const { event, tier } = input;
+    let user = await m.findOne(User, { where: { phone: input.phone, deletedAt: IsNull() } });
+    if (!user) user = await m.save(m.create(User, { phone: input.phone, name: input.name }));
+    const id = randomUUID();
+    const b = await m.save(m.create(Booking, {
+      id, code: bookingCode(), userId: user.id, eventId: event.id, status: 'confirmed',
+      basePaise: input.totalPaise, discountPaise: 0, offerDiscountPaise: 0, promoDiscountPaise: 0, promoCodeId: null, feePaise: 0, taxPaise: 0,
+      gst: {}, billingState: null, totalPaise: input.totalPaise, coinsPaise: 0, payablePaise: input.totalPaise,
+      gateway: input.gateway, orderRef: '', txnId: `${input.gateway}_${id}`, idempotencyKey: null,
+      failureReason: input.note,
+      items: [{ tierId: tier.id, tierName: tier.name, qty: input.quantity, unitPricePaise: Math.round(input.totalPaise / input.quantity), sessionId: tier.sessionId }],
+      attribution: input.attribution,
+      expiresAt: new Date(), confirmedAt: new Date(),
+    }));
+    if (input.fromReserved) {
+      await m.createQueryBuilder().update(Tier).set({ reserved: () => `GREATEST("reserved" - ${input.quantity}, 0)`, sold: () => `"sold" + ${input.quantity}` })
+        .where('id = :id', { id: tier.id }).execute();
+    } else {
+      await m.increment(Tier, { id: tier.id }, 'sold', input.quantity);
+    }
+    await this.issueTickets(m, b, event);
+    await notify(m, user.id, 'booking', input.title, `${input.quantity} × ${tier.name} for ${event.title}. Booking ${b.code}.`, { bookingId: b.id, eventId: event.id });
+    return { booking: b, userId: user.id };
   }
 
   // ───────────────────────────── seat holds (booking/seat-reserve) ─────────────────────────────

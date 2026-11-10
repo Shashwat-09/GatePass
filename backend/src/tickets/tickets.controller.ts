@@ -33,6 +33,22 @@ export class TicketsController {
     private readonly transfers: TransfersService,
   ) {}
 
+  /**
+   * What the holder paid. Normal bookings: the booking total (not shown to
+   * people who received a share). B2B: what the customer paid the seller, the
+   * ticket price, and who sold it.
+   */
+  private priceView(t: Ticket, b?: Booking) {
+    if (!b || t.receivedFromUserId) return { paidPaise: null, listPricePaise: null, soldBy: null };
+    if (b.gateway === 'b2b') {
+      const a = b.attribution ?? {};
+      const sale = a.salePricePaise != null ? Number(a.salePricePaise) * t.quantity : null;
+      const list = a.listPricePaise != null ? Number(a.listPricePaise) * t.quantity : null;
+      return { paidPaise: sale, listPricePaise: list, soldBy: a.sellerName ?? null };
+    }
+    return { paidPaise: b.totalPaise, listPricePaise: null, soldBy: null };
+  }
+
   private async views(rows: Ticket[]) {
     const evIds = [...new Set(rows.map((t) => t.eventId))];
     const events = new Map((evIds.length ? await this.events.findBy({ id: In(evIds) }) : []).map((e) => [e.id, e]));
@@ -48,8 +64,7 @@ export class TicketsController {
       return {
         id: t.id, bookingId: t.bookingId, eventId: t.eventId,
         bookingCode: t.bookingId ? bookings.get(t.bookingId)?.code ?? null : null,
-        // What the buyer paid for the whole booking; not shown to people who received a share.
-        paidPaise: t.receivedFromUserId || !t.bookingId ? null : bookings.get(t.bookingId)?.totalPaise ?? null, eventTitle: t.eventTitle, venueName: t.venueName,
+        ...this.priceView(t, t.bookingId ? bookings.get(t.bookingId) : undefined), eventTitle: t.eventTitle, venueName: t.venueName,
         tierName: t.tierName, seatLabel: t.seatLabel,
         startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
         qrToken: t.qrToken, status: t.status, quantity: t.quantity,

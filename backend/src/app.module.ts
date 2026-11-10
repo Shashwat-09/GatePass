@@ -13,6 +13,7 @@ import { DbModule } from './db/db.module';
 import { EventsModule } from './events/events.module';
 import { ExtrasModule } from './extras/extras.module';
 import { JobsModule } from './jobs/jobs.controller';
+import { B2bModule } from './b2b/b2b.controller';
 import { GateModule } from './gate/gate.module';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './users/users.module';
     AttributionModule,
     OrganiserModule,
     JobsModule,
+    B2bModule,
   ],
 })
 export class AppModule {}

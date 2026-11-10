@@ -1,5 +1,7 @@
 import { Controller, Headers, HttpCode, Logger, Module, OnModuleDestroy, OnModuleInit, Post } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
+import { B2bModule } from '../b2b/b2b.controller';
+import { B2bService } from '../b2b/b2b.service';
 import { BookingModule } from '../booking/booking.module';
 import { BookingService } from '../booking/booking.service';
 import { ApiError } from '../common/api-error';
@@ -26,6 +28,7 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
     private readonly booking: BookingService,
     private readonly events: EventsService,
     private readonly push: PushService,
+    private readonly b2b: B2bService,
     private readonly kv: KvStore,
   ) {}
 
@@ -62,11 +65,12 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
     return {
       expiredBookings: await run('expireStaleBookings', () => this.booking.expireStaleBookings()),
       openedSales: await run('notifyOpenedSales', () => this.events.notifyOpenedSales()),
+      expiredB2bOrders: await run('b2b.expireDue', () => this.b2b.expireDue()),
       pushes: await run('push.flush', () => this.push.flush()),
       kvSwept: this.kv instanceof PostgresKv ? await run('kv.sweep', () => (this.kv as PostgresKv).sweep()) : 0,
     };
   }
 }
 
-@Module({ imports: [BookingModule, EventsModule, PushModule], controllers: [JobsController] })
+@Module({ imports: [BookingModule, EventsModule, PushModule, B2bModule], controllers: [JobsController] })
 export class JobsModule {}

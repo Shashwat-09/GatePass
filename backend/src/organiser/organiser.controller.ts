@@ -10,7 +10,8 @@ import { eventFor } from '../common/event-access';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { BookingService, currentPrice } from '../booking/booking.service';
-import { ApprovalRequest, Booking, City, EventEntity, EventSession, Ticket, Tier, User } from '../db/entities';
+import { ApprovalRequest, Booking, City, CompRequest, EventEntity, EventSession, Ticket, Tier, User } from '../db/entities';
+import { commercialOf, compsIssued, eventSettlement } from './settlement';
 import { notify } from '../notifications/notify';
 
 const https = { protocols: ['https'], require_protocol: true };
@@ -41,6 +42,8 @@ class EventDto {
   @IsOptional() @IsString() @Length(0, 2000) ticketNotes?: string;
   @IsOptional() @IsInt() @Min(0) @Max(25) ageLimit?: number;
   @IsOptional() @IsBoolean() allowTransfers?: boolean;
+  /** Let B2B sellers (the distributor channel) sell this event. */
+  @IsOptional() @IsBoolean() b2bEnabled?: boolean;
   /** The evening's running order (shown as "The programme"). */
   @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ScheduleItemDto) schedule?: ScheduleItemDto[];
   @IsOptional() @IsBoolean() isWebOnly?: boolean;
@@ -70,6 +73,14 @@ class TierDto {
   @IsOptional() @IsInt() @Min(1) @Max(10) maxRequestsPerUser?: number;
   @IsOptional() @IsInt() sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  /** Rate to the B2B channel (paise); null = not offered to B2B sellers. */
+  @IsOptional() @IsInt() @Min(1) b2bPricePaise?: number | null;
+  /** Most tickets the B2B channel may take; null = no separate cap. */
+  @IsOptional() @IsInt() @Min(0) b2bQuota?: number | null;
+}
+class CompRequestDto {
+  @IsInt() @Min(1) @Max(5000) quantity!: number;
+  @IsOptional() @IsString() @Length(0, 300) note?: string;
 }
 class SessionDto {
   @IsOptional() @IsString() @Length(1, 120) venueName?: string;
@@ -93,7 +104,7 @@ class IssueDto {
 
 const EDITABLE: (keyof EventDto)[] = [
   'title', 'description', 'cityId', 'venueName', 'venueAddress', 'mapLink', 'genre', 'language', 'cardImageUrl', 'bannerUrl',
-  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl', 'schedule',
+  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl', 'schedule', 'b2bEnabled',
 ];
 const DATES: (keyof EventDto)[] = ['startDate', 'endDate', 'opensAt', 'closesAt'];
 
@@ -104,6 +115,7 @@ function tierView(t: Tier) {
     minQty: t.minQty, maxPerUser: t.maxPerUser, entryPerTicket: t.entryPerTicket, sessionId: t.sessionId, passType: t.passType,
     validFrom: t.validFrom, validTo: t.validTo, bundleNights: t.bundleNights, requiresApproval: t.requiresApproval,
     maxRequestsPerUser: t.maxRequestsPerUser, sortOrder: t.sortOrder, isActive: t.isActive,
+    b2bPricePaise: t.b2bPricePaise, b2bQuota: t.b2bQuota, b2bSold: t.b2bSold,
   };
 }
 function eventView(e: EventEntity) {
@@ -114,7 +126,12 @@ function eventView(e: EventEntity) {
     genre: e.genre, language: e.language, cardImageUrl: e.cardImageUrl, bannerUrl: e.bannerUrl, maxPerUser: e.maxPerUser, terms: e.terms,
     ticketNotes: e.ticketNotes, ageLimit: e.ageLimit, allowTransfers: e.allowTransfers, isWebOnly: e.isWebOnly, externalUrl: e.externalUrl,
     hasSeatMap: e.hasSeatMap, organiserId: e.organiserId, schedule: e.schedule ?? [],
+    b2bEnabled: e.b2bEnabled, commercial: commercialOf(e),
   };
+}
+
+export function compRequestView(r: CompRequest) {
+  return { id: r.id, eventId: r.eventId, quantity: r.quantity, note: r.note, status: r.status, createdAt: r.createdAt.toISOString(), decidedAt: r.decidedAt?.toISOString() ?? null };
 }
 
 /** Organiser tools: events, ticket types, shows, comp / box-office tickets, sales summary. */
@@ -268,7 +285,7 @@ export class OrganiserController {
   @HttpCode(200)
   async issue(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: IssueDto) {
     await eventFor(this.ds.manager, req, id);
-    return this.booking.issueOffline({ eventId: id, ...dto, issuedBy: req.userId! });
+    return this.booking.issueOffline({ eventId: id, ...dto, issuedBy: req.userId!, byAdmin: req.userRole === 'admin' });
   }
 
   @Get('events/:id/summary')
@@ -292,6 +309,45 @@ export class OrganiserController {
       pendingApprovals: await this.ds.getRepository(ApprovalRequest).countBy({ eventId: id, status: 'pending_review' }),
       tiers: tiers.map((t) => ({ id: t.id, name: t.name, quantity: t.quantity, sold: t.sold, reserved: t.reserved, remaining: Math.max(0, t.quantity - t.sold - t.reserved) })),
     };
+  }
+
+  /** Comps beyond the free allowance: ask GatePass (admin) for more. */
+  @Post('events/:id/comp-requests')
+  @HttpCode(200)
+  async requestComps(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CompRequestDto) {
+    const e = await eventFor(this.ds.manager, req, id);
+    const repo = this.ds.getRepository(CompRequest);
+    if (await repo.exist({ where: { eventId: id, status: 'pending' } })) throw new ApiError('CONFLICT', 'A request for this event is already waiting for GatePass');
+    const r = await repo.save(repo.create({ eventId: id, requestedBy: req.userId!, quantity: dto.quantity, note: dto.note?.trim() || null }));
+    const admins = await this.ds.getRepository(User).createQueryBuilder('u')
+      .where(`u."deletedAt" IS NULL AND (u.role = 'admin' OR u."extraRoles" ? 'admin')`).getMany();
+    for (const a of admins) {
+      await notify(this.ds.manager, a.id, 'event_update', 'Comp request', `${e.title}: ${dto.quantity} more complimentary tickets requested.`, { eventId: id });
+    }
+    return compRequestView(r);
+  }
+
+  @Get('events/:id/comp-requests')
+  async compRequests(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    await eventFor(this.ds.manager, req, id);
+    const rows = await this.ds.getRepository(CompRequest).find({ where: { eventId: id }, order: { createdAt: 'DESC' }, take: 50 });
+    return { items: rows.map(compRequestView) };
+  }
+
+  /** Comps used against the allowance, and the event's terms. */
+  @Get('events/:id/comps')
+  async comps(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    const e = await eventFor(this.ds.manager, req, id);
+    const t = commercialOf(e);
+    const used = await compsIssued(this.ds.manager, id);
+    return { used, free: t.compFree, feePaise: t.compFeePaise, left: t.compFree == null ? null : Math.max(0, t.compFree - used) };
+  }
+
+  /** End-of-event money: what GatePass pays the organiser and what the organiser owes GatePass. */
+  @Get('events/:id/settlement')
+  async settlement(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    const e = await eventFor(this.ds.manager, req, id);
+    return eventSettlement(this.ds.manager, e);
   }
 
   // ── helpers ──
@@ -323,6 +379,12 @@ export class OrganiserController {
   private applyTier(t: Tier, dto: TierDto) {
     const rec = t as unknown as Record<string, unknown>;
     for (const [k, v] of Object.entries(dto)) if (v !== undefined) rec[k] = v;
+    if (t.b2bPricePaise != null && t.b2bPricePaise > t.pricePaise) {
+      throw new ApiError('VALIDATION_ERROR', 'The B2B rate must be at or below the ticket price');
+    }
+    if (t.b2bQuota != null && t.b2bQuota < t.b2bSold) {
+      throw new ApiError('VALIDATION_ERROR', `${t.b2bSold} are already sold through B2B — the cap can't go below that`);
+    }
   }
 
   private applySession(s: EventSession, dto: SessionDto) {

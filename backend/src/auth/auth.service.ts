@@ -1,3 +1,4 @@
+import { rolesOf } from '../common/roles';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -193,7 +194,7 @@ export class AuthService {
   publicUser(u: User) {
     return {
       id: u.id, memberId: memberId(u.id), phone: u.phone, name: u.name, email: u.email, dob: u.dob, gender: u.gender,
-      cityId: u.cityId, acceptedTerms: u.acceptedTerms, role: u.role,
+      cityId: u.cityId, acceptedTerms: u.acceptedTerms, role: rolesOf(u)[0], roles: rolesOf(u),
       address: { house: u.house, street: u.street, locality: u.locality, city: u.addressCity, state: u.state, pincode: u.pincode },
     };
   }

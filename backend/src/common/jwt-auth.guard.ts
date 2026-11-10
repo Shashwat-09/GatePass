@@ -8,11 +8,18 @@ import { JWT_AUDIENCE, JWT_ISSUER } from '../auth/auth.service';
 import { config } from '../config/config';
 import { User, UserRole } from '../db/entities';
 import { ApiError } from './api-error';
+import { rolesOf } from './roles';
+
+export { rolesOf };
 
 export interface AuthedRequest extends Request {
   userId?: string;
+  /** The account's most powerful role (existing admin/organiser checks use this). */
   userRole?: UserRole;
+  /** Every role on the account (e.g. admin + distributor). */
+  userRoles?: UserRole[];
 }
+
 
 /**
  * Validates the Bearer access token and that the account still exists
@@ -43,10 +50,11 @@ export class JwtAuthGuard implements CanActivate {
     } catch {
       throw new ApiError('UNAUTHENTICATED', 'Invalid or expired token');
     }
-    const user = await this.users.findOne({ where: { id: sub, deletedAt: IsNull() }, select: ['id', 'role'] });
+    const user = await this.users.findOne({ where: { id: sub, deletedAt: IsNull() }, select: ['id', 'role', 'extraRoles'] });
     if (!user) throw new ApiError('UNAUTHENTICATED', 'Account not found');
     req.userId = user.id;
-    req.userRole = user.role;
+    req.userRoles = rolesOf(user);
+    req.userRole = req.userRoles[0];
     return true;
   }
 }
@@ -62,7 +70,8 @@ export class RolesGuard implements CanActivate {
     const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES, [ctx.getHandler(), ctx.getClass()]);
     if (!roles?.length) return true;
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
-    if (!req.userRole || !roles.includes(req.userRole)) {
+    const mine = req.userRoles ?? (req.userRole ? [req.userRole] : []);
+    if (!mine.some((r) => roles.includes(r))) {
       throw new ApiError('FORBIDDEN', 'You do not have access to this');
     }
     return true;

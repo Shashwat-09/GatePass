@@ -39,7 +39,25 @@ export class AccountDeletion {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
-export type UserRole = 'customer' | 'staff' | 'organiser' | 'admin';
+export type UserRole = 'customer' | 'staff' | 'organiser' | 'admin' | 'distributor' | 'reseller';
+
+/**
+ * Commercial terms per event, set by an admin (organisers read them):
+ * GatePass commission on each sales channel, and the free comp allowance.
+ */
+export interface EventCommercial {
+  /** % of the ticket price on online sales (customer app). */
+  commissionPct: number;
+  /** % on box-office sales (money collected by the organiser at the venue). */
+  boxOfficePct: number;
+  /** % of the organiser's B2B rate on tickets sold through the B2B channel. */
+  b2bPct: number;
+  /** Complimentary tickets free of charge; null = no limit. */
+  compFree: number | null;
+  /** Fee per comp beyond the free allowance (0 = extra comps need admin approval). */
+  compFeePaise: number;
+}
+export const DEFAULT_COMMERCIAL: EventCommercial = { commissionPct: 10, boxOfficePct: 10, b2bPct: 10, compFree: null, compFeePaise: 0 };
 
 @Entity('users')
 export class User {
@@ -61,6 +79,8 @@ export class User {
   @Column({ default: false }) acceptedTerms!: boolean;
   @Column({ type: 'varchar', nullable: true }) termsVersion!: string | null;
   @Column({ type: 'varchar', default: 'customer' }) role!: UserRole;
+  /** More roles on the same account (e.g. an admin who is also the distributor). */
+  @Column({ type: 'jsonb', default: () => "'[]'" }) extraRoles!: UserRole[];
   @Column({ type: 'varchar', nullable: true }) deviceToken!: string | null;
   @Column({ type: 'timestamptz', nullable: true }) deletedAt!: Date | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
@@ -141,6 +161,10 @@ export class EventEntity {
   /** Whether received tickets may be passed on again (default yes; organisers can switch off). */
   @Column({ default: true }) allowResplit!: boolean;
   @Column({ type: 'jsonb', default: () => "'[]'" }) faqs!: { q: string; a: string }[];
+  /** Commercial terms (admin): commissions per channel and the comp allowance. Null = defaults. */
+  @Column({ type: 'jsonb', nullable: true }) commercial!: EventCommercial | null;
+  /** The organiser allows selling through B2B sellers (distributor channel). */
+  @Column({ default: false }) b2bEnabled!: boolean;
 }
 
 @Entity('artists')
@@ -224,6 +248,12 @@ export class Tier {
   @Column() quantity!: number;
   @Column({ default: 0 }) sold!: number;
   @Column({ default: 0 }) reserved!: number;
+  /** Organiser's rate to the B2B channel (paise); null = not offered to B2B. */
+  @Column({ type: 'int', nullable: true }) b2bPricePaise!: number | null;
+  /** Most tickets the B2B channel may take; null = no separate cap. */
+  @Column({ type: 'int', nullable: true }) b2bQuota!: number | null;
+  /** Tickets sold or held through the B2B channel. */
+  @Column({ default: 0 }) b2bSold!: number;
   @Column({ default: 1 }) minQty!: number;
   @Column({ default: 1 }) entryPerTicket!: number;
   /** Group heading in the ticket list, e.g. "Standing", "VIP Lounge". */
@@ -739,9 +769,104 @@ export class AttributionClick {
   @Index() @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/** Admin approval for comps beyond an event's free allowance. */
+@Entity('comp_requests')
+export class CompRequest {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') eventId!: string;
+  @Column('uuid') requestedBy!: string;
+  @Column('int') quantity!: number;
+  @Column({ type: 'varchar', nullable: true }) note!: string | null;
+  @Column({ type: 'varchar', default: 'pending' }) status!: 'pending' | 'approved' | 'rejected';
+  @Column({ type: 'uuid', nullable: true }) decidedBy!: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) decidedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** A distributor's payment details shown to their sellers (personal UPI). */
+@Entity('distributor_profiles')
+export class DistributorProfile {
+  @PrimaryColumn('uuid') userId!: string;
+  @Column({ type: 'varchar', nullable: true }) upiId!: string | null;
+  @Column({ type: 'varchar', nullable: true }) payeeName!: string | null;
+  /** Minutes an unpaid order holds tickets. */
+  @Column({ default: 30 }) holdMinutes!: number;
+  @UpdateDateColumn({ type: 'timestamptz' }) updatedAt!: Date;
+}
+
+/** A B2B seller and the distributor they buy from. */
+@Entity('resellers')
+export class Reseller {
+  @PrimaryColumn('uuid') userId!: string;
+  @Index() @Column('uuid') distributorId!: string;
+  @Column({ type: 'varchar', nullable: true }) displayName!: string | null;
+  /** Tickets are issued before the distributor confirms payment. */
+  @Column({ default: false }) trusted!: boolean;
+  @Column({ default: true }) active!: boolean;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** The distributor's price to sellers for a ticket type: default (resellerId null) or for one seller. */
+@Entity('distributor_prices')
+@Unique('uq_distributor_price', ['distributorId', 'tierId', 'resellerKey'])
+export class DistributorPrice {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') distributorId!: string;
+  @Index() @Column('uuid') tierId!: string;
+  @Column({ type: 'uuid', nullable: true }) resellerId!: string | null;
+  /** resellerId or '*' (default) — part of the unique key. */
+  @Column({ type: 'varchar' }) resellerKey!: string;
+  @Column('int') pricePaise!: number;
+  @UpdateDateColumn({ type: 'timestamptz' }) updatedAt!: Date;
+}
+
+/** Every price change, for the distributor's own record. */
+@Entity('distributor_price_changes')
+export class DistributorPriceChange {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') distributorId!: string;
+  @Column('uuid') tierId!: string;
+  @Column({ type: 'uuid', nullable: true }) resellerId!: string | null;
+  @Column({ type: 'int', nullable: true }) oldPaise!: number | null;
+  @Column({ type: 'int', nullable: true }) newPaise!: number | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+export type B2bOrderStatus = 'awaiting_payment' | 'payment_submitted' | 'issued_unpaid' | 'paid' | 'cancelled' | 'expired';
+
+/** A seller's purchase from the distributor; paid to the distributor's UPI. */
+@Entity('b2b_orders')
+export class B2bOrder {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index({ unique: true }) @Column() code!: string;
+  @Index() @Column('uuid') distributorId!: string;
+  @Index() @Column('uuid') resellerId!: string;
+  @Index() @Column('uuid') eventId!: string;
+  @Column('uuid') tierId!: string;
+  @Column('int') quantity!: number;
+  /** What the seller pays per ticket (distributor's price at order time). */
+  @Column('int') unitPricePaise!: number;
+  /** Organiser's B2B rate per ticket at order time (what the distributor owes). */
+  @Column('int') b2bRatePaise!: number;
+  @Column('real') b2bPct!: number;
+  /** Ticket price customers see (price at order time). */
+  @Column('int') listPricePaise!: number;
+  @Column('int') totalPaise!: number;
+  /** Who receives the tickets: [{phone, name?, email?, qty, salePricePaise?}]. */
+  @Column({ type: 'jsonb' }) recipients!: { phone: string; name?: string | null; email?: string | null; qty: number; salePricePaise?: number | null }[];
+  @Column({ type: 'varchar' }) status!: B2bOrderStatus;
+  @Column({ type: 'varchar', nullable: true }) utr!: string | null;
+  @Column({ type: 'jsonb', default: () => "'[]'" }) bookingIds!: string[];
+  @Column({ type: 'timestamptz', nullable: true }) issuedAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) paidAt!: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) expiresAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
   Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
   VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
+  CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder,
 ];
