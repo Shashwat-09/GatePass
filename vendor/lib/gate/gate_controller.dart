@@ -14,8 +14,9 @@ import 'qr.dart';
 /// answer in a few seconds it is checked on the phone against the offline
 /// list, admitted, queued, and uploaded when the connection returns.
 class GateController extends GetxController {
-  GateController({required this.api, required this.store, required this.eventId, required this.me, this.autoSync = true})
-      : validator = OfflineValidator(store);
+  GateController({required this.api, required this.store, required this.eventId, required this.me, this.autoSync = true, bool? vouchers})
+      : validator = OfflineValidator(store),
+        vouchers = vouchers ?? VendorConfig.vouchers;
 
   final VendorApi api;
   final GateStore store;
@@ -23,6 +24,8 @@ class GateController extends GetxController {
   final String eventId;
   final Me me;
   final bool autoSync;
+  /// Partner vouchers on (off by default): otherwise a voucher code is just not a ticket.
+  final bool vouchers;
 
   final manifest = Rxn<Manifest>();
   final stats = Rxn<GateStats>();
@@ -109,7 +112,7 @@ class GateController extends GetxController {
     _lastAt = now;
     final n = entries.value;
     try {
-      final out = isVoucherCode(code) ? await _voucher(code, n) : await _ticket(code, n);
+      final out = vouchers && isVoucherCode(code) ? await _voucher(code, n) : await _ticket(code, n);
       result.value = out;
       entries.value = 1;
       return out;

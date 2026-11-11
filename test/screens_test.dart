@@ -694,7 +694,7 @@ void main() {
     d.backend.json('DELETE', 'api/user', {'deleted': true});
     await t.pumpWidget(GetMaterialApp(home: const ProfileScreen(), getPages: Routes.pages));
     await t.pumpAndSettle();
-    expect(find.text('My Vouchers'), findsOneWidget); // partner vouchers ship in v0.8
+    expect(find.text('My Vouchers'), findsNothing); // partner vouchers are off (owner decision); VOUCHERS=true shows them
     expect(find.text('Claim Shared Tickets'), findsOneWidget);
     await t.scrollUntilVisible(find.text('Delete Account'), 200);
     await t.tap(find.text('Delete Account'));

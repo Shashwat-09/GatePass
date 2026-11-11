@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../app/routes.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/requests/my_requests_screen.dart';
+import '../../core/constants.dart';
 import '../../features/vouchers/voucher_detail_screen.dart';
 import '../../features/vouchers/vouchers_screen.dart';
 
@@ -17,9 +18,9 @@ class NotificationRouter {
         Get.offAllNamed(Routes.home, arguments: {'tab': 1});
       case 'requests':
         Get.to(() => const MyRequestsScreen());
-      case 'vouchers':
+      case 'vouchers' when AppConfig.vouchers:
         Get.to(() => const VouchersScreen());
-      case 'voucher' when parts.length > 1:
+      case 'voucher' when AppConfig.vouchers && parts.length > 1:
         Get.to(() => VoucherDetailScreen(id: parts[1]));
       case 'event' when parts.length > 1:
         Get.toNamed(Routes.eventDetails, arguments: parts[1]);

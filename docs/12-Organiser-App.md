@@ -36,7 +36,7 @@ Organisers can only open the gate for their own events. The server enforces this
 
 Results show colour, a symbol and words together ("ADMIT 3", "ALREADY USED", "INVALID"), with haptics. Screen readers announce them (live region). **People Entering** sets how many people a group ticket admits at once.
 
-Partner vouchers (`GV1.` QR or a `GV-XXXXXXXX` code) are redeemed online only, by staff and admins.
+Partner vouchers are switched off (owner decision); a voucher code scans as not a ticket. With `--dart-define=VOUCHERS=true` they come back: `GV1.` QR or a `GV-XXXXXXXX` code, redeemed online only, by staff and admins.
 
 ## Demo mode
 `flutter run --dart-define=USE_MOCK=true` (or the demo APK) runs on built-in data with no server. The demo has:

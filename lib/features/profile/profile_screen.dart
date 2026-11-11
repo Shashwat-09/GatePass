@@ -101,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ]),
           InsetGroup(children: [
             GroupRow(icon: CupertinoIcons.bell, title: 'Notifications', onTap: () => Get.to(() => const NotificationsScreen())),
-            GroupRow(icon: CupertinoIcons.gift, title: 'My Vouchers', onTap: () => Get.to(() => const VouchersScreen())),
+            if (AppConfig.vouchers) GroupRow(icon: CupertinoIcons.gift, title: 'My Vouchers', onTap: () => Get.to(() => const VouchersScreen())),
             GroupRow(icon: CupertinoIcons.person_badge_plus, title: 'My Requests', onTap: () => Get.to(() => const MyRequestsScreen())),
             GroupRow(icon: CupertinoIcons.ticket, title: 'Claim Shared Tickets', onTap: () => Get.to(() => const ClaimScreen())),
           ]),

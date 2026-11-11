@@ -118,6 +118,18 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     expect(mixed.transfers[1]).toMatchObject({ delivered: true, status: 'claimed' });
   });
 
+  it('a number not on GatePass yet: the sender can take the tickets back until that person signs up', async () => {
+    const t = await buy(buyer, 2);
+    const stranger = `8${String(Date.now()).slice(-9)}`;
+    const r = (await split(buyer, { ticketId: t.id, quantity: 1, phone: stranger }).expect(200)).body.data;
+    expect(r).toMatchObject({ delivered: false, status: 'pending' });
+    const back = (await ctx.http.post('/api/ticket/claim-back').set(auth(buyer.token)).send({ transferId: r.id }).expect(200)).body.data;
+    expect(back.status).toBe('cancelled');
+    expect((await ctx.ds.getRepository(Ticket).findOneByOrFail({ id: t.id })).quantity).toBe(2); // back in the sender's ticket
+    const s = await login(ctx, stranger);
+    expect(await mine(s)).toHaveLength(0); // nothing waiting for them any more
+  });
+
   it('split to a phone that has no account yet: held, then delivered when they sign in', async () => {
     const t = await buy(buyer, 2);
     const newcomer = `9${String(Date.now()).slice(-9)}`;

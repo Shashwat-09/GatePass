@@ -20,6 +20,10 @@ class AppConfig {
   /// filters, split/transfer, location city detect). Hidden for the MVP release.
   static const bool phase2 = bool.fromEnvironment('PHASE2', defaultValue: false);
 
+  /// Partner vouchers (drinks/food coupons from sponsors). Not used by GatePass
+  /// for now (owner decision): hidden unless built with --dart-define=VOUCHERS=true.
+  static const bool vouchers = bool.fromEnvironment('VOUCHERS', defaultValue: false);
+
   static const String _baseUrl = String.fromEnvironment('BASE_URL');
 
   /// Backend base URL (trailing slash; the client appends `api/...`).

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import '../core/api_client.dart';
+import '../core/config.dart';
 import '../gate/qr.dart';
 import 'models.dart';
 import 'vendor_api.dart';
@@ -133,7 +134,7 @@ class DemoVendorApi implements VendorApi {
       if (mine.any((t) => t.used >= t.total)) DemoSample('Already used', mine.firstWhere((t) => t.used >= t.total).token),
       if (eventId != e1) DemoSample('Ticket for another event', other.token),
       if (forged.isNotEmpty) DemoSample('Forged QR', forged),
-      if (role != Role.organiser) const DemoSample('Partner voucher', 'GV-DEMO0001'),
+      if (role != Role.organiser && VendorConfig.vouchers) const DemoSample('Partner voucher', 'GV-DEMO0001'),
     ];
   }
 

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/session.dart';
+import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/demo_api.dart';
 import '../../data/models.dart';
@@ -64,7 +65,7 @@ class _ScanScreenState extends State<ScanScreen> {
           autofocus: true,
           autocorrect: false,
           textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'Ticket QR text or voucher code'),
+          decoration: const InputDecoration(hintText: VendorConfig.vouchers ? 'Ticket QR text or voucher code' : 'Ticket QR text'),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [

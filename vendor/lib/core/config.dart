@@ -10,6 +10,9 @@ class VendorConfig {
   /// Built-in demo data and a demo gate (try the app with no backend).
   static const bool demo = bool.fromEnvironment('USE_MOCK', defaultValue: false);
 
+  /// Partner vouchers at the gate. Off (owner decision); --dart-define=VOUCHERS=true turns them on.
+  static const bool vouchers = bool.fromEnvironment('VOUCHERS', defaultValue: false);
+
   static const String _baseUrl = String.fromEnvironment('BASE_URL');
 
   /// Backend base URL with a trailing slash. Debug builds default to the

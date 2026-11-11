@@ -57,7 +57,7 @@ void main() {
 
   testWidgets('tapping a push opens the right screen; foreground pushes show a banner with View', (t) async {
     d.backend.json('GET', 'api/approval-requests/my', {'items': [], 'page': 1, 'total': 0});
-    d.backend.json('GET', 'api/vouchers/me/v9', {'id': 'v9', 'voucherRef': 'GV-AAAA2222', 'brandName': 'Volt', 'displayLabel': 'Free drink', 'status': 'ACTIVE'});
+    d.backend.json('GET', 'api/notifications', {'items': [], 'page': 1, 'limit': 20, 'total': 0, 'unread': 0});
     await t.pumpWidget(app(const Scaffold(body: SizedBox())));
     await sl<PushCoordinator>().onSignedIn();
     push.tapsC.add({'type': 'approval', 'route': 'requests'});
@@ -66,6 +66,7 @@ void main() {
     Get.back();
     await t.pumpAndSettle();
 
+    // Vouchers are switched off: an old voucher push just opens the inbox.
     push.fgC.add((title: 'You\'ve got a Volt voucher', body: 'Free drink', data: {'route': 'voucher/v9'}));
     await t.pump();
     await t.pump(const Duration(seconds: 1)); // stream delivers; snackbar starts
@@ -73,7 +74,8 @@ void main() {
     expect(find.text('You\'ve got a Volt voucher\nFree drink'), findsOneWidget);
     await t.tap(find.text('View'));
     await t.pumpAndSettle();
-    expect(find.byType(VoucherDetailScreen), findsOneWidget);
+    expect(find.byType(VoucherDetailScreen), findsNothing);
+    expect(find.byType(NotificationsScreen), findsOneWidget);
   });
 
   testWidgets('inbox items open their screen', (t) async {

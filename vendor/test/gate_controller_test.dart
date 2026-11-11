@@ -8,10 +8,10 @@ void main() {
   const organiser = Me(id: 'o', name: 'Org', phone: '9000000001', role: Role.organiser);
   const staff = Me(id: 's', name: 'Staff', phone: '9000000002', role: Role.staff);
 
-  Future<(DemoVendorApi, GateController, MemoryGateStore)> setup({Me me = organiser}) async {
+  Future<(DemoVendorApi, GateController, MemoryGateStore)> setup({Me me = organiser, bool vouchers = true}) async {
     final api = DemoVendorApi(latency: Duration.zero, role: me.role);
     final store = MemoryGateStore();
-    final g = GateController(api: api, store: store, eventId: DemoVendorApi.e1, me: me, autoSync: false);
+    final g = GateController(api: api, store: store, eventId: DemoVendorApi.e1, me: me, autoSync: false, vouchers: vouchers);
     await g.init();
     return (api, g, store);
   }
@@ -106,5 +106,12 @@ void main() {
     expect(ok.title, 'Redeemed');
     api.offline = true;
     expect((await g.check('GV-DEMO0001', fromCamera: false))!.message, 'Vouchers need a connection to redeem. Try again in a moment.');
+  });
+
+  test('vouchers off (the default): a voucher code is simply not a ticket', () async {
+    final (_, g, _) = await setup(me: staff, vouchers: false);
+    final r = await g.check('GV-DEMO0001');
+    expect(r!.result, ScanResult.invalid);
+    expect(r.voucher, isFalse);
   });
 }
