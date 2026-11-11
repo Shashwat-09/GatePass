@@ -11,6 +11,7 @@ import { EventsService } from '../events/events.service';
 import { KvStore, PostgresKv } from '../infra/kv.service';
 import { SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 import { PushModule } from '../push/push.module';
+import { MessagingService } from '../messaging/messaging.service';
 import { PushService } from '../push/push.service';
 
 /**
@@ -30,6 +31,7 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
     private readonly push: PushService,
     private readonly b2b: B2bService,
     private readonly kv: KvStore,
+    private readonly messaging: MessagingService,
   ) {}
 
   onModuleInit() {
@@ -67,6 +69,7 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
       openedSales: await run('notifyOpenedSales', () => this.events.notifyOpenedSales()),
       expiredB2bOrders: await run('b2b.expireDue', () => this.b2b.expireDue()),
       pushes: await run('push.flush', () => this.push.flush()),
+      whatsapp: await run('whatsapp.flush', () => this.messaging.flush()),
       kvSwept: this.kv instanceof PostgresKv ? await run('kv.sweep', () => (this.kv as PostgresKv).sweep()) : 0,
     };
   }

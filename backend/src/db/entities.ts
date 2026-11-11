@@ -867,9 +867,34 @@ export class B2bOrder {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/**
+ * Outbox for messages outside the app (WhatsApp). Written in the same
+ * transaction as what caused it, sent right after commit, retried a few times.
+ */
+@Entity('outbound_messages')
+@Index(['status', 'createdAt'])
+export class OutboundMessage {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Column({ type: 'varchar' }) channel!: 'whatsapp';
+  @Column() toPhone!: string;
+  @Column() template!: string;
+  /** Template body values, in order. */
+  @Column({ type: 'jsonb' }) params!: string[];
+  /** Value for the template's URL button (the part after the fixed base URL). */
+  @Column({ type: 'varchar', nullable: true }) buttonParam!: string | null;
+  @Column({ type: 'varchar', default: 'pending' }) status!: 'pending' | 'sent' | 'failed';
+  @Column('int', { default: 0 }) attempts!: number;
+  @Column({ type: 'varchar', nullable: true }) lastError!: string | null;
+  @Column({ type: 'varchar', nullable: true }) providerId!: string | null;
+  /** What it's about (transfer / booking id), for support. */
+  @Column({ type: 'varchar', nullable: true }) refId!: string | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true }) sentAt!: Date | null;
+}
+
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
-  Booking, Ticket, TicketTransfer, Notification, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
+  Booking, Ticket, TicketTransfer, Notification, OutboundMessage, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
   VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
   CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder,

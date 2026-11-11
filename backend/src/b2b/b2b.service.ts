@@ -328,6 +328,7 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
           listPricePaise: String(order.listPricePaise), ...(r.salePricePaise != null ? { salePricePaise: String(r.salePricePaise) } : {}),
         },
         title: `Your tickets from ${sellerName}`,
+        fromName: sellerName,
       });
       ids.push(res.booking.id);
     }

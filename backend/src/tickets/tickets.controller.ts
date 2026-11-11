@@ -170,6 +170,21 @@ export class TicketsController {
     return this.transfers.list(req.userId!, direction === 'received' ? 'received' : 'sent', parsePage(page, limit));
   }
 
+  /** Opens the ticket a WhatsApp link (/r/<id>) points at, for the person it was sent to. */
+  @UseGuards(JwtAuthGuard)
+  @Get('open/:id')
+  async open(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    const t = await this.transfers.openFor(req.userId!, id);
+    return (await this.views([t]))[0];
+  }
+
+  /** Public, for the /r/<id> page: what was sent (no names beyond a first name, no numbers). */
+  @Get('open/:id/preview')
+  @RateLimit({ bucket: 'open-preview', limit: 60, windowSec: 60 })
+  openPreview(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.transfers.openPreview(id);
+  }
+
   /** Public preview of a share link (used by the /t/<code> page and the claim screen). */
   @Get('shared-ticket')
   @RateLimit({ bucket: 'share-preview', limit: 60, windowSec: 60 })

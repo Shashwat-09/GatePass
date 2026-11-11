@@ -42,7 +42,7 @@ export async function createApp(): Promise<NestExpressApplication> {
   });
   app.useBodyParser('json', { limit: '100kb' });
 
-  app.setGlobalPrefix('api', { exclude: ['health', { path: 't/:code', method: RequestMethod.GET }, { path: 'e/:slug', method: RequestMethod.GET }, { path: 'pay/done', method: RequestMethod.GET }] });
+  app.setGlobalPrefix('api', { exclude: ['health', { path: 't/:code', method: RequestMethod.GET }, { path: 'e/:slug', method: RequestMethod.GET }, { path: 'pay/done', method: RequestMethod.GET }, { path: 'r/:id', method: RequestMethod.GET }] });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());

@@ -26,6 +26,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private again = false;
   private closed = false;
+  private stopKick?: () => void;
 
   constructor(private readonly ds: DataSource, @Inject(PushSender) private readonly sender: PushSender | null) {}
 
@@ -36,7 +37,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     // Instant delivery: services kick the worker right after they commit.
-    onPushKick(() => void this.flush().catch((e) => !this.closed && this.log.error(e)));
+    this.stopKick = onPushKick(() => void this.flush().catch((e) => !this.closed && this.log.error(e)));
     if (!this.ds.subscribers.some((x) => x instanceof PushKickSubscriber)) this.ds.subscribers.push(new PushKickSubscriber());
     if (p.driver === 'fcm' && config().jobs.mode === 'timers') {
       this.timer = setInterval(() => void this.flush().catch((e) => this.log.error(e)), p.intervalMs);
@@ -45,7 +46,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   }
   onModuleDestroy() {
     this.closed = true;
-    onPushKick(null);
+    this.stopKick?.();
     if (this.timer) clearInterval(this.timer);
   }
 

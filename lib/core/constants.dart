@@ -98,6 +98,7 @@ class Endpoints {
   static const myTickets = 'api/ticket/my-tickets';
   static const splitTicket = 'api/ticket/split';
   static const shareTicket = 'api/ticket/share'; // several recipients at once
+  static String openTicket(String id) => 'api/ticket/open/$id'; // WhatsApp link → this person's ticket
   static const claimTicket = 'api/ticket/claim';
   static const claimBack = 'api/ticket/claim-back';
   static const transfers = 'api/ticket/transfers';
@@ -122,6 +123,7 @@ class StorageKeys {
   static const ticketCache = 'ticket_cache';
   static const pendingClaim = 'pending_claim_code';
   static const pendingEvent = 'pending_event_slug';
+  static const pendingOpen = 'pending_open_ticket'; // id from a WhatsApp ticket link, opened after sign-in
   static const attribution = 'attribution'; // last marketing touch {source,…,capturedAt}
   static const deviceId = 'device_id'; // random per install, sent as the device-id header
   static const sounds = 'pref_sounds'; // tap + success sounds

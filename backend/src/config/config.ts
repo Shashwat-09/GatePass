@@ -95,6 +95,21 @@ export interface AppConfig {
   /** Push notifications: FCM (service account), `log` (tests/dev), or off. */
   push: { driver: 'fcm' | 'log' | 'none'; intervalMs: number; fcm: { projectId: string; clientEmail: string; privateKey: string } | null };
   /**
+   * WhatsApp messages (Meta WhatsApp Cloud API, approved templates) when tickets
+   * are sent to someone: 'meta' sends, 'log' keeps them in memory (dev/test), 'none' is off.
+   */
+  whatsapp: {
+    driver: 'meta' | 'log' | 'none';
+    token: string | null;
+    phoneNumberId: string | null;
+    apiBase: string;
+    language: string;
+    /** Template for someone who has GatePass (tickets are already in their app). */
+    templateReceived: string;
+    /** Template for a number not on GatePass yet (install, sign in, tickets appear). */
+    templateWaiting: string;
+  };
+  /**
    * Requests per minute. Signed-in callers are counted per account; anonymous
    * ones per IP (higher, because venue Wi-Fi and mobile carriers put many
    * people behind one IP). `otpPerIp` is per 10 minutes.
@@ -271,6 +286,15 @@ export function loadConfig(): AppConfig {
     jobs: { mode: (str('JOBS_MODE', 'timers') as 'timers' | 'http'), secret: str('JOBS_SECRET', '')! },
     storage: { driver: (str('STORAGE_DRIVER', 'local') as 'local' | 'gcs'), bucket: str('GCS_BUCKET', '')! },
     push: pushConfig(env, errors),
+    whatsapp: {
+      driver: (str('WHATSAPP_PROVIDER', env === 'test' ? 'log' : 'none') as 'meta' | 'log' | 'none'),
+      token: str('WHATSAPP_TOKEN') ?? null,
+      phoneNumberId: str('WHATSAPP_PHONE_NUMBER_ID') ?? null,
+      apiBase: ensureSlash(str('WHATSAPP_API_BASE', 'https://graph.facebook.com/v21.0/')!),
+      language: str('WHATSAPP_TEMPLATE_LANGUAGE', 'en')!,
+      templateReceived: str('WHATSAPP_TEMPLATE_RECEIVED', 'ticket_received')!,
+      templateWaiting: str('WHATSAPP_TEMPLATE_WAITING', 'ticket_waiting')!,
+    },
     rateLimit: {
       mutatingPerMin: num('RATE_LIMIT_MUTATING_PER_MIN', 60),
       readPerMin: num('RATE_LIMIT_READ_PER_MIN', 300),
@@ -307,6 +331,10 @@ export function loadConfig(): AppConfig {
     errors.push('TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM are required for SMS_PROVIDER=twilio');
   }
 
+  if (!['meta', 'log', 'none'].includes(cfg.whatsapp.driver)) errors.push('WHATSAPP_PROVIDER must be meta|log|none');
+  if (cfg.whatsapp.driver === 'meta' && (!cfg.whatsapp.token || !cfg.whatsapp.phoneNumberId)) {
+    errors.push('WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID are required for WHATSAPP_PROVIDER=meta');
+  }
   if (!['mock', 'razorpay', 'youpi'].includes(cfg.payment.gateway)) errors.push('PAYMENT_GATEWAY must be mock|razorpay|youpi');
   if (cfg.payment.gateway === 'youpi' && !cfg.payment.youpi) {
     errors.push('YOUPI_API_URL, YOUPI_MERCHANT_ID, YOUPI_MERCHANT_API_KEY and YOUPI_WEBHOOK_SECRET are required for PAYMENT_GATEWAY=youpi');

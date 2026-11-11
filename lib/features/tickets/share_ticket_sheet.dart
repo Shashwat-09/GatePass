@@ -143,21 +143,27 @@ class _ShareSheetState extends State<ShareSheet> {
     final names = to.map((p) => p.label).toList();
     final who = names.length == 1 ? names.first : '${names.first} and ${names.length - 1} more';
     final waiting = [for (var i = 0; i < to.length; i++) if (!res.shares[i].delivered) to[i]];
+    // GatePass already WhatsApps everyone it can; only offer "Tell Them" for the rest.
+    final untold = [for (var i = 0; i < to.length; i++) if (!res.shares[i].delivered && !res.shares[i].whatsapp) to[i]];
     if (overlay != null && overlay.mounted) {
       await showSuccess(
         overlay,
         title: 'Sent!',
-        message: waiting.isEmpty ? '$who ${names.length == 1 ? 'has' : 'have'} the tickets now.' : '$who will see them as soon as they sign in to GatePass.',
+        message: waiting.isEmpty
+            ? '$who ${names.length == 1 ? 'has' : 'have'} the tickets now.'
+            : res.shares.any((x) => x.whatsapp)
+                ? 'We’ve sent $who the tickets on WhatsApp.'
+                : '$who will see them as soon as they sign in to GatePass.',
         kind: SuccessKind.sent,
       );
     } else {
       Delight.sent();
     }
-    if (waiting.isNotEmpty) {
+    if (untold.isNotEmpty) {
       // Friends without the app yet: one tap to tell them where to look.
       Get.snackbar(
         'Let them know',
-        '${waiting.map((p) => p.label).join(', ')} ${waiting.length == 1 ? 'isn’t' : 'aren’t'} on GatePass yet.',
+        '${untold.map((p) => p.label).join(', ')} ${untold.length == 1 ? 'isn’t' : 'aren’t'} on GatePass yet.',
         duration: const Duration(seconds: 6),
         mainButton: TextButton(
           onPressed: () => SharePlus.instance.share(ShareParams(

@@ -13,6 +13,7 @@ import { KvStore } from '../infra/kv.service';
 import { eventBadge } from '../events/event-status';
 import { istDate } from '../common/ist';
 import { FormResponseInput, FormsService } from '../forms/forms.service';
+import { queueTicketWhatsApp, usedApp } from '../messaging/outbox';
 import { notify } from '../notifications/notify';
 import { issueBookingVouchers } from '../vouchers/voucher-core';
 import { PaymentGateway, YouPiGateway } from '../payments/gateway';
@@ -649,6 +650,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
         totalPaise: total, note: input.note ?? null, fromReserved: false,
         attribution: { source: input.kind, ...(input.paymentMode ? { medium: input.paymentMode } : {}), issuedBy: input.issuedBy },
         title: input.kind === 'comp' ? 'You have complimentary tickets' : 'Your tickets are ready',
+        fromName: event.organiserId ? (await m.findOne(User, { where: { id: event.organiserId }, select: ['id', 'name'] }))?.name ?? 'The organiser' : 'The organiser',
       });
       return { bookingId: r.booking.id, bookingCode: r.booking.code, userId: r.userId, totalPaise: total };
     });
@@ -663,9 +665,12 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   async issueChannelTickets(m: EntityManager, input: {
     event: EventEntity; tier: Tier; phone: string; name: string | null; quantity: number; gateway: 'comp' | 'box_office' | 'b2b';
     totalPaise: number; note: string | null; fromReserved: boolean; attribution: Record<string, string>; title: string;
+    /** Who the WhatsApp message says the tickets are from. */
+    fromName: string;
   }) {
     const { event, tier } = input;
     let user = await m.findOne(User, { where: { phone: input.phone, deletedAt: IsNull() } });
+    const hasApp = !!user && (await usedApp(m, user));
     if (!user) user = await m.save(m.create(User, { phone: input.phone, name: input.name }));
     const id = randomUUID();
     const b = await m.save(m.create(Booking, {
@@ -686,6 +691,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     }
     await this.issueTickets(m, b, event);
     await notify(m, user.id, 'booking', input.title, `${input.quantity} × ${tier.name} for ${event.title}. Booking ${b.code}.`, { bookingId: b.id, eventId: event.id });
+    await queueTicketWhatsApp(m, { phone: input.phone, hasApp, fromName: input.fromName, quantity: input.quantity, event, openId: b.id });
     return { booking: b, userId: user.id };
   }
 

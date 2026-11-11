@@ -375,3 +375,8 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - Pushes are sent the moment the writing transaction commits, so a shared ticket reaches the friend's phone within about a second. Previously they waited for the worker interval or the jobs tick.
 - New error code `PAYMENT_PENDING` (HTTP 202): paid, waiting for the bank's confirmation (YouPI). Retry `process-order`; nothing is lost.
 - YouPI: see docs/15 for the quote's `checkoutUrl`, `POST api/payment/youpi/webhook`, `GET /pay/done`, `POST api/reseller/orders/:id/pay`, `GET api/reseller/orders/:id`, and the order view's `autoConfirm` / `payTo.checkoutUrl`.
+
+## 8.24 As built (v0.13) — WhatsApp ticket messages (docs/16)
+- Tickets sent to a phone number queue a WhatsApp template message in the same transaction: shares (`split` / `share`), B2B orders, and comp or box-office tickets. Template `ticket_received` goes to people who have used GatePass, `ticket_waiting` to everyone else. Shares to links send nothing. Share transfer views add `whatsapp`.
+- `GET api/ticket/open/:id` (auth) → ticket view of the share or booking a link points to (`403` other number, `404` taken back or passed on). `GET api/ticket/open/:id/preview` (public). `GET /r/:id` landing page → `gatepass://open/<id>`.
+- Config: `WHATSAPP_PROVIDER=meta|log|none`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, optional template names and language. The jobs tick also flushes WhatsApp.

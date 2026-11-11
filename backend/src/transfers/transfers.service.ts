@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, createHmac, randomUUID } from 'crypto';
-import { DataSource, EntityManager, In, IsNull } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { paged, PageQuery } from '../common/pagination';
 import { signTicketQr } from '../common/signing';
 import { config } from '../config/config';
-import { EventEntity, Ticket, TicketTransfer, User } from '../db/entities';
+import { Booking, EventEntity, Ticket, TicketTransfer, User } from '../db/entities';
+import { queueTicketWhatsApp, usedApp } from '../messaging/outbox';
 import { notify } from '../notifications/notify';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -121,6 +122,13 @@ export class TransfersService {
         await m.save(tr);
         const to = r.phone ? users.find((u) => u.phone === r.phone) ?? null : null;
         if (to) await this.claimInTx(m, tr, to.id, { src: t, sender, receiver: to, eventSlug: event.slug });
+        // WhatsApp too: "<sender> sent you 2 tickets…" with a button that opens them in the app.
+        if (r.phone) {
+          await queueTicketWhatsApp(m, {
+            phone: r.phone, hasApp: !!to && (await usedApp(m, to)), fromName: sender.name || 'A friend',
+            quantity: r.quantity, event, openId: tr.id,
+          });
+        }
         made.push({ tr, code, to });
       }
       return { t, sender, made };
@@ -133,6 +141,8 @@ export class TransfersService {
         code,
         shareUrl: code ? shareUrl(code) : null,
         delivered: !!to,
+        /** A WhatsApp message is on its way to them. */
+        whatsapp: !!tr.toPhone && config().whatsapp.driver !== 'none',
       })),
     };
   }
@@ -232,6 +242,62 @@ export class TransfersService {
       where, order: { createdAt: 'DESC' }, skip: q.skip, take: q.limit,
     });
     return paged(await this.views(rows, userId), q, total);
+  }
+
+  /**
+   * The ticket a WhatsApp link points at (/r/<id>: a share or a booking made
+   * for this person), once they're signed in with the number it was sent to.
+   */
+  async openFor(userId: string, id: string): Promise<Ticket> {
+    await this.autoClaimForUser(userId);
+    const tr = await this.ds.getRepository(TicketTransfer).findOneBy({ id });
+    if (tr) {
+      if (tr.toUserId === userId && tr.createdTicketId) {
+        const t = await this.ds.getRepository(Ticket).findOneBy({ id: tr.createdTicketId });
+        if (t && t.ownerUserId === userId && t.status !== 'transferred') return t;
+        throw new ApiError('NOT_FOUND', 'You’ve passed these tickets on');
+      }
+      if (tr.status === 'cancelled') throw new ApiError('NOT_FOUND', 'The sender took these tickets back');
+      const masked = maskPhone(tr.toPhone);
+      throw new ApiError('FORBIDDEN', masked ? `These tickets were sent to ${masked}. Sign in with that number to see them.` : 'These tickets are for someone else');
+    }
+    const t = await this.ds.getRepository(Ticket).findOne({
+      where: { bookingId: id, ownerUserId: userId, status: Not('transferred') }, order: { createdAt: 'ASC' },
+    });
+    if (t) return t;
+    const b = await this.ds.getRepository(Booking).findOneBy({ id });
+    if (!b) throw new ApiError('NOT_FOUND', 'This link is invalid');
+    const u = await this.ds.getRepository(User).findOneBy({ id: b.userId });
+    const masked = maskPhone(u?.phone ?? null);
+    throw new ApiError('FORBIDDEN', masked ? `These tickets were sent to ${masked}. Sign in with that number to see them.` : 'These tickets are for someone else');
+  }
+
+  /** What the /r/<id> page shows before the app opens (no personal details). */
+  async openPreview(id: string) {
+    const tr = await this.ds.getRepository(TicketTransfer).findOneBy({ id });
+    let quantity: number;
+    let fromName: string;
+    let src: Ticket | null;
+    let status: 'ready' | 'cancelled';
+    if (tr) {
+      src = await this.ds.getRepository(Ticket).findOneBy({ id: tr.fromTicketId });
+      const sender = await this.ds.getRepository(User).findOneBy({ id: tr.fromUserId });
+      quantity = tr.quantity;
+      fromName = sender?.name?.split(' ')[0] ?? 'A friend';
+      status = tr.status === 'cancelled' ? 'cancelled' : 'ready';
+    } else {
+      const b = await this.ds.getRepository(Booking).findOneBy({ id });
+      if (!b) throw new ApiError('NOT_FOUND', 'This link is invalid');
+      src = await this.ds.getRepository(Ticket).findOne({ where: { bookingId: id }, order: { createdAt: 'ASC' } });
+      quantity = b.items.reduce((n, i) => n + (i.qty ?? 1), 0);
+      fromName = String(b.attribution?.sellerName ?? 'GatePass');
+      status = 'ready';
+    }
+    return {
+      status, quantity, fromName,
+      eventTitle: src?.eventTitle ?? '', venueName: src?.venueName ?? '',
+      startDate: src?.startDate ? new Date(src.startDate).toISOString() : null,
+    };
   }
 
   /** Public preview for the share page / claim screen. */

@@ -107,4 +107,4 @@ A distributor can still confirm an expired order if the money arrived late. The 
 ## 5. Business notes for the owner
 - The distributor margin is personal income, outside GatePass's books. Keep it in a separate account. Agree in writing with the GatePass partners that this margin isn't shared.
 - Without YouPI, payments to a personal UPI ID are confirmed by hand (UTR check). With YouPI on your UPI ID (`YOUPI_B2B_*`, docs/15), seller payments confirm themselves: the seller taps **Pay**, pays in any UPI app, and the tickets go out when the money lands. The QR code and UTR stay as a fallback.
-- Email delivery of B2B tickets isn't connected yet. The email is stored on the order, and the tickets arrive by phone number in the app.
+- Email delivery of B2B tickets isn't connected yet; the email is stored on the order. The tickets arrive in the app by phone number, and the customer also gets a WhatsApp message from GatePass with a **View Tickets** button (docs/16).

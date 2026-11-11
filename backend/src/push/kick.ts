@@ -5,19 +5,21 @@ import type { EntityManager, EntitySubscriberInterface, QueryRunner, Transaction
  * for its next interval (or the next jobs tick on Cloud Run). Call it after
  * the transaction that wrote the notifications has committed.
  */
-let handler: (() => void) | null = null;
+const handlers = new Set<() => void>();
 let scheduled = false;
 
-export function onPushKick(fn: (() => void) | null) {
-  handler = fn;
+/** Outbox workers (push, WhatsApp) listen here. Returns a function that stops listening. */
+export function onPushKick(fn: () => void): () => void {
+  handlers.add(fn);
+  return () => handlers.delete(fn);
 }
 
 export function kickPush() {
-  if (!handler || scheduled) return;
+  if (!handlers.size || scheduled) return;
   scheduled = true;
   setImmediate(() => {
     scheduled = false;
-    handler?.();
+    for (const h of handlers) h();
   });
 }
 

@@ -9,7 +9,9 @@ import '../core/constants.dart';
 import '../core/di.dart';
 import '../data/repositories/auth_repository.dart';
 import '../features/home/event_list_screen.dart';
+import '../data/repositories/ticket_repository.dart';
 import '../features/tickets/claim_screen.dart';
+import '../features/tickets/ticket_view_screen.dart';
 import '../features/web/web_view_screen.dart';
 import 'attribution.dart';
 import 'storage/local_storage.dart';
@@ -20,6 +22,16 @@ String? eventSlugFrom(Uri uri) {
   final seg = uri.pathSegments;
   if ((uri.scheme == 'https' || uri.scheme == 'http') && seg.length == 2 && seg[0] == 'e') return seg[1];
   return null;
+}
+
+/// Ticket id from a WhatsApp link: `gatepass://open/<id>` or `https://<api>/r/<id>`.
+String? openIdFrom(Uri uri) {
+  final ok = RegExp(r'^[0-9a-fA-F-]{36}$');
+  String? id;
+  if (uri.scheme == 'gatepass' && uri.host == 'open' && uri.pathSegments.isNotEmpty) id = uri.pathSegments.first;
+  final seg = uri.pathSegments;
+  if ((uri.scheme == 'https' || uri.scheme == 'http') && seg.length == 2 && seg[0] == 'r') id = seg[1];
+  return id != null && ok.hasMatch(id) ? id : null;
 }
 
 /// Extracts a share-claim code from `gatepass://claim?code=X` or `https://<api>/t/X`.
@@ -55,6 +67,13 @@ class DeepLinks {
       consumePending();
       return;
     }
+    final open = openIdFrom(uri);
+    if (open != null) {
+      // Kept until they're signed in (new users sign up first), then opened.
+      await sl<LocalStorage>().setString(StorageKeys.pendingOpen, open);
+      consumePending();
+      return;
+    }
     final code = claimCodeFrom(uri);
     if (code != null && code.isNotEmpty) {
       await sl<LocalStorage>().setString(StorageKeys.pendingClaim, code);
@@ -85,9 +104,24 @@ class DeepLinks {
       storage.remove(StorageKeys.pendingEvent);
       Get.toNamed(Routes.eventDetails, arguments: slug);
     }
+    final ready = sl<AuthRepository>().isLoggedIn && Get.currentRoute == Routes.home;
+    final open = storage.getString(StorageKeys.pendingOpen);
+    if (open != null && ready) {
+      storage.remove(StorageKeys.pendingOpen);
+      _openTicket(open);
+    }
     final code = storage.getString(StorageKeys.pendingClaim);
-    if (code == null || !sl<AuthRepository>().isLoggedIn || Get.currentRoute != Routes.home) return;
+    if (code == null || !ready) return;
     storage.remove(StorageKeys.pendingClaim);
     Get.to(() => ClaimScreen(code: code));
+  }
+
+  static Future<void> _openTicket(String id) async {
+    final r = await sl<TicketRepository>().openTicket(id);
+    if (r.isOk) {
+      Get.to(() => TicketViewScreen(ticket: r.data!));
+    } else {
+      Get.snackbar('Tickets', r.error ?? 'Couldn’t open these tickets.');
+    }
   }
 }

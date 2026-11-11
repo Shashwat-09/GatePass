@@ -95,6 +95,7 @@ class TicketRepository {
           x['shareUrl']?.toString(),
           x['code']?.toString(),
           x['delivered'] == true,
+          whatsapp: x['whatsapp'] == true,
         )).toList();
     unawaited(_rememberRecipients(to));
     unawaited(syncOffline()); // the sender's QR changed — refresh the offline copy
@@ -148,6 +149,15 @@ class TicketRepository {
       ...recentRecipients().where((r) => !fresh.any((f) => f.phone == r.phone)),
     ].take(12).map((r) => {'phone': r.phone, if (r.name != null) 'name': r.name}).toList();
     await _storage.setJson(StorageKeys.recentRecipients, {'items': keep});
+  }
+
+  /// The ticket a WhatsApp link (/r/<id>) points at, for the signed-in person.
+  Future<ApiResult<TicketModel>> openTicket(String id) async {
+    if (AppConfig.useMockData) return ApiResult.ok(MockData.tickets.first);
+    final r = await _api.request(Endpoints.openTicket(id));
+    if (!r.isOk) return r.cast();
+    unawaited(syncOffline()); // it's theirs now: keep it on the phone for the gate
+    return ApiResult.ok(TicketModel.fromJson(r.data as Map<String, dynamic>));
   }
 
   Future<ApiResult<SharePreview>> preview(String code) async {

@@ -235,6 +235,25 @@ void main() {
     });
   });
 
+  test('WhatsApp ticket links: /r/<id> and gatepass://open/<id> open that ticket after sign-in', () async {
+    const id = '0f6d2a3e-8b1c-4d6e-9a7b-1c2d3e4f5a6b';
+    expect(openIdFrom(Uri.parse('https://api.example.org/r/$id')), id);
+    expect(openIdFrom(Uri.parse('gatepass://open/$id')), id);
+    expect(openIdFrom(Uri.parse('https://api.example.org/r/not-an-id')), isNull);
+    expect(openIdFrom(Uri.parse('https://api.example.org/t/$id')), isNull);
+
+    // Not signed in yet (a new user): the id waits until they reach Home.
+    await DeepLinks.handle(Uri.parse('https://api.example.org/r/$id'));
+    expect(d.storage.getString(StorageKeys.pendingOpen), id);
+
+    d.backend.json('GET', 'api/ticket/open/$id', ticketJson('t7'));
+    d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
+    final r = await sl<TicketRepository>().openTicket(id);
+    expect(r.data!.id, 't7');
+    d.backend.on('GET', 'api/ticket/open/$id', (_) async => FakeBackend.err('FORBIDDEN', 'These tickets were sent to +91 ••••• •1234. Sign in with that number to see them.', 403));
+    expect((await sl<TicketRepository>().openTicket(id)).error, contains('Sign in with that number'));
+  });
+
   test('deep links: gatepass://claim and https /t/<code>', () {
     expect(claimCodeFrom(Uri.parse('gatepass://claim?code=ABC123')), 'ABC123');
     expect(claimCodeFrom(Uri.parse('https://api.example.org/t/XYZ789')), 'XYZ789');
