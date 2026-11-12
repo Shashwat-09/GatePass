@@ -1,0 +1,44 @@
+# After each iOS build, puts the two unsigned IPAs (pointed at the live server)
+# on the private "ios-test" pre-release, so testers can grab them in one place.
+# Install on an iPhone with Sideloadly / AltStore (they re-sign with your Apple ID).
+name: iOS test release
+
+on:
+  workflow_run:
+    workflows: [iOS]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: iOS workflow run id to publish
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-unsigned'
+          merge-multiple: true
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Publish to the ios-test pre-release
+        run: |
+          mv gatepass-ios-unsigned.ipa GatePass.ipa
+          mv gatepass-organiser-ios-unsigned.ipa GatePass-Organiser.ipa
+          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq .head_sha)
+          gh release view ios-test -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create ios-test -R "$GITHUB_REPOSITORY" --prerelease --target "$SHA" \
+                 --title "iOS test builds" --notes "Unsigned IPAs for the test server. Install with Sideloadly or AltStore."
+          gh release upload ios-test GatePass.ipa GatePass-Organiser.ipa -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit ios-test -R "$GITHUB_REPOSITORY" --notes "Unsigned IPAs from commit ${SHA::7}, pointed at the live test server. Install with Sideloadly or AltStore."
+          ls -la *.ipa
