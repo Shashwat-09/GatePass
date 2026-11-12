@@ -8,6 +8,7 @@ import '../../app/theme.dart';
 import '../../core/di.dart';
 import '../../core/constants.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/models/models.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../services/network/api_service.dart';
 import '../../utils/links.dart';
@@ -29,6 +30,17 @@ class _SplashScreenState extends State<SplashScreen> {
 
   /// Server app config: maintenance → blocking screen, force update → blocking
   /// screen, optional update → dismissible prompt. Never blocks if the check fails.
+  /// One live city (launch: Ahmedabad): use it, no picker and no location prompt.
+  /// Several: the picker (with "Use my current location") comes back.
+  Future<void> _applyCities(AppConfigInfo c) async {
+    final storage = sl<LocalStorage>();
+    final single = c.singleCity;
+    await storage.setBool(StorageKeys.singleCity, single != null);
+    if (single == null) return;
+    final current = storage.getJson(StorageKeys.city);
+    if (current == null || current['id'] != single.id) await storage.setJson(StorageKeys.city, single.toJson());
+  }
+
   Future<bool> _checkAppConfig() async {
     final api = sl<ApiService>();
     final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
@@ -38,6 +50,7 @@ class _SplashScreenState extends State<SplashScreen> {
         );
     final c = r.data;
     if (c == null || !mounted) return true;
+    await _applyCities(c);
     if (c.maintenance) {
       Get.offAll(() => UpdateScreen(title: 'We’ll be right back', message: c.maintenanceMessage, onRetry: () => Get.offAllNamed(Routes.splash)));
       return false;

@@ -254,6 +254,13 @@ void main() {
     expect((await sl<TicketRepository>().openTicket(id)).error, contains('Sign in with that number'));
   });
 
+  test('app config: one live city (Ahmedabad) comes through; several means the picker', () {
+    final one = AppConfigInfo.fromJson({'cities': {'count': 1, 'single': {'id': 'c-ahd', 'name': 'Ahmedabad', 'state': 'Gujarat'}}});
+    expect(one.singleCity!.name, 'Ahmedabad');
+    expect(AppConfigInfo.fromJson({'cities': {'count': 3, 'single': null}}).singleCity, isNull);
+    expect(AppConfigInfo.fromJson({}).singleCity, isNull);
+  });
+
   test('deep links: gatepass://claim and https /t/<code>', () {
     expect(claimCodeFrom(Uri.parse('gatepass://claim?code=ABC123')), 'ABC123');
     expect(claimCodeFrom(Uri.parse('https://api.example.org/t/XYZ789')), 'XYZ789');

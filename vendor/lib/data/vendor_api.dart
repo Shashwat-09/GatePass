@@ -49,6 +49,9 @@ abstract class VendorApi {
   /// Admin: platform booking-fee defaults (rate, who pays, B2B sellers).
   Future<ApiResult<FeeSettings>> feeSettings();
   Future<ApiResult<FeeSettings>> setFeeSettings(FeeSettings s);
+  /// Admin: all cities, live first. Switch one on to expand GatePass there.
+  Future<ApiResult<List<CityItem>>> adminCities();
+  Future<ApiResult<CityItem>> setCityLive(String id, bool live);
   /// Organiser/admin: who pays this event's booking fee ('customer' | 'organiser'; null = default).
   Future<ApiResult<void>> setFeePayer(String eventId, String? paidBy);
   Future<ApiResult<List<CompRequestItem>>> compRequests({String status = 'pending'});
@@ -315,4 +318,12 @@ class HttpVendorApi implements VendorApi {
   @override
   Future<ApiResult<B2bOrderView>> confirmRazorpay(String orderId, Map<String, dynamic> payload) async =>
       (await _api.request('api/reseller/orders/$orderId/razorpay', method: Method.post, body: payload)).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<List<CityItem>>> adminCities() async =>
+      (await _api.request('api/admin/cities')).map((d) => [for (final c in ((d as Map)['items'] as List? ?? const [])) CityItem.fromJson(c as Map)]);
+
+  @override
+  Future<ApiResult<CityItem>> setCityLive(String id, bool live) async =>
+      (await _api.request('api/admin/cities/$id', method: Method.put, body: {'isActive': live})).map((d) => CityItem.fromJson(d as Map));
 }

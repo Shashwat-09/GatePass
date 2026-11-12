@@ -5,19 +5,21 @@ import {
 
 /**
  * Inserts demo reference data (cities, 3 events, tiers, seat sections) if the
- * database has no cities yet. Idempotent. For dev/staging — not production.
+ * database has no events yet. Idempotent. For dev/staging — not production.
+ * Demo cities are switched on (the launch migration may have added them switched off).
  */
 export async function seedDatabase(ds: DataSource): Promise<boolean> {
-  const cities = ds.getRepository(City);
-  if ((await cities.count()) > 0) return false;
+  if ((await ds.getRepository(EventEntity).count()) > 0) return false;
 
   await ds.transaction(async (m) => {
-    const mk = (name: string, state: string, lat: number, lng: number, isTop = true) =>
-      m.create(City, { name, state, iconUrl: '', isActive: true, isTop, lat, lng });
-    const [pune, mumbai, delhi, blr] = await m.save([
+    const mk = async (name: string, state: string, lat: number, lng: number, isTop = true) => {
+      const found = await m.findOneBy(City, { name });
+      return found ? m.save(Object.assign(found, { isActive: true, isTop })) : m.create(City, { name, state, iconUrl: '', isActive: true, isTop, lat, lng });
+    };
+    const [pune, mumbai, delhi, blr] = await m.save(await Promise.all([
       mk('Pune', 'Maharashtra', 18.5204, 73.8567), mk('Mumbai', 'Maharashtra', 19.076, 72.8777), mk('Delhi', 'Delhi', 28.6139, 77.209),
       mk('Bengaluru', 'Karnataka', 12.9716, 77.5946), mk('Hyderabad', 'Telangana', 17.385, 78.4867),
-    ]);
+    ]));
 
     const inDays = (d: number) => new Date(Date.now() + d * 86400000);
     const ev = (e: Partial<EventEntity>) => m.save(m.create(EventEntity, { status: 'live', language: 'English', gallery: [], faqs: [], maxPerUser: 6, ...e }));

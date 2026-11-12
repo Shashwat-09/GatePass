@@ -1,4 +1,6 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query, UseGuards } from '@nestjs/common';
+import { IsBoolean, IsOptional } from 'class-validator';
+import { JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { ApiError } from '../common/api-error';
@@ -62,5 +64,42 @@ export class CitiesController {
   @Get('meta/states')
   states() {
     return { items: INDIAN_STATES };
+  }
+}
+
+class CityPatchDto {
+  /** Live in the app (customers can pick it; organisers can list events there). */
+  @IsOptional() @IsBoolean() isActive?: boolean;
+  /** Shown as a quick pick on the city screen. */
+  @IsOptional() @IsBoolean() isTop?: boolean;
+}
+
+/** Admin: which cities are live. Launch is Ahmedabad only; switch others on to expand. */
+@Controller('admin/cities')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
+export class AdminCitiesController {
+  constructor(@InjectRepository(City) private readonly cities: Repository<City>) {}
+
+  private view(c: City) {
+    return { id: c.id, name: c.name, state: c.state, isActive: c.isActive, isTop: c.isTop };
+  }
+
+  @Get()
+  async list() {
+    const items = await this.cities.find({ order: { isActive: 'DESC', sortOrder: 'ASC', name: 'ASC' } });
+    return { items: items.map((c) => this.view(c)) };
+  }
+
+  @Put(':id')
+  async update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CityPatchDto) {
+    const c = await this.cities.findOneBy({ id });
+    if (!c) throw new ApiError('NOT_FOUND', 'City not found');
+    if (dto.isActive === false && c.isActive && (await this.cities.countBy({ isActive: true })) <= 1) {
+      throw new ApiError('VALIDATION_ERROR', 'At least one city has to stay live');
+    }
+    if (dto.isActive !== undefined) c.isActive = dto.isActive;
+    if (dto.isTop !== undefined) c.isTop = dto.isTop;
+    return this.view(await this.cities.save(c));
   }
 }

@@ -13,7 +13,7 @@ class MockData {
           'immersive light shows and food trucks. Gates open at 6 PM.',
       imageUrl: 'https://picsum.photos/seed/neon/800/600',
       venueName: 'Riverside Grounds',
-      city: 'Pune',
+      city: 'Ahmedabad',
       priceFrom: 79900,
       date: DateTime.now().add(const Duration(days: 7)),
       genre: 'Music',
@@ -37,7 +37,7 @@ class MockData {
           'material. 18+. Reserved seating.',
       imageUrl: 'https://picsum.photos/seed/comedy/800/600',
       venueName: 'The Laugh House',
-      city: 'Pune',
+      city: 'Ahmedabad',
       priceFrom: 49900,
       date: DateTime.now().add(const Duration(days: 3)),
       genre: 'Comedy',
@@ -106,7 +106,8 @@ class MockData {
     ),
   ];
 
-  static const cities = ['Pune', 'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad'];
+  /// Launch: Ahmedabad only.
+  static const cities = ['Ahmedabad'];
 
   static const genres = ['Music', 'Comedy', 'Theatre', 'Festival', 'Sports'];
 

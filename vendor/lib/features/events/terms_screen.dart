@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../app/session.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
+import 'cities_screen.dart';
 import 'fee_settings_screen.dart';
 
 /// Admin: this event's commission per channel and the comp allowance.
@@ -368,6 +369,13 @@ class _CompRequestsRowState extends State<CompRequestsRow> {
             await Get.to(() => const CompRequestsScreen());
             _load();
           },
+        ),
+        GroupRow(
+          key: const Key('cities'),
+          icon: CupertinoIcons.map,
+          title: 'Cities',
+          subtitle: 'Where GatePass is live',
+          onTap: () => Get.to(() => const CitiesScreen()),
         ),
         GroupRow(
           key: const Key('booking-fees'),

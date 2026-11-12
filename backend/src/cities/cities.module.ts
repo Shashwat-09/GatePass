@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CitiesController } from './cities.controller';
+import { AdminCitiesController, CitiesController } from './cities.controller';
 
-@Module({ controllers: [CitiesController] })
+@Module({ controllers: [CitiesController, AdminCitiesController] })
 export class CitiesModule {}

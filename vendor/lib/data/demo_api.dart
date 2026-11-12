@@ -527,6 +527,33 @@ class DemoVendorApi implements VendorApi {
     return ApiResult.ok(terms.copyWith(fee: _fee(eventId)));
   }
 
+  final _cities = <CityItem>[
+    const CityItem(id: 'c-ahd', name: 'Ahmedabad', state: 'Gujarat', isActive: true, isTop: true),
+    const CityItem(id: 'c-gnr', name: 'Gandhinagar', state: 'Gujarat', isTop: true),
+    const CityItem(id: 'c-srt', name: 'Surat', state: 'Gujarat', isTop: true),
+    const CityItem(id: 'c-vad', name: 'Vadodara', state: 'Gujarat', isTop: true),
+    const CityItem(id: 'c-raj', name: 'Rajkot', state: 'Gujarat'),
+    const CityItem(id: 'c-mum', name: 'Mumbai', state: 'Maharashtra', isTop: true),
+    const CityItem(id: 'c-pune', name: 'Pune', state: 'Maharashtra', isTop: true),
+  ];
+
+  @override
+  Future<ApiResult<List<CityItem>>> adminCities() async {
+    await _wait();
+    return ApiResult.ok([..._cities.where((c) => c.isActive), ..._cities.where((c) => !c.isActive)]);
+  }
+
+  @override
+  Future<ApiResult<CityItem>> setCityLive(String id, bool live) async {
+    await _wait();
+    final i = _cities.indexWhere((c) => c.id == id);
+    if (i < 0) return const ApiResult.fail('City not found', statusCode: 404);
+    if (!live && _cities.where((c) => c.isActive).length <= 1 && _cities[i].isActive) {
+      return const ApiResult.fail('At least one city has to stay live', statusCode: 400);
+    }
+    return ApiResult.ok(_cities[i] = _cities[i].copyWith(isActive: live));
+  }
+
   @override
   Future<ApiResult<FeeSettings>> feeSettings() async {
     await _wait();

@@ -114,11 +114,12 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
   - an admin switch makes B2B sellers pay the fee;
   - settlement, books and the customer breakdown ("Booking fee: Free") follow.
 - ✅ v0.14: **Razorpay for B2B**: sellers pay the distributor's own Razorpay account in the Organiser app (`RAZORPAY_B2B_*`, verified server-side, plus a webhook). No UTR; QR + UTR is only a fallback. Razorpay is the recommended gateway for customers too.
+- ✅ v0.14: **Ahmedabad launch**: the only live city at launch (other cities ready but off). The app skips the city screen and location prompt while one city is live; admins switch cities on in the Organiser app (Events › Cities), which brings back the picker and location detection.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 182 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 48 + 60 screenshot renders + live organiser and B2B flows, client 84 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 185 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 49 + 60 screenshot renders + live organiser and B2B flows, client 85 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: Google Cloud Run deploy (Mumbai), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass_organiser/app/app.dart';
 import 'package:gatepass_organiser/app/session.dart';
@@ -8,6 +8,7 @@ import 'package:gatepass_organiser/data/models.dart';
 import 'package:gatepass_organiser/features/b2b/distributor_home.dart';
 import 'package:gatepass_organiser/features/b2b/seller_home.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
+import 'package:gatepass_organiser/features/events/cities_screen.dart';
 import 'package:gatepass_organiser/features/events/fee_settings_screen.dart';
 import 'package:gatepass_organiser/features/home/vendor_home.dart';
 import 'package:gatepass_organiser/gate/gate_store.dart';
@@ -270,5 +271,16 @@ void main() {
     await t.scrollUntilVisible(find.textContaining('comes off your payout'), 200);
     expect(find.textContaining('comes off your payout'), findsOneWidget);
     expect((await api.event(DemoVendorApi.e1)).data!.fee.organiserPays, isTrue);
+  });
+
+  testWidgets('admin: Ahmedabad is live; switching on Surat expands; the last city can’t go off', (t) async {
+    await boot(t, const CitiesScreen());
+    expect(find.textContaining('opens straight into it'), findsOneWidget);
+    await t.tap(find.descendant(of: find.byKey(const Key('city-Ahmedabad')), matching: find.byType(CupertinoSwitch)));
+    await t.pumpAndSettle();
+    expect(find.text('At least one city has to stay live'), findsOneWidget);
+    await t.tap(find.descendant(of: find.byKey(const Key('city-Surat')), matching: find.byType(CupertinoSwitch)));
+    await t.pumpAndSettle();
+    expect(find.textContaining('Use my current location'), findsOneWidget);
   });
 }

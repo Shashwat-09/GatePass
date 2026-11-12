@@ -134,7 +134,7 @@ class EventRepository {
   }
 
   Future<ApiResult<AppConfigInfo>> appConfig(String platform, String version) async {
-    if (AppConfig.useMockData) return const ApiResult.ok(AppConfigInfo());
+    if (AppConfig.useMockData) return ApiResult.ok(AppConfigInfo(singleCity: CityModel(id: MockData.cities.first, name: MockData.cities.first)));
     final r = await _api.request(Endpoints.appConfig, query: {'platform': platform, 'version': version});
     if (!r.isOk) return r.cast();
     return ApiResult.ok(AppConfigInfo.fromJson(r.data as Map<String, dynamic>));

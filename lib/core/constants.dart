@@ -119,6 +119,7 @@ class StorageKeys {
   static const legacyBox = 'eventa_box';
   static const user = 'user_data';
   static const city = 'selected_city'; // {"id","name"}
+  static const singleCity = 'single_city'; // true while only one city is live (launch: Ahmedabad)
   static const onboardingDone = 'onboarding_done';
   static const ticketCache = 'ticket_cache';
   static const pendingClaim = 'pending_claim_code';

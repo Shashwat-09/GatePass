@@ -179,6 +179,19 @@ class FeeRule {
   String get label => type == 'percentage' ? '${fmtPct(value)}%' : '₹${(value / 100).toStringAsFixed(0)} a ticket';
 }
 
+/// A city the app can list events in (admin switches cities on to expand).
+class CityItem {
+  const CityItem({required this.id, required this.name, this.state, this.isActive = false, this.isTop = false});
+  factory CityItem.fromJson(Map j) => CityItem(
+      id: _str(j['id']), name: _str(j['name']), state: j['state']?.toString(), isActive: j['isActive'] == true, isTop: j['isTop'] == true);
+  final String id;
+  final String name;
+  final String? state;
+  final bool isActive;
+  final bool isTop;
+  CityItem copyWith({bool? isActive}) => CityItem(id: id, name: name, state: state, isActive: isActive ?? this.isActive, isTop: isTop);
+}
+
 /// Platform fee defaults (admin › Booking Fees): change any time.
 class FeeSettings {
   const FeeSettings({this.defaultFeePct = 3, this.defaultFeePaidBy = 'customer', this.b2bFeeDefault = false});

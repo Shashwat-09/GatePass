@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../core/di.dart';
+import '../../services/storage/local_storage.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../utils/links.dart';
 import '../../widgets/common.dart';
@@ -86,7 +88,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     if (widget.editing) {
       Get.back();
     } else {
-      Get.offAllNamed(Routes.city);
+      // One live city (launch: Ahmedabad) is already chosen; otherwise pick one.
+      final storage = sl<LocalStorage>();
+      Get.offAllNamed(storage.getBool(StorageKeys.singleCity) && storage.getJson(StorageKeys.city) != null ? Routes.home : Routes.city);
     }
   }
 

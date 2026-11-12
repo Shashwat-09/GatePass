@@ -17,6 +17,7 @@ Code can't make these choices or open these accounts. Each line shows the **defa
 | 11 | **Fee & GST** | 3% booking fee; 18% GST **on the fee only**, split CGST+SGST when the buyer's state = `ORGANIZER_STATE` (Maharashtra), else IGST — matches the legacy app | Backend `FEE_TYPE`, `FEE_PCT`, `GST_PCT`, `GST_ON`, `GST_INCLUDED`, `ORGANIZER_STATE`, per-event fee override. **Confirm with your accountant**: if your ticket prices are not GST-inclusive, use `GST_ON=fee_and_tickets` |
 | 13 | **Ticket sharing rules** | Sharing on; **unlimited** shares per ticket; received tickets **can** be passed on; claim-back only before the friend accepts | `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` per event |
 | 12 | **Invoice seller details** | Placeholder | Backend `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_GSTIN` |
+| 15 | **Launch city: Ahmedabad only** | Owner decision (Nov 2026) | Migration `LaunchCities` adds Ahmedabad (live) and other cities switched off. With one live city the app uses it automatically: no city screen, no location prompt (`app-config.cities.single`). To expand, an admin switches a city on (Organiser app › Events › Cities); the app then shows the picker with “Use my current location”. |
 | 14 | **Scope: events only** | Owner decision (Nov 2026) | GatePass sells live events only. Movies / theatre (cinema screens, show posters, premiere tickets) are **not** being built now — don't add movie-specific fields or screens. Revisit as a separate product decision. |
 
 ## Legacy reverse-engineering archive

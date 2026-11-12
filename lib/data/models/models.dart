@@ -231,6 +231,8 @@ class AppConfigInfo {
   final String message;
   final bool maintenance;
   final String maintenanceMessage;
+  /// The one live city (launch: Ahmedabad). null when there are several (or unknown).
+  final CityModel? singleCity;
   const AppConfigInfo({
     this.update = 'none',
     this.latestVersion = '',
@@ -238,6 +240,7 @@ class AppConfigInfo {
     this.message = '',
     this.maintenance = false,
     this.maintenanceMessage = '',
+    this.singleCity,
   });
   factory AppConfigInfo.fromJson(Map<String, dynamic> j) => AppConfigInfo(
         update: (j['update'] ?? 'none').toString(),
@@ -246,6 +249,7 @@ class AppConfigInfo {
         message: (j['updateMessage'] ?? '').toString(),
         maintenance: (j['maintenance'] as Map?)?['on'] == true,
         maintenanceMessage: ((j['maintenance'] as Map?)?['message'] ?? '').toString(),
+        singleCity: (j['cities'] as Map?)?['single'] is Map ? CityModel.fromJson(Map<String, dynamic>.from((j['cities'] as Map)['single'] as Map)) : null,
       );
 }
 

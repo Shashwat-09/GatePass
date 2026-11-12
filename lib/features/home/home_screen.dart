@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../../app/routes.dart';
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../core/di.dart';
+import '../../services/storage/local_storage.dart';
 import '../../core/format.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -119,7 +121,23 @@ class HomeScreen extends StatelessWidget {
     return 1 + thursday.difference(jan1).inDays ~/ 7;
   }
 
-  Widget _cityButton(BuildContext context, HomeController c) => Semantics(
+  Widget _cityButton(BuildContext context, HomeController c) {
+    // One live city (launch: Ahmedabad): just its name, nothing to change.
+    if (sl<LocalStorage>().getBool(StorageKeys.singleCity)) {
+      return Semantics(
+        label: 'City: ${c.cityName}',
+        excludeSemantics: true,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(CupertinoIcons.placemark, color: context.colors.tint, size: 22),
+            const SizedBox(width: 6),
+            Text(c.cityName, key: const Key('city-label'), style: context.text.titleMedium),
+          ]),
+        ),
+      );
+    }
+    return Semantics(
         button: true,
         label: 'City: ${c.cityName}. Change city',
         excludeSemantics: true,
@@ -138,6 +156,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       );
+  }
 
   Widget _seeAll(HomeController c, String title, EventFilter f) =>
       SeeAllButton(onPressed: () => Get.to(() => EventListScreen(title: title, cityId: c.city.value?.id, filter: f)));
