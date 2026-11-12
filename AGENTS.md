@@ -119,9 +119,10 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 185 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 49 + 60 screenshot renders + live organiser and B2B flows, client 85 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 186 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 49 + 60 screenshot renders + live organiser and B2B flows, client 85 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
-- ⬜ Next: Google Cloud Run deploy (Mumbai), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
+- ✅ v0.14: **Google Cloud deploy kit** (`deploy/gcp/`): `setup.sh` for Cloud Shell (Cloud SQL, Secret Manager, Artifact Registry, bucket, keyless GitHub deploys via Workload Identity Federation, Scheduler for jobs) and `.github/workflows/deploy-gcp.yml` (build + Cloud Run on every backend push once `deploy/gcp/project.env` exists). `TEST_MODE` + `TEST_PHONES` let invited testers use a real server before the SMS and Razorpay accounts exist; `BOOTSTRAP_ADMINS` grants admin on boot.
+- ⬜ Next: run `deploy/gcp/setup.sh` (owner), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).
 - ⬜ iOS: builds in CI (unsigned); still needs an Apple Developer account for TestFlight and a test on a real iPhone.
 

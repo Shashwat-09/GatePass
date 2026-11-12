@@ -41,6 +41,14 @@ export interface AppConfig {
   accessTtlSec: number;
   refreshTtlSec: number;
   devOtp: string | null;
+  /**
+   * Closed testing on a real server before SMS and payment accounts exist
+   * (TEST_MODE=true): only TEST_PHONES can sign in, with DEV_OTP; payments are
+   * the mock gateway (no money moves). Never for the public launch.
+   */
+  testMode: { on: boolean; phones: string[] };
+  /** Numbers made admin + distributor on boot (BOOTSTRAP_ADMINS). */
+  bootstrapAdmins: string[];
   sms: {
     provider: SmsProvider;
     msg91AuthKey?: string;
@@ -249,6 +257,11 @@ export function loadConfig(): AppConfig {
     accessTtlSec: num('JWT_ACCESS_TTL', 900),
     refreshTtlSec: num('JWT_REFRESH_TTL', 2_592_000),
     devOtp: null,
+    bootstrapAdmins: (str('BOOTSTRAP_ADMINS', '') ?? '').split(',').map((x) => x.replace(/\D/g, '').slice(-10)).filter((x) => /^[6-9]\d{9}$/.test(x)),
+    testMode: {
+      on: bool('TEST_MODE', false),
+      phones: (str('TEST_PHONES', '') ?? '').split(',').map((x) => x.replace(/\D/g, '').slice(-10)).filter((x) => /^[6-9]\d{9}$/.test(x)),
+    },
     sms: {
       provider: smsProvider,
       msg91AuthKey: str('MSG91_AUTH_KEY'),
@@ -332,7 +345,9 @@ export function loadConfig(): AppConfig {
   if (!['console', 'msg91', 'twilio'].includes(cfg.sms.provider)) {
     errors.push('SMS_PROVIDER must be one of console|msg91|twilio');
   }
-  if (isProd && cfg.sms.provider === 'console') errors.push('SMS_PROVIDER=console is not allowed in production');
+  const testing = isProd && cfg.testMode.on;
+  if (testing && !cfg.testMode.phones.length) errors.push('TEST_MODE needs TEST_PHONES (the invited testers’ numbers)');
+  if (isProd && !testing && cfg.sms.provider === 'console') errors.push('SMS_PROVIDER=console is not allowed in production');
   if (cfg.sms.provider === 'msg91' && (!cfg.sms.msg91AuthKey || !cfg.sms.msg91TemplateId)) {
     errors.push('MSG91_AUTH_KEY and MSG91_TEMPLATE_ID are required for SMS_PROVIDER=msg91');
   }
@@ -364,7 +379,7 @@ export function loadConfig(): AppConfig {
   }
   if (!['percentage', 'fixed_per_ticket'].includes(cfg.pricing.feeType)) errors.push('FEE_TYPE must be percentage|fixed_per_ticket');
   if (!['fee', 'fee_and_tickets'].includes(cfg.pricing.gstOn)) errors.push('GST_ON must be fee|fee_and_tickets');
-  if (isProd && cfg.payment.gateway === 'mock') errors.push('PAYMENT_GATEWAY=mock is not allowed in production');
+  if (isProd && !testing && cfg.payment.gateway === 'mock') errors.push('PAYMENT_GATEWAY=mock is not allowed in production');
   if (cfg.payment.gateway === 'razorpay') {
     const p = cfg.payment;
     if (!p.razorpayKeyId || !p.razorpayKeySecret || !p.razorpayWebhookSecret) {
@@ -387,8 +402,8 @@ export function loadConfig(): AppConfig {
   // A fixed OTP is a development convenience only — never with a real SMS provider.
   const devOtp = str('DEV_OTP');
   if (devOtp) {
-    if (isProd || cfg.sms.provider !== 'console') {
-      errors.push('DEV_OTP may only be set in development with SMS_PROVIDER=console');
+    if ((isProd && !testing) || cfg.sms.provider !== 'console') {
+      errors.push('DEV_OTP may only be set in development (or TEST_MODE) with SMS_PROVIDER=console');
     } else if (!/^\d{6}$/.test(devOtp)) {
       errors.push('DEV_OTP must be 6 digits');
     } else {
@@ -399,6 +414,7 @@ export function loadConfig(): AppConfig {
   if (errors.length) {
     throw new Error(`Invalid configuration:\n  - ${errors.join('\n  - ')}`);
   }
+  if (testing) log.warn(`TEST_MODE is on: only ${cfg.testMode.phones.length} invited number(s) can sign in, payments are pretend. Turn it off for launch.`);
   return cfg;
 }
 

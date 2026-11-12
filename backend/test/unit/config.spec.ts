@@ -25,6 +25,8 @@ describe('config validation', () => {
     process.env.RAZORPAY_KEY_SECRET = 's';
     process.env.RAZORPAY_WEBHOOK_SECRET = 'w';
     delete process.env.DEV_OTP;
+    delete process.env.TEST_MODE;
+    delete process.env.TEST_PHONES;
   }
 
   it('accepts a complete production config', () => {
@@ -66,5 +68,16 @@ describe('config validation', () => {
     process.env.TWILIO_FROM = 'c';
     process.env.DEV_OTP = '123456';
     expect(() => loadConfig()).toThrow(/DEV_OTP/);
+  });
+
+
+  it('TEST_MODE allows console SMS, a fixed code and pretend payments, but only with invited numbers', () => {
+    prodEnv();
+    Object.assign(process.env, { SMS_PROVIDER: 'console', PAYMENT_GATEWAY: 'mock', DEV_OTP: '123456', TEST_MODE: 'true' });
+    expect(() => loadConfig()).toThrow(/TEST_PHONES/);
+    process.env.TEST_PHONES = '9876543210, +91 98765 00001, junk';
+    const c = loadConfig();
+    expect(c.testMode).toEqual({ on: true, phones: ['9876543210', '9876500001'] });
+    expect(c.devOtp).toBe('123456');
   });
 });

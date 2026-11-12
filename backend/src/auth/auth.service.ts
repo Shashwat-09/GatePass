@@ -52,6 +52,11 @@ export class AuthService {
   }
 
   async sendOtp(phone: string, ip: string, countryCode = '+91') {
+    // Closed testing (TEST_MODE): only invited testers can sign in.
+    const t = config().testMode;
+    if (config().isProd && t.on && !t.phones.includes(phone)) {
+      throw new ApiError('FORBIDDEN', 'GatePass is in private testing. Ask the team to add your number.');
+    }
     const cooldown = await this.kv.ttl(`otp:cooldown:${phone}`);
     if (cooldown > 0) {
       throw new ApiError('RATE_LIMITED', `Please wait ${cooldown}s before requesting another code`, undefined, {

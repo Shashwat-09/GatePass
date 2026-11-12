@@ -1,0 +1,83 @@
+# Builds the API image and deploys it to Cloud Run (Mumbai) on every push that
+# touches the backend. Keyless: GitHub proves who it is to Google (Workload
+# Identity Federation) — no Google keys are stored in GitHub.
+# Project values live in deploy/gcp/project.env (written after deploy/gcp/setup.sh).
+name: Deploy API (Google Cloud)
+
+on:
+  push:
+    branches: [release-readiness, main]
+    paths: ['backend/**', 'deploy/gcp/**', '.github/workflows/deploy-gcp.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-gcp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read project settings
+        id: cfg
+        run: |
+          if [ ! -f deploy/gcp/project.env ]; then
+            echo "deploy/gcp/project.env not found yet: run deploy/gcp/setup.sh first. Skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          set -a; . deploy/gcp/project.env; set +a
+          for k in GCP_PROJECT_ID GCP_PROJECT_NUMBER GCP_REGION GCP_WIF_PROVIDER; do echo "$k=${!k}" >> "$GITHUB_ENV"; done
+          echo "API_ENV=$(grep -v '^GCP_\|^#\|^$' deploy/gcp/project.env | paste -sd'|' -)" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to Google Cloud (keyless)
+        if: steps.cfg.outputs.ready == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: gatepass-deployer@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.cfg.outputs.ready == 'true'
+
+      - name: Build and push the image
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/gatepass/api:${GITHUB_SHA::12}"
+          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          URL="https://gatepass-api-${GCP_PROJECT_NUMBER}.${GCP_REGION}.run.app/"
+          ENV="^|^NODE_ENV=production|PUBLIC_BASE_URL=${URL}|KV_DRIVER=postgres|JOBS_MODE=http|STORAGE_DRIVER=gcs|GCS_BUCKET=${GCP_PROJECT_ID}-gatepass-uploads|DB_POOL_MAX=5|TRUST_PROXY=true|DB_MIGRATE_ON_BOOT=true"
+          [ -n "$API_ENV" ] && ENV="${ENV}|${API_ENV}"
+          SECRETS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,URL_SIGNING_SECRET=URL_SIGNING_SECRET:latest,OTP_PEPPER=OTP_PEPPER:latest,JOBS_SECRET=JOBS_SECRET:latest,TICKET_SIGNING_KEY=TICKET_SIGNING_KEY:latest"
+          # Test server: the sign-in code for invited testers.
+          if grep -q '^TEST_MODE=true' deploy/gcp/project.env; then SECRETS="${SECRETS},DEV_OTP=TEST_OTP:latest"; fi
+          # Optional secrets once the accounts exist (create them in Secret Manager with these names).
+          for s in RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET RAZORPAY_B2B_KEY_SECRET RAZORPAY_B2B_WEBHOOK_SECRET MSG91_AUTH_KEY WHATSAPP_TOKEN FCM_SERVICE_ACCOUNT; do
+            if gcloud secrets describe "$s" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then SECRETS="${SECRETS},${s}=${s}:latest"; fi
+          done
+          gcloud run deploy gatepass-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --image "$IMAGE" \
+            --service-account "gatepass-api@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --add-cloudsql-instances "${GCP_PROJECT_ID}:${GCP_REGION}:gatepass-db" \
+            --allow-unauthenticated --cpu 1 --memory 512Mi --concurrency 80 --min-instances 0 --max-instances 20 \
+            --timeout 60 --set-env-vars "$ENV" --set-secrets "$SECRETS" --quiet
+          echo "### Deployed: ${URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check it's up
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          URL="https://gatepass-api-${GCP_PROJECT_NUMBER}.${GCP_REGION}.run.app"
+          for i in $(seq 1 20); do curl -fsS "$URL/health" && exit 0; sleep 6; done
+          echo "Health check failed"; exit 1
