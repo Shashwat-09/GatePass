@@ -885,6 +885,8 @@ class PriceBreakdown {
   final int offerDiscountPaise;
   final int promoDiscountPaise;
   final int feePaise;
+  /// The organiser covers the booking fee for this event: the customer pays none.
+  final bool feeCoveredByOrganiser;
   final int taxPaise;
   final GstBreakdown gst;
   final int totalPaise;
@@ -895,6 +897,7 @@ class PriceBreakdown {
     this.offerDiscountPaise = 0,
     this.promoDiscountPaise = 0,
     this.feePaise = 0,
+    this.feeCoveredByOrganiser = false,
     this.taxPaise = 0,
     this.gst = const GstBreakdown(),
     this.totalPaise = 0,
@@ -909,6 +912,7 @@ class PriceBreakdown {
       offerDiscountPaise: n('offerDiscountPaise'),
       promoDiscountPaise: n('promoDiscountPaise'),
       feePaise: n('feePaise'),
+      feeCoveredByOrganiser: d['feePaidBy'] == 'organiser',
       taxPaise: n('taxPaise'),
       gst: GstBreakdown.fromJson(d['gst'] as Map<String, dynamic>?),
       totalPaise: n('totalPaise'),

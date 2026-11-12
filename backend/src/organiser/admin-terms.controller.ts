@@ -1,9 +1,10 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { IsInt, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { DataSource, In } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
-import { CompRequest, EventCommercial, EventEntity } from '../db/entities';
+import { CompRequest, EventCommercial, EventEntity, FeePayer } from '../db/entities';
+import { effectiveFee, SettingsService } from '../settings/settings.service';
 import { notify } from '../notifications/notify';
 import { compRequestView } from './organiser.controller';
 import { commercialOf, eventSettlement } from './settlement';
@@ -15,6 +16,19 @@ class TermsDto {
   /** null = no limit on free comps. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(0) compFree?: number | null;
   @IsOptional() @IsInt() @Min(0) compFeePaise?: number;
+  /** Booking fee % for this event (decimals allowed); null = platform default. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(25) feePct?: number | null;
+  /** Who pays it; null = platform default. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(['customer', 'organiser']) feePaidBy?: FeePayer | null;
+  /** B2B sellers pay the booking fee on their orders; null = platform default. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsBoolean() b2bFee?: boolean | null;
+}
+
+class FeeSettingsDto {
+  /** Default booking fee % (usually 1–10; decimals allowed). */
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(25) defaultFeePct?: number;
+  @IsOptional() @IsIn(['customer', 'organiser']) defaultFeePaidBy?: FeePayer;
+  @IsOptional() @IsBoolean() b2bFeeDefault?: boolean;
 }
 
 /** GatePass admin: each event's commercial terms and comp approvals. */
@@ -22,13 +36,33 @@ class TermsDto {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminTermsController {
-  constructor(private readonly ds: DataSource) {}
+  constructor(private readonly ds: DataSource, private readonly settings: SettingsService) {}
+
+  /** Platform fee defaults: change any time; events without their own settings follow them. */
+  @Get('settings/fees')
+  feeSettings() {
+    return this.settings.fees();
+  }
+
+  @Put('settings/fees')
+  setFeeSettings(@Req() req: AuthedRequest, @Body() dto: FeeSettingsDto) {
+    return this.settings.setFees(dto, req.userId!);
+  }
+
+  private async termsView(e: EventEntity) {
+    return {
+      ...commercialOf(e), custom: e.commercial != null,
+      feePct: e.feePct, feePaidBy: e.feePaidBy, b2bFee: e.b2bFee,
+      /** What applies now (the event's own values, else the platform defaults). */
+      fee: effectiveFee(e, await this.settings.fees()),
+    };
+  }
 
   @Get('events/:id/terms')
   async terms(@Param('id', new ParseUUIDPipe()) id: string) {
     const e = await this.ds.getRepository(EventEntity).findOneBy({ id });
     if (!e) throw new ApiError('NOT_FOUND', 'Event not found');
-    return { ...commercialOf(e), custom: e.commercial != null };
+    return this.termsView(e);
   }
 
   @Put('events/:id/terms')
@@ -41,8 +75,11 @@ export class AdminTermsController {
       if (dto[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = dto[k];
     }
     e.commercial = next;
+    if (dto.feePct !== undefined) e.feePct = dto.feePct;
+    if (dto.feePaidBy !== undefined) e.feePaidBy = dto.feePaidBy;
+    if (dto.b2bFee !== undefined) e.b2bFee = dto.b2bFee;
     await repo.save(e);
-    return { ...next, custom: true };
+    return this.termsView(e);
   }
 
   @Get('events/:id/settlement')

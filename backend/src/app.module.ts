@@ -6,6 +6,7 @@ import { SurveyModule } from './survey/survey.module';
 import { VouchersModule } from './vouchers/vouchers.module';
 import { PushModule } from './push/push.module';
 import { MessagingModule } from './messaging/messaging.service';
+import { SettingsModule } from './settings/settings.service';
 import { AttributionModule } from './attribution/attribution.module';
 import { OrganiserModule } from './organiser/organiser.module';
 import { BookingModule } from './booking/booking.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './users/users.module';
     VouchersModule,
     PushModule,
     MessagingModule,
+    SettingsModule,
     AttributionModule,
     OrganiserModule,
     JobsModule,

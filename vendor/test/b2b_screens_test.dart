@@ -2,16 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass_organiser/app/app.dart';
 import 'package:gatepass_organiser/app/session.dart';
+import 'package:gatepass_organiser/core/razorpay_checkout.dart';
 import 'package:gatepass_organiser/data/demo_api.dart';
 import 'package:gatepass_organiser/data/models.dart';
 import 'package:gatepass_organiser/features/b2b/distributor_home.dart';
 import 'package:gatepass_organiser/features/b2b/seller_home.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
+import 'package:gatepass_organiser/features/events/fee_settings_screen.dart';
 import 'package:gatepass_organiser/features/home/vendor_home.dart';
 import 'package:gatepass_organiser/gate/gate_store.dart';
 import 'package:get/get.dart';
 
 late DemoVendorApi api;
+
+class _FakeRazorpay extends RazorpayCheckout {
+  int opened = 0;
+  int amount = 0;
+  @override
+  Future<RazorpayOutcome> open({
+    required String keyId, required String orderId, required int amountPaise, required String name, required String description, String? phone,
+  }) async {
+    opened++;
+    amount = amountPaise;
+    return RazorpayPaid({'razorpay_payment_id': 'pay_t1', 'razorpay_order_id': orderId, 'razorpay_signature': 'sig'});
+  }
+}
 
 Future<void> boot(WidgetTester t, Widget home, {Role role = Role.admin, Brightness brightness = Brightness.light}) async {
   Get.reset();
@@ -98,7 +113,10 @@ void main() {
   });
 
   for (final b in Brightness.values) {
-    testWidgets('seller orders for two numbers and pays by UPI (${b.name})', (t) async {
+    testWidgets('seller orders for two numbers and pays with Razorpay: no UTR (${b.name})', (t) async {
+      final rzp = _FakeRazorpay();
+      RazorpayCheckout.instance = rzp;
+      addTearDown(() => RazorpayCheckout.instance = RazorpayCheckout());
       await boot(t, const SellerHome(), role: Role.reseller, brightness: b);
       await t.tap(find.byKey(const Key('buy-t-ga')));
       await t.pumpAndSettle();
@@ -112,16 +130,44 @@ void main() {
       await t.tap(find.byKey(const Key('place-order')));
       await t.pumpAndSettle();
       expect(find.text('Pay Your Distributor'), findsOneWidget);
-      expect(find.text('Demo Distributor · demo.distributor@okaxis'), findsOneWidget);
-      await t.enterText(find.byKey(const Key('utr')), '512345678901');
+      expect(find.byKey(const Key('utr')), findsNothing); // nothing to type
+      await t.tap(find.byKey(const Key('pay-razorpay')));
       await t.pump();
-      await t.tap(find.byKey(const Key('paid')));
+      await t.pump(const Duration(milliseconds: 500));
+      expect(rzp.opened, 1);
+      expect(rzp.amount, 120000);
+      expect(find.text('Paid'), findsWidgets); // the green moment
+      await t.pump(const Duration(seconds: 2));
       await t.pumpAndSettle();
-      expect(find.textContaining('Waiting for your distributor to confirm'), findsOneWidget);
+      expect(find.textContaining('Paid and confirmed'), findsOneWidget);
       expect(find.text('They paid ₹700 per ticket'), findsOneWidget);
       expect(t.takeException(), isNull);
     });
   }
+
+  testWidgets('without Razorpay or YouPI, the seller pays the QR and enters the UTR', (t) async {
+    const order = B2bOrderView(
+      id: 'b2b-7q2m', code: 'B2B-7Q2M', status: OrderStatus.awaitingPayment, quantity: 2, unitPricePaise: 60000, totalPaise: 120000,
+      eventTitle: 'Sunset Sessions', tierName: 'General Admission', upiUri: 'upi://pay?pa=demo.distributor@okaxis&am=1200.00',
+      upiId: 'demo.distributor@okaxis', payeeName: 'Demo Distributor',
+    );
+    await boot(t, const PayScreen(order: order), role: Role.reseller);
+    expect(find.byKey(const Key('pay-razorpay')), findsNothing);
+    await t.enterText(find.byKey(const Key('utr')), '512345678901');
+    await t.pump();
+    await t.ensureVisible(find.byKey(const Key('paid')));
+    await t.tap(find.byKey(const Key('paid')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('Waiting for your distributor to confirm'), findsOneWidget);
+  });
+
+  testWidgets('seller sees the booking fee on top when the event charges it', (t) async {
+    const tier = SellerTier(tierId: 't-ga', name: 'General Admission', listPricePaise: 79900, yourPricePaise: 60000, available: 50);
+    const ev = SellerEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions', venueName: 'Empress Garden', tiers: [tier], fee: FeeRule(value: 5));
+    await boot(t, const BuyScreen(event: ev, tier: tier), role: Role.reseller);
+    expect(find.byKey(const Key('seller-fee-note')), findsOneWidget);
+    expect(find.text('₹630'), findsOneWidget); // ₹600 + 5%
+  });
 
   testWidgets('seller can’t sell above the ticket price', (t) async {
     await boot(t, const SellerHome(), role: Role.reseller);
@@ -158,12 +204,25 @@ void main() {
     await t.tap(find.text('Edit Terms'));
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('t-online')), '8');
+    // This event's own booking fee: 2.5%, paid by the organiser, B2B sellers pay it too.
+    await t.enterText(find.byKey(const Key('t-booking-fee')), '2.5');
+    await t.tap(find.descendant(of: find.byKey(const Key('t-payer')), matching: find.text('Organiser')));
+    await t.pumpAndSettle();
+    await t.tap(find.descendant(of: find.byKey(const Key('t-b2b-fee')), matching: find.text('Yes')));
+    await t.pumpAndSettle();
+    final page = find.byType(Scrollable).first;
+    await t.scrollUntilVisible(find.byKey(const Key('t-free')), 200, scrollable: page);
     await t.enterText(find.byKey(const Key('t-free')), '25');
+    await t.scrollUntilVisible(find.text('Save Terms'), 200, scrollable: page);
     await t.tap(find.text('Save Terms'));
     await t.pumpAndSettle();
     final terms = (await api.terms(DemoVendorApi.e1)).data!;
     expect(terms.commissionPct, 8);
     expect(terms.compFree, 25);
+    expect(terms.feePct, 2.5);
+    expect(terms.feePaidBy, 'organiser');
+    expect(terms.b2bFee, isTrue);
+    expect(terms.fee!.label, '2.5%');
   });
 
   testWidgets('distributor on YouPI: the seller just taps Pay; QR + UTR stay as a fallback', (t) async {
@@ -177,5 +236,39 @@ void main() {
     expect(find.text('Pay ₹1,700'), findsOneWidget);
     expect(find.text('PAID ANOTHER WAY?'), findsOneWidget);
     expect(find.byKey(const Key('utr')), findsOneWidget);
+  });
+
+  testWidgets('admin changes the default booking fee any time', (t) async {
+    await boot(t, const FeeSettingsScreen());
+    expect(find.text('3'), findsOneWidget); // the demo default, 3%
+    await t.tap(find.byKey(const Key('fee-inc')));
+    await t.pump();
+    expect(find.text('3.5'), findsOneWidget);
+    await t.tap(find.text('7.5%')); // quick pick
+    await t.pump();
+    await t.tap(find.descendant(of: find.byKey(const Key('fee-payer')), matching: find.text('Organiser')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('The organiser gives up'), findsOneWidget);
+    await t.scrollUntilVisible(find.byKey(const Key('fee-save')), 200, scrollable: find.byType(Scrollable).first);
+    await t.tap(find.byKey(const Key('fee-save')));
+    await t.pump();
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+    final s = (await api.feeSettings()).data!;
+    expect(s.defaultFeePct, 7.5);
+    expect(s.defaultFeePaidBy, 'organiser');
+  });
+
+  testWidgets('organiser switches who pays the booking fee', (t) async {
+    await boot(t, const EventScreen(event: tonight), role: Role.organiser);
+    await t.scrollUntilVisible(find.byKey(const Key('fee-organiser-pays')), 200);
+    expect(find.textContaining('booking fee on top'), findsOneWidget);
+    await t.ensureVisible(find.byKey(const Key('fee-organiser-pays')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('fee-organiser-pays')));
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.textContaining('comes off your payout'), 200);
+    expect(find.textContaining('comes off your payout'), findsOneWidget);
+    expect((await api.event(DemoVendorApi.e1)).data!.fee.organiserPays, isTrue);
   });
 }

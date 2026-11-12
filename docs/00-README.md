@@ -58,6 +58,7 @@ It currently runs on in-app mock data (`AppConfig.useMockData = true`) so the UI
 - [14 — B2B selling, event terms and roles](14-B2B-and-Roles.md)
 - [15 — Payments with YouPI (self-hosted UPI)](15-Payments-YouPI.md)
 - [16 — WhatsApp messages for tickets](16-WhatsApp.md)
+- [17 — Booking fees and Razorpay](17-Booking-Fees-and-Razorpay.md)
 - [Deployment guide](DEPLOYMENT.md)
 - [Release checklist & data safety](RELEASE.md)
 - Legal drafts: [privacy policy](legal/privacy-policy.md), [terms](legal/terms.md)

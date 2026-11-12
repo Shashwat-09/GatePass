@@ -23,6 +23,7 @@ import 'package:gatepass/features/profile/profile_screen.dart';
 import 'package:gatepass/features/tickets/claim_screen.dart';
 import 'package:gatepass/features/tickets/my_tickets_screen.dart';
 import 'package:gatepass/features/tickets/share_ticket_sheet.dart';
+import 'package:gatepass/widgets/price_breakdown.dart';
 import 'package:gatepass/core/di.dart';
 import 'package:gatepass/services/storage/local_storage.dart';
 import 'package:gatepass/features/tickets/ticket_view_screen.dart';
@@ -720,5 +721,20 @@ void main() {
       expect(find.text(s), findsOneWidget, reason: s);
     }
     expect(find.text('₹200'), findsOneWidget);
+  });
+
+  testWidgets('price breakdown: the organiser covers the booking fee → "Free", no GST lines', (t) async {
+    final p = PriceBreakdown.fromJson({
+      'basePaise': 200000, 'feePaise': 0, 'feePaidBy': 'organiser', 'taxPaise': 0, 'totalPaise': 200000, 'payablePaise': 200000,
+      'gst': {'type': 'cgst_sgst', 'ratePct': 18, 'cgstPaise': 0, 'sgstPaise': 0, 'igstPaise': 0, 'included': false},
+    });
+    await t.pumpWidget(app(Scaffold(body: PriceBreakdownView(p))));
+    expect(find.text('Free'), findsOneWidget);
+    expect(find.textContaining('CGST'), findsNothing);
+    final c = PriceBreakdown.fromJson({'basePaise': 100000, 'feePaise': 5000, 'taxPaise': 900, 'totalPaise': 105900,
+      'gst': {'type': 'cgst_sgst', 'ratePct': 18, 'cgstPaise': 450, 'sgstPaise': 450, 'igstPaise': 0, 'included': false}});
+    await t.pumpWidget(app(Scaffold(body: PriceBreakdownView(c))));
+    expect(find.text('₹50'), findsOneWidget);
+    expect(find.textContaining('CGST'), findsOneWidget);
   });
 }

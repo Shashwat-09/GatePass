@@ -1,5 +1,6 @@
 import { EntityManager } from 'typeorm';
-import { Booking, DEFAULT_COMMERCIAL, EventCommercial, EventEntity } from '../db/entities';
+import { B2bOrder, Booking, DEFAULT_COMMERCIAL, EventCommercial, EventEntity } from '../db/entities';
+import { In } from 'typeorm';
 
 /** The event's commercial terms with defaults filled in. */
 export function commercialOf(e: Pick<EventEntity, 'commercial'>): EventCommercial {
@@ -21,7 +22,8 @@ export async function compsIssued(m: EntityManager, eventId: string): Promise<nu
 /**
  * End-of-event settlement between the organiser and GatePass, per channel.
  *  - Online: GatePass collected the money; it pays the organiser the ticket
- *    revenue less commission (booking fees and their GST stay with GatePass).
+ *    revenue less commission (booking fees and their GST stay with GatePass)
+ *    and less any booking fees the organiser chose to absorb.
  *  - Box office, B2B, extra comps: the organiser (or distributor) collected
  *    the money, so the organiser owes GatePass the commission.
  */
@@ -37,6 +39,8 @@ export async function eventSettlement(m: EntityManager, e: EventEntity) {
   const onlineRevenue = online.reduce((n, b) => n + Math.max(0, b.basePaise - b.discountPaise), 0);
   const onlineCommission = pct(onlineRevenue, terms.commissionPct);
   const bookingFees = online.reduce((n, b) => n + b.feePaise, 0);
+  // Booking fees the organiser chose to absorb (customer paid none): off their payout.
+  const absorbedFees = online.reduce((n, b) => n + (b.absorbedFeePaise ?? 0), 0);
   const boxRevenue = box.reduce((n, b) => n + b.totalPaise, 0);
   const boxCommission = pct(boxRevenue, terms.boxOfficePct);
   const compTickets = comps.reduce((n, b) => n + qtyOf(b), 0);
@@ -44,12 +48,20 @@ export async function eventSettlement(m: EntityManager, e: EventEntity) {
   const compFees = chargeableComps * terms.compFeePaise;
   const b2bValue = b2b.reduce((n, b) => n + b.totalPaise, 0);
   const b2bCommission = pct(b2bValue, terms.b2bPct);
+  // Booking fees B2B sellers paid with their orders: the distributor collected them for GatePass.
+  const b2bOrders = await m.find(B2bOrder, { where: { eventId: e.id, status: In(['paid', 'issued_unpaid']) }, select: ['id', 'feePaise'] });
+  const b2bFees = b2bOrders.reduce((n, o) => n + (o.feePaise ?? 0), 0);
 
-  const gatepassPaysOrganiser = onlineRevenue - onlineCommission;
+  const gatepassPaysOrganiser = onlineRevenue - onlineCommission - absorbedFees;
   const organiserPaysGatepass = boxCommission + compFees + b2bCommission;
   return {
     terms,
-    online: { tickets: online.reduce((n, b) => n + qtyOf(b), 0), revenuePaise: onlineRevenue, commissionPaise: onlineCommission, bookingFeesPaise: bookingFees },
+    online: {
+      tickets: online.reduce((n, b) => n + qtyOf(b), 0), revenuePaise: onlineRevenue, commissionPaise: onlineCommission,
+      bookingFeesPaise: bookingFees,
+      /** Booking fees (+ GST) the organiser absorbed instead of the customer. */
+      absorbedFeesPaise: absorbedFees,
+    },
     boxOffice: { tickets: box.reduce((n, b) => n + qtyOf(b), 0), revenuePaise: boxRevenue, commissionPaise: boxCommission },
     comps: { tickets: compTickets, free: terms.compFree, chargeable: chargeableComps, feesPaise: compFees },
     b2b: {
@@ -57,9 +69,11 @@ export async function eventSettlement(m: EntityManager, e: EventEntity) {
       /** What the distributor owes the organiser (B2B rate × tickets). */
       distributorOwesOrganiserPaise: b2bValue,
       commissionPaise: b2bCommission,
+      /** Booking fees paid by B2B sellers (the distributor owes these to GatePass). */
+      bookingFeesPaise: b2bFees,
     },
     /** GatePass's total earnings from this event (commissions + fees + booking fees). */
-    gatepassEarningsPaise: onlineCommission + bookingFees + boxCommission + compFees + b2bCommission,
+    gatepassEarningsPaise: onlineCommission + bookingFees + absorbedFees + boxCommission + compFees + b2bCommission + b2bFees,
     gatepassPaysOrganiserPaise: gatepassPaysOrganiser,
     organiserPaysGatepassPaise: organiserPaysGatepass,
     /** Positive: GatePass transfers this to the organiser. Negative: the organiser owes GatePass. */

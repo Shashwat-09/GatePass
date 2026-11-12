@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min, ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { randomBytes } from 'crypto';
 import { DataSource, In, IsNull, Not } from 'typeorm';
@@ -10,8 +11,9 @@ import { eventFor } from '../common/event-access';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { BookingService, currentPrice } from '../booking/booking.service';
-import { ApprovalRequest, Booking, City, CompRequest, EventEntity, EventSession, Ticket, Tier, User } from '../db/entities';
+import { ApprovalRequest, Booking, City, CompRequest, EventEntity, EventSession, FeePayer, Ticket, Tier, User } from '../db/entities';
 import { commercialOf, compsIssued, eventSettlement } from './settlement';
+import { effectiveFee, SettingsService } from '../settings/settings.service';
 import { notify } from '../notifications/notify';
 
 const https = { protocols: ['https'], require_protocol: true };
@@ -44,6 +46,8 @@ class EventDto {
   @IsOptional() @IsBoolean() allowTransfers?: boolean;
   /** Let B2B sellers (the distributor channel) sell this event. */
   @IsOptional() @IsBoolean() b2bEnabled?: boolean;
+  /** Who pays the booking fee: the customer (on top) or the organiser (off their payout). null = platform default. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(['customer', 'organiser']) feePaidBy?: FeePayer | null;
   /** The evening's running order (shown as "The programme"). */
   @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ScheduleItemDto) schedule?: ScheduleItemDto[];
   @IsOptional() @IsBoolean() isWebOnly?: boolean;
@@ -104,7 +108,7 @@ class IssueDto {
 
 const EDITABLE: (keyof EventDto)[] = [
   'title', 'description', 'cityId', 'venueName', 'venueAddress', 'mapLink', 'genre', 'language', 'cardImageUrl', 'bannerUrl',
-  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl', 'schedule', 'b2bEnabled',
+  'maxPerUser', 'terms', 'ticketNotes', 'ageLimit', 'allowTransfers', 'isWebOnly', 'externalUrl', 'schedule', 'b2bEnabled', 'feePaidBy',
 ];
 const DATES: (keyof EventDto)[] = ['startDate', 'endDate', 'opensAt', 'closesAt'];
 
@@ -127,6 +131,8 @@ function eventView(e: EventEntity) {
     ticketNotes: e.ticketNotes, ageLimit: e.ageLimit, allowTransfers: e.allowTransfers, isWebOnly: e.isWebOnly, externalUrl: e.externalUrl,
     hasSeatMap: e.hasSeatMap, organiserId: e.organiserId, schedule: e.schedule ?? [],
     b2bEnabled: e.b2bEnabled, commercial: commercialOf(e),
+    /** The event's own fee settings (null = platform default); `fee` (in detail) is what applies. */
+    feePct: e.feePct, feePaidBy: e.feePaidBy, b2bFee: e.b2bFee,
   };
 }
 
@@ -139,7 +145,7 @@ export function compRequestView(r: CompRequest) {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('organiser', 'admin')
 export class OrganiserController {
-  constructor(private readonly ds: DataSource, private readonly booking: BookingService) {}
+  constructor(private readonly ds: DataSource, private readonly booking: BookingService, private readonly settings: SettingsService) {}
 
   @Get('events')
   async list(@Req() req: AuthedRequest, @Query('page') page?: string, @Query('limit') limit?: string) {
@@ -184,6 +190,8 @@ export class OrganiserController {
     ]);
     return {
       ...eventView(e), tiers: tiers.map(tierView),
+      /** Booking fee that applies now: rate, who pays, whether B2B sellers pay it. */
+      fee: effectiveFee(e, await this.settings.fees()),
       sessions: sessions.map((x) => ({ id: x.id, venueName: x.venueName, venueAddress: x.venueAddress, mapLink: x.mapLink, label: x.label, startsAt: x.startsAt.toISOString(), endsAt: x.endsAt?.toISOString() ?? null, isActive: x.isActive })),
     };
   }

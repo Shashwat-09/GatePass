@@ -190,7 +190,9 @@ class DemoVendorApi implements VendorApi {
     await _wait();
     final x = _events[id];
     if (x == null) return _missing();
-    return ApiResult.ok(EventDetail(event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, b2bEnabled: _b2bOn[id] ?? false, terms: _terms[id] ?? const EventTerms()));
+    return ApiResult.ok(EventDetail(
+        event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, b2bEnabled: _b2bOn[id] ?? false,
+        terms: (_terms[id] ?? const EventTerms()).copyWith(fee: _fee(id)), fee: _fee(id)));
   }
 
   @override
@@ -391,6 +393,13 @@ class DemoVendorApi implements VendorApi {
   final _b2bQuota = <String, int?>{'t-ga': 100};
   final _b2bSold = <String, int>{'t-ga': 6, 't-vip': 0};
   final _terms = <String, EventTerms>{};
+  var _feeSettings = const FeeSettings(defaultFeePct: 3);
+
+  /// What applies to an event: its own fee settings, else the defaults.
+  FeeRule _fee(String eventId) {
+    final t = _terms[eventId] ?? const EventTerms();
+    return FeeRule(value: t.feePct ?? _feeSettings.defaultFeePct, paidBy: t.feePaidBy ?? _feeSettings.defaultFeePaidBy, b2b: t.b2bFee ?? _feeSettings.b2bFeeDefault);
+  }
   final _compsUsed = <String, int>{};
   final _compReqs = <CompRequestItem>[];
   DistributorProfile _profile = const DistributorProfile(upiId: 'demo.distributor@okaxis', payeeName: 'Demo Distributor', holdMinutes: 30);
@@ -406,15 +415,19 @@ class DemoVendorApi implements VendorApi {
     _order('B2B-3KD9', _s2, 't-ga', 4, 57000, OrderStatus.paid, recipients: const [Recipient(phone: '9876500113', qty: 4)]),
   ];
 
-  B2bOrderView _order(String code, String seller, String tierId, int qty, int unit, OrderStatus st, {String? utr, List<Recipient> recipients = const []}) {
+  B2bOrderView _order(String code, String seller, String tierId, int qty, int unit, OrderStatus st,
+      {String? utr, List<Recipient> recipients = const [], int feePaise = 0, bool razorpay = false}) {
     final t = _events[e1]?.tiers.firstWhere((x) => x.id == tierId);
     final s = _sellers.firstWhere((x) => x.userId == seller);
     return B2bOrderView(
-      id: code.toLowerCase(), code: code, status: st, quantity: qty, unitPricePaise: unit, totalPaise: unit * qty,
+      id: code.toLowerCase(), code: code, status: st, quantity: qty, unitPricePaise: unit, totalPaise: unit * qty + feePaise, feePaise: feePaise,
       eventTitle: 'Sunset Sessions: Live at the Lawn', tierName: t?.name ?? tierId, listPricePaise: t?.pricePaise ?? 0, recipients: recipients, utr: utr,
       createdAt: DateTime.now().subtract(const Duration(minutes: 25)), sellerName: s.name, sellerPhone: s.phone,
-      upiId: _profile.upiId, payeeName: _profile.payeeName, upiUri: _upi(code, unit * qty),
+      upiId: _profile.upiId, payeeName: _profile.payeeName, upiUri: _upi(code, unit * qty + feePaise),
       expiresAt: st == OrderStatus.awaitingPayment ? DateTime.now().add(Duration(minutes: _profile.holdMinutes)) : null,
+      // Demo: new orders pay through a pretend Razorpay checkout (no UTR).
+      autoConfirm: razorpay, gateway: razorpay ? 'razorpay' : null,
+      razorpayKeyId: razorpay ? 'rzp_demo' : null, razorpayOrderId: razorpay ? 'order_demo_${code.toLowerCase()}' : null,
     );
   }
 
@@ -479,13 +492,20 @@ class DemoVendorApi implements VendorApi {
     final chargeable = t.compFree == null ? 0 : (comps - t.compFree!).clamp(0, 1 << 30);
     final box = pct(d.boxOffice.revenuePaise, t.boxOfficePct);
     final b2bComm = pct(b2bOwed, t.b2bPct);
-    final pays = onlineRev - pct(onlineRev, t.commissionPct);
+    final fee = _fee(eventId);
+    // Demo: if the organiser takes on the fee, it (+18% GST) comes off their payout.
+    final absorbed = fee.organiserPays ? (pct(onlineRev, fee.value) * 1.18).round() : 0;
+    final b2bFees = _b2bOrders.where((o) => o.ticketsSent).fold<int>(0, (n, o) => n + o.feePaise);
+    final pays = onlineRev - pct(onlineRev, t.commissionPct) - absorbed;
     final owes = box + chargeable * t.compFeePaise + b2bComm;
     return ApiResult.ok(Settlement({
-      'online': {'tickets': d.online.tickets, 'revenuePaise': onlineRev, 'commissionPaise': pct(onlineRev, t.commissionPct), 'bookingFeesPaise': pct(onlineRev, 3)},
+      'online': {
+        'tickets': d.online.tickets, 'revenuePaise': onlineRev, 'commissionPaise': pct(onlineRev, t.commissionPct),
+        'bookingFeesPaise': fee.organiserPays ? 0 : pct(onlineRev, fee.value), 'absorbedFeesPaise': absorbed,
+      },
       'boxOffice': {'tickets': d.boxOffice.tickets, 'revenuePaise': d.boxOffice.revenuePaise, 'commissionPaise': box},
       'comps': {'tickets': comps, 'free': t.compFree, 'chargeable': chargeable, 'feesPaise': chargeable * t.compFeePaise},
-      'b2b': {'tickets': b2bTickets, 'distributorOwesOrganiserPaise': b2bOwed, 'commissionPaise': b2bComm},
+      'b2b': {'tickets': b2bTickets, 'distributorOwesOrganiserPaise': b2bOwed, 'commissionPaise': b2bComm, 'bookingFeesPaise': b2bFees},
       'gatepassEarningsPaise': pct(onlineRev, t.commissionPct) + pct(onlineRev, 3) + owes,
       'gatepassPaysOrganiserPaise': pays,
       'organiserPaysGatepassPaise': owes,
@@ -496,13 +516,36 @@ class DemoVendorApi implements VendorApi {
   @override
   Future<ApiResult<EventTerms>> terms(String eventId) async {
     await _wait();
-    return ApiResult.ok(_terms[eventId] ?? const EventTerms());
+    return ApiResult.ok((_terms[eventId] ?? const EventTerms()).copyWith(fee: _fee(eventId)));
   }
 
   @override
   Future<ApiResult<EventTerms>> setTerms(String eventId, EventTerms terms) async {
     await _wait();
-    return ApiResult.ok(_terms[eventId] = terms);
+    if (terms.feePct != null && (terms.feePct! < 0 || terms.feePct! > 25)) return const ApiResult.fail('Booking fee must be between 0% and 25%', statusCode: 400);
+    _terms[eventId] = terms;
+    return ApiResult.ok(terms.copyWith(fee: _fee(eventId)));
+  }
+
+  @override
+  Future<ApiResult<FeeSettings>> feeSettings() async {
+    await _wait();
+    return ApiResult.ok(_feeSettings);
+  }
+
+  @override
+  Future<ApiResult<FeeSettings>> setFeeSettings(FeeSettings s) async {
+    await _wait();
+    if (s.defaultFeePct < 0 || s.defaultFeePct > 25) return const ApiResult.fail('Booking fee must be between 0% and 25%', statusCode: 400);
+    return ApiResult.ok(_feeSettings = s);
+  }
+
+  @override
+  Future<ApiResult<void>> setFeePayer(String eventId, String? paidBy) async {
+    await _wait();
+    final t = _terms[eventId] ?? const EventTerms();
+    _terms[eventId] = paidBy == null ? t.copyWith(clearFeePaidBy: true) : t.copyWith(feePaidBy: paidBy);
+    return const ApiResult.ok(null);
   }
 
   @override
@@ -624,10 +667,11 @@ class DemoVendorApi implements VendorApi {
   }
 
   B2bOrderView _with(B2bOrderView o, OrderStatus st, {String? utr}) => B2bOrderView(
-      id: o.id, code: o.code, status: st, quantity: o.quantity, unitPricePaise: o.unitPricePaise, totalPaise: o.totalPaise, eventTitle: o.eventTitle,
+      id: o.id, code: o.code, status: st, quantity: o.quantity, unitPricePaise: o.unitPricePaise, totalPaise: o.totalPaise, feePaise: o.feePaise, eventTitle: o.eventTitle,
       tierName: o.tierName, listPricePaise: o.listPricePaise, recipients: o.recipients, utr: utr ?? o.utr, createdAt: o.createdAt,
       expiresAt: st == OrderStatus.awaitingPayment ? o.expiresAt : null, upiUri: o.upiUri, upiId: o.upiId, payeeName: o.payeeName,
-      sellerName: o.sellerName, sellerPhone: o.sellerPhone);
+      sellerName: o.sellerName, sellerPhone: o.sellerPhone, autoConfirm: o.autoConfirm, gateway: o.gateway,
+      razorpayKeyId: o.razorpayKeyId, razorpayOrderId: o.razorpayOrderId);
 
   Future<void> _issueDemo(B2bOrderView o) async {
     for (final r in o.recipients) {
@@ -704,7 +748,12 @@ class DemoVendorApi implements VendorApi {
           if (_b2bRate.containsKey(t.id) && _priceFor(t.id, me.userId) != null)
             SellerTier(tierId: t.id, name: t.name, listPricePaise: t.pricePaise, yourPricePaise: _priceFor(t.id, me.userId)!, available: _b2bTier(t).available),
       ];
-      if (tiers.isNotEmpty) events.add(SellerEvent(id: x.e.id, title: x.e.title, venueName: x.e.venueName, startDate: x.e.startDate, tiers: tiers));
+      final f = _fee(x.e.id);
+      if (tiers.isNotEmpty) {
+        events.add(SellerEvent(
+            id: x.e.id, title: x.e.title, venueName: x.e.venueName, startDate: x.e.startDate, tiers: tiers,
+            fee: f.b2b && f.value > 0 ? FeeRule(value: f.value) : null));
+      }
     }
     return ApiResult.ok(SellerCatalog(upiId: _profile.upiId, payeeName: _profile.payeeName, trusted: me.trusted, events: events));
   }
@@ -725,7 +774,10 @@ class DemoVendorApi implements VendorApi {
     if (quantity > avail) return ApiResult.fail('Only $avail ${t.name} left for B2B', statusCode: 409);
     _b2bSold[tierId] = (_b2bSold[tierId] ?? 0) + quantity;
     final code = 'B2B-${(_code++).toRadixString(36).toUpperCase().padLeft(4, '0')}';
-    var o = _order(code, me.userId, tierId, quantity, unit, me.trusted ? OrderStatus.issuedUnpaid : OrderStatus.awaitingPayment, recipients: recipients);
+    final f = _fee(e1);
+    final feePaise = f.b2b ? (unit * quantity * f.value / 100).round() : 0;
+    var o = _order(code, me.userId, tierId, quantity, unit, me.trusted ? OrderStatus.issuedUnpaid : OrderStatus.awaitingPayment, recipients: recipients, feePaise: feePaise,
+        razorpay: !me.trusted);
     if (me.trusted) await _issueDemo(o);
     _b2bOrders.insert(0, o);
     return ApiResult.ok(o);
@@ -755,6 +807,16 @@ class DemoVendorApi implements VendorApi {
   // The demo distributor confirms by hand (no YouPI here).
   @override
   Future<ApiResult<B2bOrderView>> paySession(String orderId) => sellerOrder(orderId);
+
+  @override
+  Future<ApiResult<B2bOrderView>> confirmRazorpay(String orderId, Map<String, dynamic> payload) async {
+    await _wait();
+    final i = _b2bOrders.indexWhere((o) => o.id == orderId);
+    if (i < 0) return const ApiResult.fail('Order not found', statusCode: 404);
+    final o = _with(_b2bOrders[i], OrderStatus.paid, utr: payload['razorpay_payment_id']?.toString());
+    await _issueDemo(o);
+    return ApiResult.ok(_b2bOrders[i] = o);
+  }
 
   @override
   Future<ApiResult<B2bOrderView>> sellerOrder(String orderId) async {

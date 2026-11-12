@@ -65,6 +65,8 @@ export interface AppConfig {
     youpiAccept: 'observed' | 'reconciled';
     /** Where YouPI sends the payer after paying (must be allowlisted on YouPI). */
     youpiReturnUrl: string;
+    /** B2B: the main distributor's own Razorpay account (seller payments go straight to them and confirm themselves). */
+    razorpayB2b: { keyId: string; keySecret: string; webhookSecret: string; distributorPhone: string } | null;
     /** B2B: the main distributor's own YouPI merchant (their UPI ID), so seller payments confirm themselves. */
     youpiB2b: (YouPiMerchant & { distributorPhone: string }) | null;
   };
@@ -261,6 +263,13 @@ export function loadConfig(): AppConfig {
       razorpayKeySecret: str('RAZORPAY_KEY_SECRET'),
       razorpayWebhookSecret: str('RAZORPAY_WEBHOOK_SECRET'),
       razorpayApiBase: str('RAZORPAY_API_BASE', 'https://api.razorpay.com/v1/')!,
+      razorpayB2b: (() => {
+        const keyId = str('RAZORPAY_B2B_KEY_ID');
+        const keySecret = str('RAZORPAY_B2B_KEY_SECRET');
+        const webhookSecret = str('RAZORPAY_B2B_WEBHOOK_SECRET');
+        const distributorPhone = str('RAZORPAY_B2B_DISTRIBUTOR_PHONE');
+        return keyId && keySecret && webhookSecret && distributorPhone ? { keyId, keySecret, webhookSecret, distributorPhone } : null;
+      })(),
       youpi: youpiMerchant('YOUPI'),
       youpiAccept: (str('YOUPI_ACCEPT', 'observed') as 'observed' | 'reconciled'),
       youpiReturnUrl: str('YOUPI_RETURN_URL', `${ensureSlash(str('PUBLIC_BASE_URL', `http://localhost:${num('PORT', 4000)}/`)!)}pay/done`)!,
@@ -343,6 +352,12 @@ export function loadConfig(): AppConfig {
   for (const [k, m] of [['YOUPI', cfg.payment.youpi], ['YOUPI_B2B', cfg.payment.youpiB2b]] as const) {
     if (m && isProd && !m.apiUrl.startsWith('https://')) errors.push(`${k}_API_URL must be https in production`);
     if (m && m.webhookSecret.length < 16) errors.push(`${k}_WEBHOOK_SECRET looks too short`);
+  }
+  if (str('RAZORPAY_B2B_KEY_ID') && !cfg.payment.razorpayB2b) {
+    errors.push('RAZORPAY_B2B_* needs RAZORPAY_B2B_KEY_ID, _KEY_SECRET, _WEBHOOK_SECRET and RAZORPAY_B2B_DISTRIBUTOR_PHONE');
+  }
+  if (isProd && cfg.payment.razorpayB2b?.keyId.startsWith('rzp_test_') && !bool('ALLOW_TEST_PAYMENTS', false)) {
+    errors.push('Razorpay B2B test keys in production; set live keys or ALLOW_TEST_PAYMENTS=true for staging');
   }
   if (str('YOUPI_B2B_API_URL') && !cfg.payment.youpiB2b) {
     errors.push('YOUPI_B2B_* needs YOUPI_B2B_API_URL, _MERCHANT_ID, _MERCHANT_API_KEY, _WEBHOOK_SECRET and YOUPI_B2B_DISTRIBUTOR_PHONE');

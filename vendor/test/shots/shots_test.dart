@@ -14,6 +14,7 @@ import 'package:gatepass_organiser/data/models.dart';
 import 'package:gatepass_organiser/features/account/account_screen.dart';
 import 'package:gatepass_organiser/features/b2b/distributor_home.dart';
 import 'package:gatepass_organiser/features/b2b/seller_home.dart';
+import 'package:gatepass_organiser/features/events/fee_settings_screen.dart';
 import 'package:gatepass_organiser/features/events/terms_screen.dart';
 import 'package:gatepass_organiser/features/home/vendor_home.dart';
 import 'package:gatepass_organiser/features/approvals/approvals_screen.dart';
@@ -170,6 +171,11 @@ void main() {
           await t.drag(find.byType(ListView), const Offset(0, -1700));
         }));
     testWidgets('settlement ${mode.name}', (t) => shoot(t, 'settlement', () => const SettlementScreen(event: tonight), mode: mode, role: Role.admin));
+    testWidgets('fee-settings ${mode.name}', (t) => shoot(t, 'fee-settings', () => const FeeSettingsScreen(), mode: mode, role: Role.admin));
+    testWidgets('terms-edit ${mode.name}', (t) => shoot(t, 'terms-edit', () => const TermsScreen(event: tonight, terms: EventTerms(feePct: 2.5, feePaidBy: 'organiser', b2bFee: true)), mode: mode, role: Role.admin));
+    testWidgets('fee-organiser ${mode.name}', (t) => shoot(t, 'fee-organiser', () => const EventScreen(event: tonight), mode: mode, role: Role.organiser, before: () async {
+          await t.scrollUntilVisible(find.byKey(const Key('fee-organiser-pays')), 300, scrollable: find.byType(Scrollable).first);
+        }));
     testWidgets('no-access ${mode.name}', (t) => shoot(t, 'no-access', () => const NoAccessScreen(), mode: mode));
   }
 }

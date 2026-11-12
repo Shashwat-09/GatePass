@@ -68,6 +68,16 @@ describe('quote', () => {
     expect(q.gst).toMatchObject({ type: 'igst', igstPaise: 1525, included: true });
     expect(q.totalPaise).toBe(169800); // fee already includes GST
   });
+  it('organiser pays the fee: the customer pays only the tickets; fee + its GST come off the organiser', () => {
+    const q = quote(lines, { ...feePct, paidBy: 'organiser' }, { intraState: true });
+    expect(q).toMatchObject({ feePaise: 0, taxPaise: 0, totalPaise: 159800, payablePaise: 159800, absorbedFeePaise: 4794 + 863 });
+    const c = quote(lines, { ...feePct, paidBy: 'customer' }, { intraState: true });
+    expect(c.absorbedFeePaise).toBe(0);
+  });
+  it('any fee rate, decimals included (2.5%)', () => {
+    expect(quote(lines, { ...feePct, value: 2.5 }, { intraState: true }).feePaise).toBe(3995);
+    expect(quote(lines, { ...feePct, value: 0 }, { intraState: true })).toMatchObject({ feePaise: 0, totalPaise: 159800 });
+  });
   it('legacy GatePass mode: GST on tickets + fee', () => {
     expect(quote(lines, { ...feePct, gstOn: 'fee_and_tickets' }, { intraState: false }).totalPaise).toBe(194221);
   });

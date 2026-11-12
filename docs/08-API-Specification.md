@@ -380,3 +380,6 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - Tickets sent to a phone number queue a WhatsApp template message in the same transaction: shares (`split` / `share`), B2B orders, and comp or box-office tickets. Template `ticket_received` goes to people who have used GatePass, `ticket_waiting` to everyone else. Shares to links send nothing. Share transfer views add `whatsapp`.
 - `GET api/ticket/open/:id` (auth) → ticket view of the share or booking a link points to (`403` other number, `404` taken back or passed on). `GET api/ticket/open/:id/preview` (public). `GET /r/:id` landing page → `gatepass://open/<id>`.
 - Config: `WHATSAPP_PROVIDER=meta|log|none`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, optional template names and language. The jobs tick also flushes WhatsApp.
+
+## 8.25 As built (v0.14) — booking fee controls, Razorpay for B2B (docs/17)
+Admin fee settings (`api/admin/settings/fees`); per-event `feePct` / `feePaidBy` / `b2bFee` (admin terms; the organiser can set `feePaidBy`); quotes with `feePaidBy`; absorbed fees and B2B seller fees in settlements and distributor books; B2B orders with `feePaise`, `gateway`, `razorpay`; `POST api/reseller/orders/:id/razorpay`; `POST api/payment/razorpay/b2b-webhook`. Full field list in docs/17.

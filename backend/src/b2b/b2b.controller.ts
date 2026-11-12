@@ -9,7 +9,7 @@ import { ApiError } from '../common/api-error';
 import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { parsePage } from '../common/pagination';
 import { DistributorPriceChange, DistributorProfile, Reseller, Tier, User } from '../db/entities';
-import { PayReturnController, YouPiWebhookController } from '../payments/youpi.controller';
+import { PayReturnController, RazorpayB2bWebhookController, YouPiWebhookController } from '../payments/youpi.controller';
 import { B2bService } from './b2b.service';
 
 class ProfileDto {
@@ -47,6 +47,11 @@ class OrderDto {
   @IsUUID() tierId!: string;
   @IsInt() @Min(1) @Max(200) quantity!: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => RecipientDto) recipients!: RecipientDto[];
+}
+class RazorpayResultDto {
+  @IsString() @Length(1, 64) razorpay_payment_id!: string;
+  @IsString() @Length(1, 64) razorpay_order_id!: string;
+  @IsString() @Length(1, 256) razorpay_signature!: string;
 }
 class UtrDto {
   @IsString() @Matches(/^[A-Za-z0-9]{6,30}$/, { message: 'Enter the UPI reference (UTR) from your payment app' }) utr!: string;
@@ -185,6 +190,13 @@ export class ResellerController {
     return this.b2b.cancel(req.userId!, id, false);
   }
 
+  /** Razorpay: the seller's checkout result; verified with Razorpay before the tickets go out. */
+  @Post('orders/:id/razorpay')
+  @HttpCode(200)
+  razorpay(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: RazorpayResultDto) {
+    return this.b2b.confirmRazorpay(req.userId!, id, { ...dto });
+  }
+
   /** YouPI: the payment page for this order (a fresh session if the last one lapsed). */
   @Post('orders/:id/pay')
   @HttpCode(200)
@@ -201,7 +213,7 @@ export class ResellerController {
 
 @Module({
   imports: [BookingModule],
-  controllers: [DistributorController, ResellerController, YouPiWebhookController, PayReturnController],
+  controllers: [DistributorController, ResellerController, YouPiWebhookController, PayReturnController, RazorpayB2bWebhookController],
   providers: [B2bService],
   exports: [B2bService],
 })

@@ -8,7 +8,8 @@ import {
   B2bOrder, DistributorPrice, DistributorPriceChange, DistributorProfile, EventEntity, Reseller, Tier, User, UserRole,
 } from '../db/entities';
 import { notify } from '../notifications/notify';
-import { YouPiClient, youpiOutcome } from '../payments/gateway';
+import { effectiveFee, SettingsService } from '../settings/settings.service';
+import { RazorpayGateway, YouPiClient, youpiOutcome } from '../payments/gateway';
 import { commercialOf } from '../organiser/settlement';
 
 export interface Recipient { phone: string; name?: string | null; email?: string | null; qty: number; salePricePaise?: number | null }
@@ -30,9 +31,12 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger('B2B');
   private timer?: NodeJS.Timeout;
   private youpiDistributorId: string | null | undefined;
+  private phoneIds = new Map<string, string>();
   readonly youpiClient = config().payment.youpiB2b ? new YouPiClient(config().payment.youpiB2b!) : null;
+  /** The main distributor's own Razorpay account (RAZORPAY_B2B_*). */
+  readonly razorpay = config().payment.razorpayB2b ? new RazorpayGateway(config().payment.razorpayB2b!) : null;
 
-  constructor(private readonly ds: DataSource, private readonly booking: BookingService) {}
+  constructor(private readonly ds: DataSource, private readonly booking: BookingService, private readonly settings: SettingsService) {}
 
   onModuleInit() {
     if (config().sweeperEnabled) {
@@ -48,6 +52,22 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
    * The distributor whose UPI is watched by YouPI (YOUPI_B2B_*): their
    * sellers pay through YouPI's checkout and orders confirm themselves.
    */
+  /** User id behind a configured phone number (cached once found). */
+  private async idForPhone(phone: string) {
+    const known = this.phoneIds.get(phone);
+    if (known) return known;
+    const u = await this.ds.getRepository(User).findOne({ where: { phone, deletedAt: IsNull() }, select: ['id'] });
+    if (u) this.phoneIds.set(phone, u.id);
+    return u?.id ?? null;
+  }
+
+  /** Razorpay when this distributor's own account is set up (RAZORPAY_B2B_*). */
+  async razorpayFor(distributorId: string): Promise<RazorpayGateway | null> {
+    const c = config().payment.razorpayB2b;
+    if (!c || !this.razorpay) return null;
+    return (await this.idForPhone(c.distributorPhone)) === distributorId ? this.razorpay : null;
+  }
+
   async youpiFor(distributorId: string): Promise<YouPiClient | null> {
     const b2b = config().payment.youpiB2b;
     if (!b2b || !this.youpiClient) return null;
@@ -57,6 +77,17 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       else return null;
     }
     return this.youpiDistributorId === distributorId ? this.youpiClient : null;
+  }
+
+  /** The booking fee B2B sellers pay for this event (null: not charged). */
+  async b2bFeeFor(e: EventEntity): Promise<{ type: 'percentage' | 'fixed_per_ticket'; value: number } | null> {
+    const f = effectiveFee(e, await this.settings.fees());
+    return f.b2b && f.value > 0 ? { type: f.type, value: f.value } : null;
+  }
+
+  static feeOn(fee: { type: 'percentage' | 'fixed_per_ticket'; value: number } | null, subtotalPaise: number, qty: number) {
+    if (!fee) return 0;
+    return fee.type === 'percentage' ? Math.round((subtotalPaise * fee.value) / 100) : fee.value * qty;
   }
 
   // ───────────── prices ─────────────
@@ -99,9 +130,12 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
     if (!events.length) return { items: [] };
     const tiers = await this.ds.getRepository(Tier).find({ where: { eventId: In(events.map((e) => e.id)) }, order: { sortOrder: 'ASC', pricePaise: 'ASC' } });
     const prices = await this.ds.getRepository(DistributorPrice).findBy({ distributorId, tierId: In(tiers.map((t) => t.id)) });
+    const fees = new Map(await Promise.all(events.map(async (e) => [e.id, await this.b2bFeeFor(e)] as const)));
     return {
       items: events.map((e) => ({
         id: e.id, title: e.title, venueName: e.venueName, startDate: e.startDate?.toISOString() ?? null, b2bPct: commercialOf(e).b2bPct,
+        /** Booking fee sellers pay on top (% or paise per ticket); null = none. */
+        sellerFee: fees.get(e.id) ?? null,
         tiers: tiers.filter((t) => t.eventId === e.id && t.b2bPricePaise != null).map((t) => ({
           ...this.tierStock(t),
           defaultPricePaise: prices.find((p) => p.tierId === t.id && p.resellerKey === '*')?.pricePaise ?? null,
@@ -163,6 +197,8 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       items: d.items
         .map((e) => ({
           id: e.id, title: e.title, venueName: e.venueName, startDate: e.startDate,
+          /** Booking fee added to their orders (% or paise per ticket); null = none. */
+          fee: e.sellerFee,
           // Sellers see only their own price and the customer price, never the organiser's rate.
           tiers: e.tiers.filter((t) => priceOf(t.tierId) != null).map((t) => ({
             tierId: t.tierId, name: t.name, listPricePaise: t.listPricePaise, yourPricePaise: priceOf(t.tierId)!, available: t.available,
@@ -194,10 +230,12 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
         .where('id = :id', { id: tier.id }).execute();
       const profile = await m.findOneBy(DistributorProfile, { userId: seller.distributorId });
       const holdMin = profile?.holdMinutes ?? 30;
+      // Booking fee on top, when the event charges B2B sellers (admin switch).
+      const feePaise = B2bService.feeOn(await this.b2bFeeFor(event), unit * dto.quantity, dto.quantity);
       let order = await m.save(m.create(B2bOrder, {
         code: orderCode(), distributorId: seller.distributorId, resellerId: userId, eventId: event.id, tierId: tier.id, quantity: dto.quantity,
         unitPricePaise: unit, b2bRatePaise: tier.b2bPricePaise, b2bPct: commercialOf(event).b2bPct, listPricePaise: list,
-        totalPaise: unit * dto.quantity, recipients, status: 'awaiting_payment', utr: null, bookingIds: [],
+        totalPaise: unit * dto.quantity + feePaise, feePaise, recipients, status: 'awaiting_payment', utr: null, bookingIds: [],
         issuedAt: null, paidAt: null, expiresAt: seller.trusted ? null : new Date(Date.now() + holdMin * 60_000),
       }));
       if (seller.trusted) {
@@ -209,8 +247,19 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       return { order, event, tier, profile, sellerName: who };
     });
     let { order } = made;
-    // Distributor on YouPI: open a payment session so the money confirms itself.
-    const youpi = order.status === 'awaiting_payment' ? await this.youpiFor(order.distributorId) : null;
+    // Distributor on Razorpay (preferred) or YouPI: the payment confirms itself, no UTR.
+    const rzp = order.status === 'awaiting_payment' ? await this.razorpayFor(order.distributorId) : null;
+    const youpi = order.status === 'awaiting_payment' && !rzp ? await this.youpiFor(order.distributorId) : null;
+    if (rzp) {
+      try {
+        const r = await rzp.createOrder(order.id, order.totalPaise, { code: order.code, notes: { kind: 'b2b', orderId: order.id, code: order.code } });
+        await this.ds.getRepository(B2bOrder).update({ id: order.id }, { gateway: 'razorpay', gatewayRef: r.orderRef });
+        order = Object.assign(order, { gateway: 'razorpay' as const, gatewayRef: r.orderRef });
+      } catch (e) {
+        // Razorpay down: the seller can still pay the UPI ID and enter the UTR.
+        this.log.warn(`Razorpay order for ${order.code} failed: ${(e as Error).message}`);
+      }
+    }
     if (youpi) {
       try {
         const sellerUser = await this.ds.getRepository(User).findOne({ where: { id: userId }, select: ['id', 'phone', 'name'] });
@@ -220,8 +269,8 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
           customer: { name: made.sellerName, phoneNumber: sellerUser?.phone },
           metadata: { kind: 'b2b', orderId: order.id },
         });
-        await this.ds.getRepository(B2bOrder).update({ id: order.id }, { gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
-        order = Object.assign(order, { gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
+        await this.ds.getRepository(B2bOrder).update({ id: order.id }, { gateway: 'youpi', gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
+        order = Object.assign(order, { gateway: 'youpi' as const, gatewayRef: p.paymentId, checkoutUrl: p.checkoutUrl });
       } catch (e) {
         // YouPI down: the seller can still pay the UPI ID and enter the UTR.
         this.log.warn(`YouPI session for ${order.code} failed: ${(e as Error).message}`);
@@ -248,7 +297,7 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
     if (utr && !o.utr) await this.ds.getRepository(B2bOrder).update({ id: o.id }, { utr });
     await this.confirm(o.distributorId, o.id);
     await this.ds.transaction((m) => notify(m, o.distributorId, 'booking', 'Payment received',
-      `Order ${o.code}: ${this.rupees(o.totalPaise)} reached your UPI${utr ? ` (ref ${utr})` : ''}. Tickets sent automatically.`, { eventId: o.eventId }));
+      `Order ${o.code}: ${this.rupees(o.totalPaise)} received${utr ? ` (ref ${utr})` : ''}. Tickets sent automatically.`, { eventId: o.eventId }));
     return o;
   }
 
@@ -259,6 +308,7 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
   async paySession(userId: string, orderId: string) {
     const o = await this.ds.getRepository(B2bOrder).findOneBy({ id: orderId, resellerId: userId });
     if (!o) throw new ApiError('NOT_FOUND', 'Order not found');
+    if (o.gateway === 'razorpay') return this.checkPayment(userId, orderId); // the same Razorpay order stays payable
     const youpi = await this.youpiFor(o.distributorId);
     if (youpi && ['awaiting_payment', 'payment_submitted'].includes(o.status)) {
       const last = o.gatewayRef ? await youpi.getPayment(o.gatewayRef).catch(() => null) : null;
@@ -277,11 +327,36 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
     return this.orderView(fresh, null, null, profile);
   }
 
+  /**
+   * The seller paid in Razorpay's checkout: check the signature and the
+   * payment with Razorpay (amount, order, captured), then issue the tickets.
+   */
+  async confirmRazorpay(userId: string, orderId: string, payload: Record<string, unknown>) {
+    const o = await this.ds.getRepository(B2bOrder).findOneBy({ id: orderId, resellerId: userId });
+    if (!o) throw new ApiError('NOT_FOUND', 'Order not found');
+    const rzp = o.gateway === 'razorpay' && o.gatewayRef ? await this.razorpayFor(o.distributorId) : null;
+    if (!rzp) throw new ApiError('VALIDATION_ERROR', 'This order isn’t paid through Razorpay');
+    if (o.status !== 'paid') {
+      let r;
+      try {
+        r = await rzp.verifyClientPayment({ id: o.id, orderRef: o.gatewayRef!, totalPaise: o.totalPaise }, payload);
+      } catch (e) {
+        this.log.error(`Razorpay verify failed for ${o.code}: ${(e as Error).message}`);
+        throw new ApiError('SERVER_ERROR', 'Couldn’t confirm the payment yet. If money left your account, the tickets go out by themselves shortly.');
+      }
+      if (!r.ok) throw new ApiError('PAYMENT_FAILED', r.reason);
+      await this.confirmByGateway(o.gatewayRef!, o.totalPaise, r.paymentId);
+    }
+    const fresh = await this.ds.getRepository(B2bOrder).findOneByOrFail({ id: o.id });
+    const profile = await this.ds.getRepository(DistributorProfile).findOneBy({ userId: fresh.distributorId });
+    return this.orderView(fresh, null, null, profile);
+  }
+
   /** The seller's app asks whether YouPI has seen the payment yet. */
   async checkPayment(userId: string, orderId: string) {
     const o = await this.ds.getRepository(B2bOrder).findOneBy({ id: orderId, resellerId: userId });
     if (!o) throw new ApiError('NOT_FOUND', 'Order not found');
-    const youpi = o.gatewayRef ? await this.youpiFor(o.distributorId) : null;
+    const youpi = o.gatewayRef && o.gateway !== 'razorpay' ? await this.youpiFor(o.distributorId) : null;
     if (youpi && ['awaiting_payment', 'payment_submitted', 'expired'].includes(o.status)) {
       const p = await youpi.getPayment(o.gatewayRef!).catch(() => null);
       if (p && youpiOutcome(p.status, config().payment.youpiAccept) === 'paid') await this.confirmByGateway(p.paymentId, p.amountPaise);
@@ -455,12 +530,15 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
       : null;
     return {
       id: o.id, code: o.code, status: o.status, eventId: o.eventId, eventTitle: event?.title ?? null, tierId: o.tierId, tierName: tier?.name ?? null,
-      quantity: o.quantity, unitPricePaise: o.unitPricePaise, totalPaise: o.totalPaise, listPricePaise: o.listPricePaise,
+      quantity: o.quantity, unitPricePaise: o.unitPricePaise, feePaise: o.feePaise ?? 0, totalPaise: o.totalPaise, listPricePaise: o.listPricePaise,
       recipients: o.recipients, utr: o.utr, createdAt: o.createdAt?.toISOString() ?? null, expiresAt: o.expiresAt?.toISOString() ?? null,
       issuedAt: o.issuedAt?.toISOString() ?? null, paidAt: o.paidAt?.toISOString() ?? null,
       payTo: profile ? { upiId: profile.upiId, payeeName: profile.payeeName, upiUri: pay, checkoutUrl: o.checkoutUrl ?? null } : undefined,
-      /** Payment confirms itself (YouPI watches the distributor's UPI). */
+      /** Payment confirms itself (Razorpay, or YouPI watching the distributor's UPI). */
       autoConfirm: !!o.gatewayRef,
+      gateway: o.gateway ?? null,
+      /** Razorpay checkout for the seller's app (public key id + order id; never a secret). */
+      razorpay: o.gateway === 'razorpay' && o.gatewayRef && this.razorpay ? { keyId: this.razorpay.keyId, orderId: o.gatewayRef } : null,
     };
   }
 
@@ -504,6 +582,8 @@ export class B2bService implements OnModuleInit, OnModuleDestroy {
         unpaidBySellersPaise: toCollect,
         awaitingConfirmationPaise: toConfirm,
         marginPaise: issued.reduce((n, o) => n + (o.unitPricePaise - o.b2bRatePaise) * o.quantity, 0),
+        /** Booking fees sellers paid with their orders: GatePass's, to hand over. */
+        bookingFeesPaise: issued.reduce((n, o) => n + (o.feePaise ?? 0), 0),
         sellers: bySeller,
       };
     });

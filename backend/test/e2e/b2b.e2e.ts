@@ -146,7 +146,7 @@ describe('B2B channel, roles and event terms (e2e)', () => {
     });
     // Organiser and admin settlement: the B2B line, without the distributor's margin.
     const st = (await as(org).get(`organiser/events/${eventId}/settlement`).expect(200)).body.data;
-    expect(st.b2b).toEqual({ tickets: 5, distributorOwesOrganiserPaise: 375000, commissionPaise: 37500 });
+    expect(st.b2b).toEqual({ tickets: 5, distributorOwesOrganiserPaise: 375000, commissionPaise: 37500, bookingFeesPaise: 0 });
     expect(JSON.stringify(st)).not.toContain('margin');
     expect((await as(admin).get(`admin/events/${eventId}/settlement`).expect(200)).body.data.organiserPaysGatepassPaise).toBe(37500);
   });

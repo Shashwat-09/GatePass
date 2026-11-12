@@ -1,5 +1,7 @@
 # 15. Payments with YouPI (self-hosted UPI)
 
+> **Decision (v0.14):** GatePass uses **Razorpay** for customer checkout and for B2B seller payments (docs/17). YouPI stays in the code as an option.
+
 GatePass can take payments through **YouPI** (github.com/youpi-pg/youpi-pg), a self-hosted UPI gateway, instead of Razorpay. It is used in two places:
 
 | Where | Whose UPI | Turned on by |

@@ -107,6 +107,8 @@ export interface FeeConfig {
   gstIncluded: boolean;
   /** 'fee' = GST only on the booking fee (legacy); 'fee_and_tickets' = on everything. */
   gstOn: 'fee' | 'fee_and_tickets';
+  /** 'organiser': the fee isn't charged to the customer; it (and its GST) comes off the organiser's payout. */
+  paidBy?: 'customer' | 'organiser';
 }
 
 export interface Line {
@@ -122,7 +124,10 @@ export interface Quote {
   promoDiscountPaise: number;
   discountPaise: number;
   netPaise: number;
+  /** Booking fee the customer pays (0 when the organiser absorbs it). */
   feePaise: number;
+  /** Booking fee + its GST absorbed by the organiser (0 when the customer pays). */
+  absorbedFeePaise: number;
   gst: { type: 'cgst_sgst' | 'igst'; ratePct: number; cgstPaise: number; sgstPaise: number; igstPaise: number; included: boolean };
   taxPaise: number;
   totalPaise: number;
@@ -164,12 +169,17 @@ export function quote(
   const net = Math.max(0, base - offerD - promoD);
   const qty = lines.reduce((s, l) => s + l.qty, 0);
 
-  let feeP = 0;
-  if (net > 0) feeP = fee.type === 'percentage' ? Math.round((net * fee.value) / 100) : fee.value * qty;
+  let fullFee = 0;
+  if (net > 0) fullFee = fee.type === 'percentage' ? Math.round((net * fee.value) / 100) : fee.value * qty;
+  const absorbed = fee.paidBy === 'organiser';
+  const feeP = absorbed ? 0 : fullFee;
+  const gstOf = (amount: number) => (fee.gstIncluded
+    ? amount - Math.round((amount * 100) / (100 + fee.gstPct))
+    : Math.round((amount * fee.gstPct) / 100));
   const taxable = fee.gstOn === 'fee' ? feeP : net + feeP;
-  const gstTotal = fee.gstIncluded
-    ? taxable - Math.round((taxable * 100) / (100 + fee.gstPct))
-    : Math.round((taxable * fee.gstPct) / 100);
+  const gstTotal = gstOf(taxable);
+  // What the organiser gives up instead: the fee plus the GST on it.
+  const absorbedFeePaise = absorbed ? fullFee + (fee.gstIncluded ? 0 : gstOf(fullFee)) : 0;
   const cgst = opts.intraState ? Math.floor(gstTotal / 2) : 0;
   const sgst = opts.intraState ? gstTotal - cgst : 0;
   const igst = opts.intraState ? 0 : gstTotal;
@@ -180,7 +190,7 @@ export function quote(
   if (total - coins > 0 && total - coins < 100) coins = Math.max(0, total - 100);
   return {
     basePaise: base, offerDiscountPaise: offerD, promoDiscountPaise: promoD, discountPaise: offerD + promoD,
-    netPaise: net, feePaise: feeP,
+    netPaise: net, feePaise: feeP, absorbedFeePaise,
     gst: { type: opts.intraState ? 'cgst_sgst' : 'igst', ratePct: fee.gstPct, cgstPaise: cgst, sgstPaise: sgst, igstPaise: igst, included: fee.gstIncluded },
     taxPaise: gstTotal, totalPaise: total, coinsPaise: coins, payablePaise: total - coins, lineOfferDiscounts,
   };

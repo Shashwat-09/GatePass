@@ -206,6 +206,7 @@ class _EventScreenState extends State<EventScreen> {
         _sales(s),
         _tiers(_detail?.tiers ?? s.tiers),
         if (_detail != null) _b2b(_detail!),
+        if (_detail != null && _me.canManage) _bookingFee(_detail!),
         _actions(s),
         if (_detail != null) _terms(_detail!),
       ] else
@@ -383,6 +384,39 @@ class _EventScreenState extends State<EventScreen> {
     _toast(r.isOk ? 'Request sent to GatePass' : r.error!);
   }
 
+  /// Booking fee: the rate is GatePass's; who pays it the organiser can switch.
+  Widget _bookingFee(EventDetail d) {
+    final f = d.fee;
+    return InsetGroup(
+      header: 'Booking fee',
+      footer: f.organiserPays
+          ? 'Customers pay just the ticket price. The ${f.label} fee (plus GST) comes off your payout.'
+          : 'Customers pay a ${f.label} booking fee on top of the ticket price.',
+      children: [
+        GroupRow(title: 'Rate', value: f.label, subtitle: 'Set by GatePass'),
+        GroupRow(
+          title: 'I’ll pay the booking fee',
+          subtitle: 'Your customers see no fee',
+          chevron: false,
+          trailing: CupertinoSwitch(
+            key: const Key('fee-organiser-pays'),
+            value: f.organiserPays,
+            onChanged: (v) async {
+              Delight.tap();
+              final r = await Session.to.api.setFeePayer(_event.id, v ? 'organiser' : 'customer');
+              if (!mounted) return;
+              if (!r.isOk) {
+                Delight.error();
+                _toast(r.error!);
+              }
+              _load();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   /// The commercial terms GatePass set for this event: editable by admins.
   Widget _terms(EventDetail d) {
     final t = d.terms;
@@ -395,6 +429,7 @@ class _EventScreenState extends State<EventScreen> {
         GroupRow(title: 'B2B commission', value: _pct(t.b2bPct)),
         GroupRow(title: 'Free comps', value: t.compFree == null ? 'No limit' : '${t.compFree}'),
         GroupRow(title: 'Fee per extra comp', value: t.compFeePaise == 0 ? 'Needs approval' : formatPaise(t.compFeePaise)),
+        GroupRow(title: 'Booking fee', value: d.fee.label, subtitle: '${d.fee.organiserPays ? 'Organiser pays' : 'Customer pays'}${d.fee.b2b ? ' · B2B sellers pay it too' : ''}'),
         if (_me.isAdmin)
           GroupRow(
             icon: CupertinoIcons.pencil,

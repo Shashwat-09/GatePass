@@ -104,6 +104,10 @@ If an event doesn't allow B2B, nothing in this section applies. GatePass earns o
 
 A distributor can still confirm an expired order if the money arrived late. The stock is taken again if it's still there.
 
+## 4b. Paying without a UTR, and booking fees
+- **Razorpay (recommended):** with your own Razorpay account set up (`RAZORPAY_B2B_*`), sellers tap **Pay**, pay in any UPI app or by card, and the order confirms itself. No UTR. See docs/17.
+- **Booking fee for sellers:** an admin switch, as a default and per event. When on, the seller pays the event's booking fee % on top. You collect it and hand it to GatePass (Your Books › Booking fees collected).
+
 ## 5. Business notes for the owner
 - The distributor margin is personal income, outside GatePass's books. Keep it in a separate account. Agree in writing with the GatePass partners that this margin isn't shared.
 - Without YouPI, payments to a personal UPI ID are confirmed by hand (UTR check). With YouPI on your UPI ID (`YOUPI_B2B_*`, docs/15), seller payments confirm themselves: the seller taps **Pay**, pays in any UPI app, and the tickets go out when the money lands. The QR code and UTR stay as a fallback.

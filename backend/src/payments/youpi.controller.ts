@@ -86,3 +86,38 @@ export class PayReturnController {
 <h1>Payment sent</h1><p>Go back to the GatePass app. Your tickets appear as soon as the bank confirms, usually within a minute.</p></div></body></html>`);
   }
 }
+
+/**
+ * Webhook from the main distributor's own Razorpay account (RAZORPAY_B2B_*):
+ * a seller's payment confirms their order even if their app closed mid-way.
+ * Set it in that Razorpay account to <PUBLIC_BASE_URL>api/payment/razorpay/b2b-webhook.
+ */
+@Controller('payment/razorpay')
+export class RazorpayB2bWebhookController {
+  private readonly log = new Logger('Razorpay B2B');
+  constructor(private readonly ds: DataSource, private readonly b2b: B2bService) {}
+
+  @Post('b2b-webhook')
+  @HttpCode(200)
+  @SkipGlobalRateLimit()
+  async webhook(@Req() req: Request & { rawBody?: Buffer }, @Headers('x-razorpay-signature') sig?: string, @Headers('x-razorpay-event-id') eventId?: string) {
+    const raw = req.rawBody;
+    if (!raw || !this.b2b.razorpay || !this.b2b.razorpay.verifyWebhook(raw, sig)) {
+      this.log.warn('Rejected B2B webhook with an invalid signature');
+      throw new ApiError('UNAUTHENTICATED', 'Invalid signature');
+    }
+    const body = JSON.parse(raw.toString('utf8')) as {
+      event: string; payload?: { payment?: { entity?: { id: string; order_id: string; amount: number; status: string } } };
+    };
+    const pay = body.payload?.payment?.entity;
+    const id = `rzpb2b:${eventId || `${body.event}:${pay?.id ?? ''}`}`;
+    const inserted = await this.ds.createQueryBuilder().insert().into(PaymentEvent)
+      .values({ id, type: `razorpay_b2b.${body.event}`, payload: body as unknown as Record<string, unknown> } as QueryDeepPartialEntity<PaymentEvent>)
+      .orIgnore().returning('id').execute();
+    if (!(inserted.raw as unknown[]).length) return { duplicate: true };
+    if (pay && (body.event === 'payment.captured' || body.event === 'order.paid') && pay.status === 'captured') {
+      await this.b2b.confirmByGateway(pay.order_id, pay.amount, pay.id);
+    }
+    return { received: true };
+  }
+}

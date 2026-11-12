@@ -79,7 +79,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.13)
+## 9. Current status (v0.14)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Or YouPI (self-hosted UPI, docs/15). Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -108,11 +108,17 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ v0.12: Utsav brand moved into `packages/gatepass_ui` (palette, Fraunces + Inter, jaali) and applied to the Organiser app.
 - ✅ v0.12: **YouPI payments** (docs/15): `PAYMENT_GATEWAY=youpi` for customer checkout (hosted UPI page, `PAYMENT_PENDING` while the bank confirms, signed webhook), and `YOUPI_B2B_*` so seller payments to the distributor's UPI confirm themselves. Razorpay is still switchable. Read docs/15's limits before going live.
 - ✅ v0.13: **WhatsApp ticket messages** (docs/16): tickets sent to a number (shares, B2B, comps) also go out as a Meta Cloud API template message, from an outbox sent on commit with retries. The **View Tickets** button opens `/r/<id>`, then the app (`gatepass://open/<id>`) opens that ticket, after sign-in for new users.
+- ✅ v0.14: **Booking fee controls** (docs/17):
+  - admin sets the default rate any time (DB `platform_settings`, no redeploy), plus a per-event rate;
+  - who pays (customer, or organiser absorbing it off their payout) is switchable by the admin and the event's organiser;
+  - an admin switch makes B2B sellers pay the fee;
+  - settlement, books and the customer breakdown ("Booking fee: Free") follow.
+- ✅ v0.14: **Razorpay for B2B**: sellers pay the distributor's own Razorpay account in the Organiser app (`RAZORPAY_B2B_*`, verified server-side, plus a webhook). No UTR; QR + UTR is only a fallback. Razorpay is the recommended gateway for customers too.
 - 📋 Feature parity with the legacy apps and the next batches: `docs/10-Feature-Parity.md`.
 - ✅ Auth: random hashed OTP in Redis, rate limits, MSG91/Twilio providers; rotating refresh tokens with reuse detection; client refresh-on-401 + logout on failure; tokens in secure storage.
 - ✅ Hardening: config validation (no default secrets), helmet, CORS allowlist, Redis-backed rate limits, migrations (synchronize off), `/health`, Dockerfile, docker-compose, CI.
 - ✅ Store: account deletion (server erases PII), privacy/terms links, invoices, pagination, Crashlytics + Analytics (TRD §2.11 events, no ad ID), placeholder icon/splash.
-- ✅ Tests: backend 172 (unit + e2e on real Postgres, incl. a fake YouPI and WhatsApp), organiser app 44 + 54 screenshot renders + live organiser and B2B flows, client 83 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
+- ✅ Tests: backend 182 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 48 + 60 screenshot renders + live organiser and B2B flows, client 84 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ⬜ Next: Google Cloud Run deploy (Mumbai), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).

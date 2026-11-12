@@ -14,6 +14,7 @@ import { eventBadge } from '../events/event-status';
 import { istDate } from '../common/ist';
 import { FormResponseInput, FormsService } from '../forms/forms.service';
 import { queueTicketWhatsApp, usedApp } from '../messaging/outbox';
+import { effectiveFee, SettingsService } from '../settings/settings.service';
 import { notify } from '../notifications/notify';
 import { issueBookingVouchers } from '../vouchers/voucher-core';
 import { PaymentGateway, YouPiGateway } from '../payments/gateway';
@@ -94,6 +95,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     private readonly gateway: PaymentGateway,
     private readonly kv: KvStore,
     private readonly forms: FormsService,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit() {
@@ -153,7 +155,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           id, code: bookingCode(), userId, eventId: event.id, status: 'pending',
           basePaise: priced.q.basePaise, discountPaise: priced.q.discountPaise,
           offerDiscountPaise: priced.q.offerDiscountPaise, promoDiscountPaise: priced.q.promoDiscountPaise,
-          promoCodeId: priced.promo?.id ?? null, feePaise: priced.q.feePaise, taxPaise: priced.q.taxPaise,
+          promoCodeId: priced.promo?.id ?? null, feePaise: priced.q.feePaise, absorbedFeePaise: priced.q.absorbedFeePaise, taxPaise: priced.q.taxPaise,
           gst: priced.q.gst as unknown as Record<string, unknown>, billingState: priced.billingState,
           totalPaise: priced.q.totalPaise, coinsPaise: priced.q.coinsPaise, payablePaise: priced.q.payablePaise,
           gateway: priced.q.payablePaise === 0 ? 'none' : this.gateway.name, orderRef: '', txnId: null,
@@ -280,8 +282,10 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     if (opts.promoCode?.trim()) promo = await this.validPromo(m, opts.promoCode, event.id, user.id, lock);
 
     const cfg = config().pricing;
+    // The event's own fee settings, else the platform defaults (admin › Settings).
+    const eff = effectiveFee(event, await this.settings.fees());
     const fee: FeeConfig = {
-      type: event.feeType ?? cfg.feeType, value: event.feeValue ?? cfg.feePct,
+      type: eff.type, value: eff.value, paidBy: eff.paidBy,
       gstPct: cfg.gstPct, gstIncluded: cfg.gstIncluded, gstOn: cfg.gstOn,
     };
     const billingState = opts.billingState?.trim() || user.state || null;
@@ -331,7 +335,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
   private breakdown(q: Quote) {
     return {
       basePaise: q.basePaise, offerDiscountPaise: q.offerDiscountPaise, promoDiscountPaise: q.promoDiscountPaise,
-      discountPaise: q.discountPaise, feePaise: q.feePaise, gst: q.gst, taxPaise: q.taxPaise,
+      discountPaise: q.discountPaise, feePaise: q.feePaise, feePaidBy: q.absorbedFeePaise > 0 ? 'organiser' : 'customer', gst: q.gst, taxPaise: q.taxPaise,
       totalPaise: q.totalPaise, coinsPaise: q.coinsPaise, payablePaise: q.payablePaise, currency: 'INR',
     };
   }
@@ -340,7 +344,7 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     return {
       bookingId: b.id, bookingCode: b.code, bookingStatus: b.status,
       basePaise: b.basePaise, offerDiscountPaise: b.offerDiscountPaise, promoDiscountPaise: b.promoDiscountPaise,
-      discountPaise: b.discountPaise, feePaise: b.feePaise, gst: b.gst, taxPaise: b.taxPaise,
+      discountPaise: b.discountPaise, feePaise: b.feePaise, feePaidBy: b.absorbedFeePaise > 0 ? 'organiser' : 'customer', gst: b.gst, taxPaise: b.taxPaise,
       totalPaise: b.totalPaise, coinsPaise: b.coinsPaise, payablePaise: b.payablePaise, currency: 'INR',
       orderRef: b.orderRef, gateway: b.gateway,
       // Public SDK key (Razorpay key id) — never a secret.

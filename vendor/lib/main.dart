@@ -7,6 +7,8 @@ import 'app/app.dart';
 import 'app/session.dart';
 import 'core/api_client.dart';
 import 'core/config.dart';
+import 'core/demo_razorpay.dart';
+import 'core/razorpay_checkout.dart';
 import 'core/token_store.dart';
 import 'data/demo_api.dart';
 import 'data/models.dart';
@@ -23,6 +25,7 @@ Future<void> main() async {
   if (VendorConfig.demo) {
     // The demo opens as the owner's own account: admin and distributor.
     api = DemoVendorApi(role: Role.admin);
+    RazorpayCheckout.instance = DemoRazorpayCheckout(); // no money moves in the demo
     store = MemoryGateStore();
   } else {
     final tokens = SecureTokenStore();

@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../app/session.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
+import 'fee_settings_screen.dart';
 
 /// Admin: this event's commission per channel and the comp allowance.
 class TermsScreen extends StatefulWidget {
@@ -25,6 +26,9 @@ class _TermsScreenState extends State<TermsScreen> {
   late final _b2b = TextEditingController(text: _n(widget.terms.b2bPct));
   late final _free = TextEditingController(text: widget.terms.compFree?.toString() ?? '');
   late final _fee = TextEditingController(text: rupeesInput(widget.terms.compFeePaise == 0 ? null : widget.terms.compFeePaise));
+  late final _bookingFee = TextEditingController(text: widget.terms.feePct == null ? '' : fmtPct(widget.terms.feePct!));
+  late String? _payer = widget.terms.feePaidBy;
+  late bool? _b2bFee = widget.terms.b2bFee;
   bool _saving = false;
   String? _error;
 
@@ -32,7 +36,7 @@ class _TermsScreenState extends State<TermsScreen> {
 
   @override
   void dispose() {
-    for (final c in [_online, _box, _b2b, _free, _fee]) {
+    for (final c in [_online, _box, _b2b, _free, _fee, _bookingFee]) {
       c.dispose();
     }
     super.dispose();
@@ -59,13 +63,22 @@ class _TermsScreenState extends State<TermsScreen> {
       setState(() => _error = 'Check the fee per extra comp');
       return;
     }
+    final bf = _bookingFee.text.trim();
+    final bookingFee = bf.isEmpty ? null : double.tryParse(bf);
+    if (bf.isNotEmpty && (bookingFee == null || bookingFee < 0 || bookingFee > 25)) {
+      setState(() => _error = 'Booking fee is a percentage from 0 to 25 (empty = the default)');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     final r = await Session.to.api.setTerms(
       widget.event.id,
-      EventTerms(commissionPct: online, boxOfficePct: box, b2bPct: b2b, compFree: free, compFeePaise: fee),
+      EventTerms(
+        commissionPct: online, boxOfficePct: box, b2bPct: b2b, compFree: free, compFeePaise: fee,
+        feePct: bookingFee == null ? null : (bookingFee * 100).round() / 100, feePaidBy: _payer, b2bFee: _b2bFee,
+      ),
     );
     if (!mounted) return;
     setState(() {
@@ -92,6 +105,16 @@ class _TermsScreenState extends State<TermsScreen> {
           _field('B2B', _b2b, '%', const Key('t-b2b')),
         ]),
         InsetGroup(
+          header: 'Booking fee',
+          footer: 'Leave the rate empty to use your default${widget.terms.fee != null ? ' (now ${widget.terms.fee!.label})' : ''}. '
+              'Customer: added on top at checkout. Organiser: customers pay just the ticket price; the fee comes off the organiser’s payout. The organiser can also switch who pays.',
+          children: [
+            _field('Rate', _bookingFee, '%', const Key('t-booking-fee'), hint: 'Default'),
+            _choice<String?>('Paid by', _payer, const {null: 'Default', 'customer': 'Customer', 'organiser': 'Organiser'}, (v) => setState(() => _payer = v), const Key('t-payer')),
+            _choice<bool?>('B2B sellers pay it', _b2bFee, const {null: 'Default', true: 'Yes', false: 'No'}, (v) => setState(() => _b2bFee = v), const Key('t-b2b-fee')),
+          ],
+        ),
+        InsetGroup(
           header: 'Complimentary tickets',
           footer: 'Leave free comps empty for no limit. With no fee, comps beyond the allowance need your approval; with a fee, the organiser can issue them and pays the fee at settlement.',
           children: [
@@ -104,6 +127,27 @@ class _TermsScreenState extends State<TermsScreen> {
       ]),
     );
   }
+
+  Widget _choice<T>(String label, T value, Map<T, String> options, ValueChanged<T> onChanged, Key key) => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, 10, AppSpacing.md, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: context.text.bodyLarge),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoSlidingSegmentedControl<int>(
+              key: key,
+              groupValue: options.keys.toList().indexOf(value),
+              children: {for (var i = 0; i < options.length; i++) i: Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(options.values.elementAt(i)))},
+              onValueChanged: (i) {
+                if (i == null) return;
+                Delight.tap(sound: false);
+                onChanged(options.keys.elementAt(i));
+              },
+            ),
+          ),
+        ]),
+      );
 
   Widget _field(String label, TextEditingController ctl, String unit, Key key, {bool prefix = false, String hint = ''}) => Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 2, AppSpacing.md, 2),
@@ -185,6 +229,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
           GroupRow(title: 'Tickets', value: '${s.onlineTickets}'),
           GroupRow(title: 'Ticket revenue', value: formatPaise(s.onlineRevenue)),
           GroupRow(title: 'GatePass commission', value: '− ${formatPaise(s.onlineCommission)}'),
+          if (s.absorbedFees > 0) GroupRow(title: 'Booking fees you took on', subtitle: 'Fee + GST customers didn’t pay', value: '− ${formatPaise(s.absorbedFees)}'),
           GroupRow(title: 'Due to organiser', value: formatPaise(s.gatepassPaysOrganiser)),
         ]),
         InsetGroup(header: 'Box office (organiser collected)', children: [
@@ -196,6 +241,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
           GroupRow(title: 'Tickets', value: '${s.b2bTickets}'),
           GroupRow(title: 'Distributor owes the organiser', value: formatPaise(s.b2bOwed)),
           GroupRow(title: 'Commission due to GatePass', value: formatPaise(s.b2bCommission)),
+          if (s.b2bBookingFees > 0) GroupRow(title: 'Seller booking fees', subtitle: 'Collected by the distributor for GatePass', value: formatPaise(s.b2bBookingFees)),
         ]),
         InsetGroup(
           header: 'Complimentary',
@@ -294,6 +340,7 @@ class CompRequestsRow extends StatefulWidget {
 
 class _CompRequestsRowState extends State<CompRequestsRow> {
   int? _n;
+  FeeSettings? _fees;
   @override
   void initState() {
     super.initState();
@@ -302,7 +349,13 @@ class _CompRequestsRowState extends State<CompRequestsRow> {
 
   Future<void> _load() async {
     final r = await Session.to.api.compRequests();
-    if (mounted) setState(() => _n = r.data?.length);
+    final f = await Session.to.api.feeSettings();
+    if (mounted) {
+      setState(() {
+        _n = r.data?.length;
+        _fees = f.data;
+      });
+    }
   }
 
   @override
@@ -313,6 +366,16 @@ class _CompRequestsRowState extends State<CompRequestsRow> {
           value: _n == null ? null : (_n == 0 ? 'None' : '$_n waiting'),
           onTap: () async {
             await Get.to(() => const CompRequestsScreen());
+            _load();
+          },
+        ),
+        GroupRow(
+          key: const Key('booking-fees'),
+          icon: CupertinoIcons.percent,
+          title: 'Booking Fees',
+          value: _fees == null ? null : '${fmtPct(_fees!.defaultFeePct)}% · ${_fees!.defaultFeePaidBy == 'organiser' ? 'organiser pays' : 'customer pays'}',
+          onTap: () async {
+            await Get.to(() => const FeeSettingsScreen());
             _load();
           },
         ),

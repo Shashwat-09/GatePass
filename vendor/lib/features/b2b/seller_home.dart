@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/session.dart';
+import '../../core/razorpay_checkout.dart';
 import '../../core/format.dart';
 import '../../data/models.dart';
 import '../account/account_screen.dart';
@@ -217,6 +218,8 @@ class _BuyScreenState extends State<BuyScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(widget.event.title, style: context.text.titleLarge),
             Text('You pay ${formatPaise(t.yourPricePaise)} per ticket · ticket price ${formatPaise(t.listPricePaise)} · ${t.available} left', style: context.text.bodySmall),
+            if (widget.event.fee != null)
+              Text('+ ${widget.event.fee!.label} booking fee on your order', key: const Key('seller-fee-note'), style: context.text.bodySmall!.copyWith(color: c.accentText)),
           ]),
         ),
         for (var i = 0; i < _rows.length; i++) _row(i),
@@ -232,8 +235,10 @@ class _BuyScreenState extends State<BuyScreen> {
           Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0), child: Text(_error!, style: context.text.bodyMedium!.copyWith(color: c.danger))),
       ]),
       bottomNavigationBar: CheckoutBar(
-        caption: '$_qty ticket${_qty == 1 ? '' : 's'} · you pay',
-        amount: formatPaise(t.yourPricePaise * _qty),
+        caption: widget.event.fee == null
+            ? '$_qty ticket${_qty == 1 ? '' : 's'} · you pay'
+            : '$_qty ticket${_qty == 1 ? '' : 's'} + ${formatPaise(widget.event.feeOn(t.yourPricePaise * _qty, _qty))} fee',
+        amount: formatPaise(t.yourPricePaise * _qty + widget.event.feeOn(t.yourPricePaise * _qty, _qty)),
         button: PrimaryButton(
           key: const Key('place-order'),
           label: widget.trusted ? 'Send Tickets' : 'Order & Pay',
@@ -381,6 +386,48 @@ class _PayScreenState extends State<PayScreen> {
 
   B2bOrderView get o => _o;
 
+  /// Razorpay (the distributor's own account): pay in any UPI app or by card; no UTR.
+  Future<void> _payRazorpay() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final out = await RazorpayCheckout.instance.open(
+      keyId: _o.razorpayKeyId!,
+      orderId: _o.razorpayOrderId!,
+      amountPaise: _o.totalPaise,
+      name: _o.payeeName ?? 'Your distributor',
+      description: '${_o.quantity} × ${_o.tierName} · ${_o.code}',
+      phone: Session.to.me.value?.phone,
+    );
+    if (!mounted) return;
+    switch (out) {
+      case RazorpayCancelled():
+        setState(() => _busy = false);
+        return;
+      case RazorpayFailed(:final message):
+        Delight.error();
+        setState(() {
+          _busy = false;
+          _error = message;
+        });
+        return;
+      case RazorpayPaid(:final payload):
+        final r = await Session.to.api.confirmRazorpay(_o.id, payload);
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _error = r.error;
+          if (r.isOk) _o = r.data!;
+        });
+        if (r.isOk && _o.status == OrderStatus.paid) {
+          showSuccess(context, title: 'Paid', message: 'Tickets sent to ${_o.recipients.length} number${_o.recipients.length == 1 ? '' : 's'}.', kind: SuccessKind.sent);
+        } else if (!r.isOk) {
+          Delight.error();
+        }
+    }
+  }
+
   Future<void> _cancel() async {
     final r = await Session.to.api.cancelOrderAsSeller(_o.id);
     if (!mounted) return;
@@ -403,7 +450,19 @@ class _PayScreenState extends State<PayScreen> {
         Center(child: Text(formatPaise(o.totalPaise), style: context.text.displaySmall)),
         Center(child: Text('${o.quantity} × ${o.tierName} · ${o.eventTitle}', textAlign: TextAlign.center, style: context.text.bodyMedium!.copyWith(color: c.secondaryLabel))),
         const SizedBox(height: AppSpacing.md),
-        if (waiting && o.autoConfirm) ...[
+        if (waiting && o.gateway == 'razorpay' && o.razorpayOrderId != null) ...[
+          if (o.feePaise > 0)
+            Center(child: Text('Includes ${formatPaise(o.feePaise)} booking fee', key: const Key('order-fee'), style: context.text.bodySmall)),
+          const SizedBox(height: AppSpacing.md),
+          PrimaryButton(key: const Key('pay-razorpay'), label: 'Pay ${formatPaise(o.totalPaise)}', loading: _busy, onPressed: _busy ? null : _payRazorpay),
+          const SizedBox(height: 6),
+          Center(
+            child: Text('GPay, PhonePe, Paytm, any UPI app or card. Tickets go out the moment it’s paid.',
+                textAlign: TextAlign.center, style: context.text.bodySmall!.copyWith(color: c.secondaryLabel)),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Center(child: TextButton(onPressed: _cancel, child: Text('Cancel Order', style: TextStyle(color: c.danger)))),
+        ] else if (waiting && o.autoConfirm) ...[
           // YouPI watches the distributor's UPI: no UTR, no waiting for a manual check.
           PrimaryButton(key: const Key('pay-online'), label: 'Pay ${formatPaise(o.totalPaise)}', loading: _busy, onPressed: _busy ? null : _payOnline),
           const SizedBox(height: 6),
@@ -415,7 +474,7 @@ class _PayScreenState extends State<PayScreen> {
           Text('PAID ANOTHER WAY?', style: context.eyebrow),
           const SizedBox(height: AppSpacing.sm),
         ],
-        if (waiting && o.upiUri != null) ...[
+        if (waiting && o.upiUri != null && o.gateway != 'razorpay') ...[
           Center(
             child: Semantics(
               label: 'UPI QR code for ${formatPaise(o.totalPaise)}',
@@ -463,7 +522,7 @@ class _PayScreenState extends State<PayScreen> {
           const SizedBox(height: AppSpacing.md),
           PrimaryButton(key: const Key('paid'), label: 'I’ve Paid', loading: _busy, onPressed: _busy || _utr.text.trim().length < 6 ? null : _paid),
           TextButton(onPressed: _cancel, child: Text('Cancel Order', style: TextStyle(color: c.danger))),
-        ] else ...[
+        ] else if (!(waiting && o.gateway == 'razorpay')) ...[
           InsetGroup(margin: EdgeInsets.zero, children: [
             GroupRow(title: 'Status', value: o.statusLabel),
             if (o.utr != null) GroupRow(title: 'UPI reference', value: o.utr),

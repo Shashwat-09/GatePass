@@ -138,14 +138,21 @@ class TierInfo {
 }
 
 class EventDetail {
-  const EventDetail({required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms()});
+  const EventDetail({required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms(), this.fee = const FeeRule()});
   factory EventDetail.fromJson(Map j) => EventDetail(
         event: OrgEvent.fromJson(j),
         statusNote: j['statusNote']?.toString(),
         tiers: [for (final t in (j['tiers'] as List? ?? const [])) TierInfo.fromJson(t as Map)],
         b2bEnabled: j['b2bEnabled'] == true,
-        terms: j['commercial'] is Map ? EventTerms.fromJson(j['commercial'] as Map) : const EventTerms(),
+        // The event's own fee fields sit next to `commercial`; Edit Terms needs them together.
+        terms: EventTerms.fromJson({
+          ...(j['commercial'] is Map ? j['commercial'] as Map : const {}),
+          'feePct': j['feePct'], 'feePaidBy': j['feePaidBy'], 'b2bFee': j['b2bFee'], 'fee': j['fee'],
+        }),
+        fee: j['fee'] is Map ? FeeRule.fromJson(j['fee'] as Map) : const FeeRule(),
       );
+  /// The booking fee that applies (rate set by GatePass; who pays: the organiser can switch).
+  final FeeRule fee;
   final OrgEvent event;
   final List<TierInfo> tiers;
   final String? statusNote;
@@ -153,29 +160,93 @@ class EventDetail {
   final EventTerms terms;
 }
 
+/// The booking fee that applies to an event: rate, who pays it, and whether B2B sellers pay it.
+class FeeRule {
+  const FeeRule({this.type = 'percentage', this.value = 0, this.paidBy = 'customer', this.b2b = false});
+  factory FeeRule.fromJson(Map j) => FeeRule(
+        type: _str(j['type']).isEmpty ? 'percentage' : _str(j['type']),
+        value: (j['value'] as num?)?.toDouble() ?? 0,
+        paidBy: _str(j['paidBy']).isEmpty ? 'customer' : _str(j['paidBy']),
+        b2b: j['b2b'] == true,
+      );
+  final String type; // percentage | fixed_per_ticket
+  /// % (percentage) or paise per ticket.
+  final double value;
+  final String paidBy; // customer | organiser
+  final bool b2b;
+  bool get organiserPays => paidBy == 'organiser';
+  /// "5%" or "₹20 a ticket".
+  String get label => type == 'percentage' ? '${fmtPct(value)}%' : '₹${(value / 100).toStringAsFixed(0)} a ticket';
+}
+
+/// Platform fee defaults (admin › Booking Fees): change any time.
+class FeeSettings {
+  const FeeSettings({this.defaultFeePct = 3, this.defaultFeePaidBy = 'customer', this.b2bFeeDefault = false});
+  factory FeeSettings.fromJson(Map j) => FeeSettings(
+        defaultFeePct: (j['defaultFeePct'] as num?)?.toDouble() ?? 3,
+        defaultFeePaidBy: _str(j['defaultFeePaidBy']).isEmpty ? 'customer' : _str(j['defaultFeePaidBy']),
+        b2bFeeDefault: j['b2bFeeDefault'] == true,
+      );
+  final double defaultFeePct;
+  final String defaultFeePaidBy;
+  final bool b2bFeeDefault;
+  Map<String, dynamic> toJson() => {'defaultFeePct': defaultFeePct, 'defaultFeePaidBy': defaultFeePaidBy, 'b2bFeeDefault': b2bFeeDefault};
+  FeeSettings copyWith({double? defaultFeePct, String? defaultFeePaidBy, bool? b2bFeeDefault}) => FeeSettings(
+        defaultFeePct: defaultFeePct ?? this.defaultFeePct,
+        defaultFeePaidBy: defaultFeePaidBy ?? this.defaultFeePaidBy,
+        b2bFeeDefault: b2bFeeDefault ?? this.b2bFeeDefault,
+      );
+}
+
+/// "5", "2.5", "7.25" (no trailing zeros).
+String fmtPct(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+
 /// Commercial terms an admin sets per event (organisers read them).
 class EventTerms {
-  const EventTerms({this.commissionPct = 10, this.boxOfficePct = 10, this.b2bPct = 10, this.compFree, this.compFeePaise = 0});
+  const EventTerms({this.commissionPct = 10, this.boxOfficePct = 10, this.b2bPct = 10, this.compFree, this.compFeePaise = 0, this.feePct, this.feePaidBy, this.b2bFee, this.fee});
   factory EventTerms.fromJson(Map j) => EventTerms(
         commissionPct: (j['commissionPct'] as num?)?.toDouble() ?? 10,
         boxOfficePct: (j['boxOfficePct'] as num?)?.toDouble() ?? 10,
         b2bPct: (j['b2bPct'] as num?)?.toDouble() ?? 10,
         compFree: j['compFree'] == null ? null : _int(j['compFree']),
         compFeePaise: _int(j['compFeePaise']),
+        feePct: (j['feePct'] as num?)?.toDouble(),
+        feePaidBy: j['feePaidBy']?.toString(),
+        b2bFee: j['b2bFee'] as bool?,
+        fee: j['fee'] is Map ? FeeRule.fromJson(j['fee'] as Map) : null,
       );
+  /// This event's own booking fee % (null = the platform default).
+  final double? feePct;
+  /// customer | organiser (null = platform default).
+  final String? feePaidBy;
+  /// B2B sellers pay the booking fee (null = platform default).
+  final bool? b2bFee;
+  /// What applies now.
+  final FeeRule? fee;
   final double commissionPct;
   final double boxOfficePct;
   final double b2bPct;
   /// Free comps; null = no limit.
   final int? compFree;
   final int compFeePaise;
-  Map<String, dynamic> toJson() => {'commissionPct': commissionPct, 'boxOfficePct': boxOfficePct, 'b2bPct': b2bPct, 'compFree': compFree, 'compFeePaise': compFeePaise};
-  EventTerms copyWith({double? commissionPct, double? boxOfficePct, double? b2bPct, int? compFree, bool clearCompFree = false, int? compFeePaise}) => EventTerms(
+  Map<String, dynamic> toJson() => {
+        'commissionPct': commissionPct, 'boxOfficePct': boxOfficePct, 'b2bPct': b2bPct, 'compFree': compFree, 'compFeePaise': compFeePaise,
+        'feePct': feePct, 'feePaidBy': feePaidBy, 'b2bFee': b2bFee,
+      };
+  EventTerms copyWith({
+    double? commissionPct, double? boxOfficePct, double? b2bPct, int? compFree, bool clearCompFree = false, int? compFeePaise,
+    double? feePct, bool clearFeePct = false, String? feePaidBy, bool clearFeePaidBy = false, bool? b2bFee, bool clearB2bFee = false, FeeRule? fee,
+  }) =>
+      EventTerms(
         commissionPct: commissionPct ?? this.commissionPct,
         boxOfficePct: boxOfficePct ?? this.boxOfficePct,
         b2bPct: b2bPct ?? this.b2bPct,
         compFree: clearCompFree ? null : compFree ?? this.compFree,
         compFeePaise: compFeePaise ?? this.compFeePaise,
+        feePct: clearFeePct ? null : feePct ?? this.feePct,
+        feePaidBy: clearFeePaidBy ? null : feePaidBy ?? this.feePaidBy,
+        b2bFee: clearB2bFee ? null : b2bFee ?? this.b2bFee,
+        fee: fee ?? this.fee,
       );
 }
 
@@ -211,6 +282,10 @@ class Settlement {
   int get onlineRevenue => _p('online', 'revenuePaise');
   int get onlineCommission => _p('online', 'commissionPaise');
   int get bookingFees => _p('online', 'bookingFeesPaise');
+  /// Booking fees (+ GST) the organiser took on instead of customers.
+  int get absorbedFees => _p('online', 'absorbedFeesPaise');
+  /// Booking fees B2B sellers paid (the distributor hands these to GatePass).
+  int get b2bBookingFees => _p('b2b', 'bookingFeesPaise');
   int get boxTickets => _p('boxOffice', 'tickets');
   int get boxRevenue => _p('boxOffice', 'revenuePaise');
   int get boxCommission => _p('boxOffice', 'commissionPaise');
@@ -310,10 +385,19 @@ class SellerTier {
 }
 
 class SellerEvent {
-  const SellerEvent({required this.id, required this.title, required this.venueName, this.startDate, this.tiers = const []});
+  const SellerEvent({required this.id, required this.title, required this.venueName, this.startDate, this.tiers = const [], this.fee});
   factory SellerEvent.fromJson(Map j) => SellerEvent(
         id: _str(j['id']), title: _str(j['title']), venueName: _str(j['venueName']), startDate: _date(j['startDate']),
-        tiers: [for (final t in (j['tiers'] as List? ?? const [])) SellerTier.fromJson(t as Map)]);
+        tiers: [for (final t in (j['tiers'] as List? ?? const [])) SellerTier.fromJson(t as Map)],
+        fee: j['fee'] is Map ? FeeRule.fromJson(j['fee'] as Map) : null);
+  /// Booking fee added to the seller's orders (null: none).
+  final FeeRule? fee;
+  /// The fee on an order of [subtotalPaise] for [qty] tickets (same rounding as the server).
+  int feeOn(int subtotalPaise, int qty) {
+    final f = fee;
+    if (f == null) return 0;
+    return f.type == 'percentage' ? (subtotalPaise * f.value / 100).round() : (f.value * qty).round();
+  }
   final String id;
   final String title;
   final String venueName;
@@ -371,6 +455,7 @@ class B2bOrderView {
     required this.id, required this.code, required this.status, required this.quantity, required this.unitPricePaise, required this.totalPaise,
     this.eventTitle = '', this.tierName = '', this.listPricePaise = 0, this.recipients = const [], this.utr, this.createdAt, this.expiresAt,
     this.upiUri, this.upiId, this.payeeName, this.sellerName, this.sellerPhone, this.checkoutUrl, this.autoConfirm = false,
+    this.feePaise = 0, this.gateway, this.razorpayKeyId, this.razorpayOrderId,
   });
   factory B2bOrderView.fromJson(Map j) {
     final pay = j['payTo'] as Map?;
@@ -384,8 +469,18 @@ class B2bOrderView {
       upiUri: pay?['upiUri']?.toString(), upiId: pay?['upiId']?.toString(), payeeName: pay?['payeeName']?.toString(),
       sellerName: seller?['name']?.toString(), sellerPhone: seller?['phone']?.toString(),
       checkoutUrl: pay?['checkoutUrl']?.toString(), autoConfirm: j['autoConfirm'] == true,
+      feePaise: _int(j['feePaise']), gateway: j['gateway']?.toString(),
+      razorpayKeyId: (j['razorpay'] as Map?)?['keyId']?.toString(), razorpayOrderId: (j['razorpay'] as Map?)?['orderId']?.toString(),
     );
   }
+
+  /// Booking fee included in [totalPaise].
+  final int feePaise;
+  /// razorpay | youpi | null (UPI + UTR).
+  final String? gateway;
+  /// Razorpay checkout (public key id + order id; never a secret).
+  final String? razorpayKeyId;
+  final String? razorpayOrderId;
 
   /// YouPI checkout page (the distributor's UPI is watched; payment confirms itself).
   final String? checkoutUrl;
@@ -435,14 +530,17 @@ class DistributorEventReport {
   const DistributorEventReport({
     required this.eventId, required this.title, this.startDate, required this.tickets, required this.owedToOrganiserPaise,
     required this.gatepassCommissionPaise, required this.organiserKeepsPaise, required this.collectedPaise, required this.unpaidBySellersPaise,
-    required this.awaitingConfirmationPaise, required this.marginPaise, this.sellers = const [],
+    required this.awaitingConfirmationPaise, required this.marginPaise, this.bookingFeesPaise = 0, this.sellers = const [],
   });
+  /// Booking fees sellers paid with their orders: GatePass's, to hand over.
+  final int bookingFeesPaise;
   factory DistributorEventReport.fromJson(Map j) => DistributorEventReport(
         eventId: _str(j['eventId']), title: _str(j['title']), startDate: _date(j['startDate']), tickets: _int(j['tickets']),
         owedToOrganiserPaise: _int(j['owedToOrganiserPaise']), gatepassCommissionPaise: _int(j['gatepassCommissionPaise']),
         organiserKeepsPaise: _int(j['organiserKeepsPaise']), collectedPaise: _int(j['collectedPaise']),
         unpaidBySellersPaise: _int(j['unpaidBySellersPaise']), awaitingConfirmationPaise: _int(j['awaitingConfirmationPaise']),
         marginPaise: _int(j['marginPaise']),
+        bookingFeesPaise: _int(j['bookingFeesPaise']),
         sellers: [
           for (final s in (j['sellers'] as List? ?? const []))
             SellerShare(name: (s as Map)['name']?.toString(), tickets: _int(s['tickets']), soldPaise: _int(s['soldPaise']), marginPaise: _int(s['marginPaise']), unpaidPaise: _int(s['unpaidPaise'])),

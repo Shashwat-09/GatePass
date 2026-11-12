@@ -46,6 +46,11 @@ abstract class VendorApi {
   // ── admin ──
   Future<ApiResult<EventTerms>> terms(String eventId);
   Future<ApiResult<EventTerms>> setTerms(String eventId, EventTerms terms);
+  /// Admin: platform booking-fee defaults (rate, who pays, B2B sellers).
+  Future<ApiResult<FeeSettings>> feeSettings();
+  Future<ApiResult<FeeSettings>> setFeeSettings(FeeSettings s);
+  /// Organiser/admin: who pays this event's booking fee ('customer' | 'organiser'; null = default).
+  Future<ApiResult<void>> setFeePayer(String eventId, String? paidBy);
   Future<ApiResult<List<CompRequestItem>>> compRequests({String status = 'pending'});
   Future<ApiResult<void>> decideCompRequest(String id, bool approve);
 
@@ -74,6 +79,8 @@ abstract class VendorApi {
   Future<ApiResult<B2bOrderView>> paySession(String orderId);
   /// One order, checking with YouPI whether the money has arrived.
   Future<ApiResult<B2bOrderView>> sellerOrder(String orderId);
+  /// Razorpay: the checkout result, verified by the server before tickets go out.
+  Future<ApiResult<B2bOrderView>> confirmRazorpay(String orderId, Map<String, dynamic> payload);
 }
 
 class HttpVendorApi implements VendorApi {
@@ -294,4 +301,18 @@ class HttpVendorApi implements VendorApi {
   @override
   Future<ApiResult<B2bOrderView>> sellerOrder(String orderId) async =>
       (await _api.request('api/reseller/orders/$orderId')).map((d) => B2bOrderView.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<FeeSettings>> feeSettings() async => (await _api.request('api/admin/settings/fees')).map((d) => FeeSettings.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<FeeSettings>> setFeeSettings(FeeSettings s) async =>
+      (await _api.request('api/admin/settings/fees', method: Method.put, body: s.toJson())).map((d) => FeeSettings.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<void>> setFeePayer(String eventId, String? paidBy) => _void('api/organiser/events/$eventId', Method.put, {'feePaidBy': paidBy});
+
+  @override
+  Future<ApiResult<B2bOrderView>> confirmRazorpay(String orderId, Map<String, dynamic> payload) async =>
+      (await _api.request('api/reseller/orders/$orderId/razorpay', method: Method.post, body: payload)).map((d) => B2bOrderView.fromJson(d as Map));
 }

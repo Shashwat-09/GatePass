@@ -57,6 +57,18 @@ export interface EventCommercial {
   /** Fee per comp beyond the free allowance (0 = extra comps need admin approval). */
   compFeePaise: number;
 }
+/** 'customer': added on top at checkout. 'organiser': absorbed, taken from the organiser's payout. */
+export type FeePayer = 'customer' | 'organiser';
+
+/** Platform-wide fee settings (admin › Settings): change any time, no redeploy. */
+export interface FeeSettings {
+  /** Default booking fee % for events without their own (usually 1–10). */
+  defaultFeePct: number;
+  defaultFeePaidBy: FeePayer;
+  /** Charge B2B sellers the booking fee by default. */
+  b2bFeeDefault: boolean;
+}
+
 export const DEFAULT_COMMERCIAL: EventCommercial = { commissionPct: 10, boxOfficePct: 10, b2bPct: 10, compFree: null, compFeePaise: 0 };
 
 @Entity('users')
@@ -165,6 +177,12 @@ export class EventEntity {
   @Column({ type: 'jsonb', nullable: true }) commercial!: EventCommercial | null;
   /** The organiser allows selling through B2B sellers (distributor channel). */
   @Column({ default: false }) b2bEnabled!: boolean;
+  /** Booking fee % for this event (admin); null = the platform default (admin › Settings). */
+  @Column({ type: 'real', nullable: true }) feePct!: number | null;
+  /** Who pays the booking fee (admin or the event's organiser); null = platform default. */
+  @Column({ type: 'varchar', nullable: true }) feePaidBy!: FeePayer | null;
+  /** Charge B2B sellers the booking fee on their orders (admin); null = platform default. */
+  @Column({ type: 'boolean', nullable: true }) b2bFee!: boolean | null;
 }
 
 @Entity('artists')
@@ -415,6 +433,8 @@ export class Booking {
   @Column({ default: 0 }) promoDiscountPaise!: number;
   @Column({ type: 'uuid', nullable: true }) promoCodeId!: string | null;
   @Column({ default: 0 }) feePaise!: number;
+  /** Booking fee (+ its GST) the organiser absorbed instead of the customer; comes off their payout. */
+  @Column({ default: 0 }) absorbedFeePaise!: number;
   @Column({ default: 0 }) taxPaise!: number;
   @Column({ type: 'jsonb', nullable: true }) gst!: Record<string, unknown> | null;
   @Column({ type: 'varchar', nullable: true }) billingState!: string | null;
@@ -860,11 +880,24 @@ export class B2bOrder {
   @Column({ type: 'timestamptz', nullable: true }) issuedAt!: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) paidAt!: Date | null;
   @Column({ type: 'timestamptz', nullable: true }) expiresAt!: Date | null;
+  /** Booking fee on this order (when the event charges B2B sellers the fee); included in totalPaise. */
+  @Column('int', { default: 0 }) feePaise!: number;
+  /** Which gateway takes this order's payment: 'razorpay' / 'youpi' (confirms itself) or null (UPI + UTR). */
+  @Column({ type: 'varchar', nullable: true }) gateway!: 'razorpay' | 'youpi' | null;
   /** YouPI payment id when the distributor's UPI is watched by YouPI (payment confirms itself). */
   @Index() @Column({ type: 'varchar', nullable: true }) gatewayRef!: string | null;
   /** YouPI hosted checkout page for the seller. */
   @Column({ type: 'varchar', nullable: true }) checkoutUrl!: string | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** Admin settings stored in the database (change without a redeploy), one JSON value per key. */
+@Entity('platform_settings')
+export class PlatformSetting {
+  @PrimaryColumn() key!: string;
+  @Column({ type: 'jsonb' }) value!: Record<string, unknown>;
+  @Column({ type: 'uuid', nullable: true }) updatedBy!: string | null;
+  @UpdateDateColumn({ type: 'timestamptz' }) updatedAt!: Date;
 }
 
 /**
@@ -894,7 +927,7 @@ export class OutboundMessage {
 
 export const ENTITIES = [
   City, AccountDeletion, User, RefreshToken, EventEntity, EventSession, Artist, EventArtist, EventSponsor, EventWatcher, Tier, SeatSection, SeatReservation,
-  Booking, Ticket, TicketTransfer, Notification, OutboundMessage, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
+  Booking, Ticket, TicketTransfer, Notification, OutboundMessage, PlatformSetting, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
   VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
   CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder,

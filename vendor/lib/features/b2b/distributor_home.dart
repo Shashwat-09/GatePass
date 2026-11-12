@@ -640,6 +640,8 @@ class _DistributorReportScreenState extends State<DistributorReportScreen> {
             GroupRow(title: 'Received', value: formatPaise(e.collectedPaise)),
             GroupRow(title: 'To confirm', value: formatPaise(e.awaitingConfirmationPaise)),
             GroupRow(title: 'Still unpaid', value: formatPaise(e.unpaidBySellersPaise)),
+            if (e.bookingFeesPaise > 0)
+              GroupRow(title: 'Booking fees collected', subtitle: 'GatePass’s share: hand over at settlement', value: formatPaise(e.bookingFeesPaise)),
           ]),
           InsetGroup(header: 'Your margin', footer: 'Only you see this.', children: [
             Padding(

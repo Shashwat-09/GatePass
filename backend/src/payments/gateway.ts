@@ -52,8 +52,20 @@ export class RazorpayGateway extends PaymentGateway {
   readonly name = 'razorpay';
   private readonly log = new Logger('Razorpay');
 
+  /** Another Razorpay account (e.g. the distributor's own, for B2B); default: GatePass's. */
+  constructor(private readonly creds?: { keyId: string; keySecret: string; webhookSecret: string }) {
+    super();
+  }
+
   private get cfg() {
-    return config().payment;
+    const p = config().payment;
+    return this.creds
+      ? { ...p, razorpayKeyId: this.creds.keyId, razorpayKeySecret: this.creds.keySecret, razorpayWebhookSecret: this.creds.webhookSecret }
+      : p;
+  }
+
+  get keyId() {
+    return this.cfg.razorpayKeyId!;
   }
 
   private async api<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -72,12 +84,12 @@ export class RazorpayGateway extends PaymentGateway {
     return json;
   }
 
-  async createOrder(bookingId: string, amountPaise: number): Promise<GatewayOrder> {
+  async createOrder(bookingId: string, amountPaise: number, info: { code?: string; description?: string; notes?: Record<string, string> } = {}): Promise<GatewayOrder> {
     const order = await this.api<{ id: string }>('POST', 'orders', {
       amount: amountPaise,
       currency: 'INR',
-      receipt: bookingId.slice(0, 40),
-      notes: { bookingId },
+      receipt: (info.code ?? bookingId).slice(0, 40),
+      notes: info.notes ?? { bookingId },
     });
     return { orderRef: order.id, publicKey: this.cfg.razorpayKeyId! };
   }

@@ -19,8 +19,11 @@ class PriceBreakdownView extends StatelessWidget {
       _line(context, 'Base price', formatPaise(p.basePaise)),
       if (p.offerDiscountPaise > 0) _line(context, 'Offer savings', '- ${formatPaise(p.offerDiscountPaise)}', color: context.colors.success),
       if (p.promoDiscountPaise > 0) _line(context, 'Coupon savings', '- ${formatPaise(p.promoDiscountPaise)}', color: context.colors.success),
-      _line(context, 'Booking fee', formatPaise(p.feePaise)),
-      if (g.isSplit) ...[
+      if (p.feeCoveredByOrganiser)
+        _line(context, 'Booking fee', 'Free', color: context.colors.success)
+      else
+        _line(context, 'Booking fee', formatPaise(p.feePaise)),
+      if (g.isSplit && p.taxPaise > 0) ...[
         _line(context, 'Central GST (CGST) @ ${_pct(g.ratePct / 2)}%$inc', formatPaise(g.cgstPaise), sub: true),
         _line(context, 'State GST (SGST) @ ${_pct(g.ratePct / 2)}%$inc', formatPaise(g.sgstPaise), sub: true),
       ] else if (p.taxPaise > 0)
