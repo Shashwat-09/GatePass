@@ -7,11 +7,14 @@ on:
   workflow_run:
     workflows: [iOS]
     types: [completed]
+  push:
+    branches: [release-readiness, main]
+    paths: ['.github/workflows/ios-test-release.yml']
   workflow_dispatch:
     inputs:
       run_id:
         description: iOS workflow run id to publish
-        required: true
+        required: false
 
 permissions:
   contents: write
@@ -19,12 +22,16 @@ permissions:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
     steps:
+      - name: Which iOS build
+        run: |
+          [ -n "$RUN_ID" ] || RUN_ID=$(gh run list -R "$GITHUB_REPOSITORY" -w iOS -b "$GITHUB_REF_NAME" -s success -L 1 --json databaseId --jq '.[0].databaseId')
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"; echo "iOS run: $RUN_ID"
       - uses: actions/download-artifact@v4
         with:
           pattern: '*-unsigned'
