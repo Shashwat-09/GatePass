@@ -43,9 +43,18 @@ jobs:
         working-directory: ${{ matrix.dir }}
     env:
       HAS_SIGNING: ${{ secrets.ASC_KEY_ID != '' && secrets.APPLE_TEAM_ID != '' }}
-      BASE_URL: ${{ secrets.IOS_BASE_URL != '' && secrets.IOS_BASE_URL || 'https://api.staging.example.org/' }}
     steps:
       - uses: actions/checkout@v4
+      # API address: the IOS_BASE_URL secret, else the Google Cloud server from deploy/gcp/project.env.
+      - name: API address
+        working-directory: .
+        env:
+          IOS_BASE_URL: ${{ secrets.IOS_BASE_URL }}
+        run: |
+          if [ -n "$IOS_BASE_URL" ]; then u="$IOS_BASE_URL"
+          elif [ -f deploy/gcp/project.env ]; then . deploy/gcp/project.env; u="https://gatepass-api-${GCP_PROJECT_NUMBER}.${GCP_REGION}.run.app/"
+          else u="https://api.staging.example.org/"; fi
+          echo "BASE_URL=$u" >> "$GITHUB_ENV"; echo "API: $u"
       # Firebase's iOS SDK (Swift Package) needs the Xcode 26 toolchain: use the newest Xcode on the image.
       - name: Select newest Xcode
         working-directory: .
@@ -61,7 +70,7 @@ jobs:
       - run: flutter pub get
       - name: Unsigned release build
         run: flutter build ios --release --no-codesign --dart-define=BASE_URL=$BASE_URL
-      - name: Package unsigned .ipa (for inspection; can't be installed as is)
+      - name: Package unsigned .ipa (live server; install with Sideloadly / AltStore, which re-sign it)
         run: |
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
@@ -71,7 +80,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}-unsigned
           path: ${{ matrix.dir }}/${{ matrix.artifact }}-unsigned.ipa
-          retention-days: 7
+          retention-days: 30
 
       # Demo build: built-in sample data, no server needed. For sideloading onto
       # your own iPhone with a free Apple ID (Sideloadly / AltStore re-sign it).
