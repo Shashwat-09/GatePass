@@ -24,9 +24,23 @@ ok() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}"
 if [[ -z "${PROJECT_ID}" ]]; then
-  read -rp "Google Cloud project ID (e.g. gatepass-123456): " PROJECT_ID
+  # No project yet: reuse a "gatepass" one if it exists, else create it and attach billing.
+  PROJECT_ID="$(gcloud projects list --filter='name:gatepass' --format='value(projectId)' --limit 1 2>/dev/null || true)"
+  if [[ -z "${PROJECT_ID}" ]]; then
+    PROJECT_ID="gatepass-$(od -An -N3 -tu4 /dev/urandom | tr -d ' ' | cut -c1-6)"
+    say "Creating Google Cloud project ${PROJECT_ID}"
+    gcloud projects create "$PROJECT_ID" --name gatepass >/dev/null
+  fi
 fi
 gcloud config set project "$PROJECT_ID" >/dev/null
+if [[ "$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingEnabled)' 2>/dev/null)" != "True" ]]; then
+  BILLING="$(gcloud billing accounts list --filter='open=true' --format='value(name)' --limit 1 2>/dev/null || true)"
+  if [[ -z "$BILLING" ]]; then
+    echo "No billing account found. Open https://console.cloud.google.com/freetrial , start the free trial, then run this again."; exit 1
+  fi
+  gcloud billing projects link "$PROJECT_ID" --billing-account "${BILLING##*/}" >/dev/null
+  ok "billing linked"
+fi
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
 SERVICE_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
 echo "Project: $PROJECT_ID ($PROJECT_NUMBER) · region $REGION · API will be at $SERVICE_URL"
