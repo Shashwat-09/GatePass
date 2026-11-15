@@ -54,7 +54,7 @@ class _VoucherDetailScreenState extends State<VoucherDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final v = _v;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: Text(v?.brandName ?? 'Voucher')),
       body: v == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())

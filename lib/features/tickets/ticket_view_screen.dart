@@ -18,8 +18,6 @@ import '../../utils/links.dart';
 import 'my_tickets_screen.dart';
 import 'share_ticket_sheet.dart';
 import '../../widgets/common.dart';
-import '../../widgets/ticket_stub.dart';
-import '../../widgets/utsav_art.dart';
 import '../../core/format.dart';
 
 class TicketViewScreen extends StatefulWidget {
@@ -117,134 +115,135 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
       if (t.eventSlug != null) const PopupMenuItem(value: 'more', child: Text('Buy More')),
     ];
 
-    return Scaffold(
-      backgroundColor: c.groupedCanvas,
+    final seed = t.eventId.isEmpty ? t.eventTitle : t.eventId;
+    final what = [t.isSeason ? t.tierName : (seat?.section ?? t.tierName), if (!t.isSeason) '${t.entryUsed}/${t.entryTotal} in'];
+    return GlassScaffold(
+      extendBody: true,
       appBar: AppBar(
-        backgroundColor: c.groupedCanvas,
-        leading: IconButton(tooltip: 'Close', icon: Icon(CupertinoIcons.xmark, color: c.label), onPressed: () => Get.back()),
-        title: Text('Works offline · brightness up', style: context.text.bodyMedium!.copyWith(color: c.secondaryLabel)),
+        leadingWidth: 64,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Center(child: GlassIconButton(icon: CupertinoIcons.chevron_back, tooltip: 'Back', onPressed: () => Get.back())),
+        ),
+        title: const Text('Ticket'),
         actions: [
           if (actions.isNotEmpty)
-            PopupMenuButton<String>(tooltip: 'More', icon: Icon(CupertinoIcons.ellipsis, color: c.label), onSelected: _menu, itemBuilder: (_) => actions),
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: _menu,
+              itemBuilder: (_) => actions,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: GlassPanel(radius: 22, blur: true, shadow: false, child: Icon(CupertinoIcons.ellipsis, size: 18, color: c.label)),
+              ),
+            ),
+          if (t.transferableUnits > 0) ...[
+            const SizedBox(width: 8),
+            GlassIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
+          ],
+          const SizedBox(width: 16),
         ],
       ),
+      bottomNavigationBar: t.transferableUnits > 0
+          ? SafeArea(
+              top: false,
+              minimum: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, 0),
+                child: SwipeButton(
+                  key: const Key('share-tickets'),
+                  knobKey: const Key('share-knob'),
+                  label: t.quantity > 1 ? 'Send to Friends' : 'Send to a Friend',
+                  icon: CupertinoIcons.paperplane_fill,
+                  leading: t.invoiceUrl == null
+                      ? null
+                      : Container(
+                          decoration: BoxDecoration(color: c.fill, shape: BoxShape.circle),
+                          child: IconButton(
+                            tooltip: 'Download invoice',
+                            icon: Icon(CupertinoIcons.arrow_down_to_line, color: c.label, size: 20),
+                            onPressed: _openInvoice,
+                          ),
+                        ),
+                  onConfirm: _share,
+                ),
+              ),
+            )
+          : null,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xl),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 120),
             children: [
-              TicketStub(
-                ornate: true,
-                background: c.groupedCanvas,
-                header: Stack(children: [
-                  const Positioned(top: 14, right: 14, child: Crescent(size: 52)),
+              GlassTicket(
+                header: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: SizedBox(height: 120, child: PosterArt(seed: seed)),
+                  ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 64, 20),
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(when.toUpperCase(), style: context.text.labelMedium!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.6)),
-                      const SizedBox(height: 8),
-                      Text(t.eventTitle, style: context.serif(28, color: Colors.white, height: 1.12)),
-                      const SizedBox(height: 6),
-                      Text(t.venueName, style: context.text.bodyMedium!.copyWith(color: Colors.white.withValues(alpha: 0.88))),
+                      Text([when.toUpperCase(), if (seat?.gate != null) seat!.gate!.toUpperCase()].join(' · '),
+                          style: context.text.labelMedium!.copyWith(color: c.secondaryLabel, letterSpacing: 0.4)),
+                      const SizedBox(height: 2),
+                      Text(t.eventTitle, style: context.serif(22, height: 1.15)),
+                      Text(t.venueName, style: context.text.bodyMedium!.copyWith(color: c.secondaryLabel)),
                       if (t.receivedFrom != null) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(AppRadius.pill)),
-                          child: Text('From ${t.receivedFrom}', style: context.text.labelMedium!.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
-                        ),
+                        const SizedBox(height: 8),
+                        TagPill('From ${t.receivedFrom}'),
                       ],
                     ]),
                   ),
                 ]),
-                body: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      for (final f in facts) Expanded(child: f),
-                    ]),
-                    if (status.label != 'Ready') ...[
-                      const SizedBox(height: 10),
-                      Align(alignment: Alignment.centerLeft, child: TagPill(status.label, color: status.color)),
-                    ],
-                    const SizedBox(height: 16),
-                    Center(
-                      child: Semantics(
-                        label: 'Entry QR code',
-                        image: true,
-                        // White quiet zone so scanners read it in dark mode too.
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            border: Border.all(color: const Color(0xFFE4DACA)),
-                          ),
-                          child: QrImageView(
-                            data: t.qrPayload,
-                            version: QrVersions.auto,
-                            size: 216,
-                            eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
-                            dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
-                          ),
-                        ),
-                      ),
-                    ),
+                body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (seat != null && seat.row != null) ...[
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [for (final f in facts) Expanded(child: f)]),
                     const SizedBox(height: 14),
-                    Text.rich(
-                      TextSpan(children: [
-                        TextSpan(text: 'ADMIT ${t.entryTotal}', style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                        TextSpan(text: ' · $admit', style: context.text.bodyMedium!.copyWith(color: c.secondaryLabel)),
-                      ]),
-                      textAlign: TextAlign.center,
-                    ),
-                  ]),
-                ),
-                stub: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('BOOKING', style: context.text.labelMedium!.copyWith(color: c.secondaryLabel, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                        Text(t.bookingCode ?? '—',
-                            style: context.text.titleMedium!.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1.4, fontFeatures: const [FontFeature.tabularFigures()])),
-                      ]),
-                    ),
-                    if (t.paidPaise != null)
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('PAID', style: context.text.labelMedium!.copyWith(color: c.secondaryLabel, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                        Text(t.paidPaise == 0 ? 'Free' : formatPaise(t.paidPaise!), style: context.serif(22, height: 1.2)),
-                      ]),
-                  ]),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                if (t.transferableUnits > 0)
-                  Expanded(
-                    child: PrimaryButton(
-                      key: const Key('share-tickets'),
-                      label: t.quantity > 1 ? 'Share Tickets' : 'Send to a Friend',
-                      onPressed: _share,
-                    ),
-                  ),
-                if (t.transferableUnits > 0 && t.mapLink != null) const SizedBox(width: 12),
-                if (t.mapLink != null)
-                  Expanded(
-                    child: SizedBox(
-                      height: 54,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          side: BorderSide(color: c.tint, width: 1.5),
+                  ],
+                  if (status.label != 'Ready') ...[
+                    Center(child: TagPill(status.label, color: status.color)),
+                    const SizedBox(height: 12),
+                  ],
+                  Center(
+                    child: Semantics(
+                      label: 'Entry QR code',
+                      image: true,
+                      // White quiet zone so scanners read it in dark mode too.
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                        child: QrImageView(
+                          data: t.qrPayload,
+                          version: QrVersions.auto,
+                          size: 200,
+                          eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+                          dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
                         ),
-                        onPressed: () => openLink(t.mapLink!),
-                        child: const Text('Directions'),
                       ),
                     ),
                   ),
-              ]),
+                  const SizedBox(height: 14),
+                  Wrap(alignment: WrapAlignment.center, spacing: 22, runSpacing: 4, children: [
+                    Text('Admit ${t.entryTotal}', style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w600)),
+                    for (final w in what) Text(w, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w600)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(
+                    [if (t.bookingCode != null) t.bookingCode!, 'works offline', if (t.paidPaise != null) (t.paidPaise == 0 ? 'free' : 'paid ${formatPaise(t.paidPaise!)}')].join(' · '),
+                    textAlign: TextAlign.center,
+                    style: context.text.bodySmall!.copyWith(color: c.secondaryLabel, letterSpacing: 0.3),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(admit, textAlign: TextAlign.center, style: context.text.bodySmall),
+                ]),
+              ),
+              if (t.mapLink != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                SecondaryButton(label: 'Directions', icon: CupertinoIcons.location, onPressed: () => openLink(t.mapLink!)),
+              ],
               if (t.soldBy != null) ...[
                 const SizedBox(height: AppSpacing.lg),
                 InsetGroup(margin: EdgeInsets.zero, children: [
@@ -255,11 +254,10 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
                     GroupRow(title: 'You saved', value: formatPaise(t.listPricePaise! - t.paidPaise!)),
                 ]),
               ],
-              if (t.isSeason || t.entryUsed > 0) ...[
+              if (t.isSeason) ...[
                 const SizedBox(height: AppSpacing.lg),
                 InsetGroup(margin: EdgeInsets.zero, children: [
-                  if (t.entryUsed > 0) GroupRow(title: 'Checked in', value: '${t.entryUsed} of ${t.entryTotal}'),
-                  if (t.isSeason) GroupRow(title: 'Entries', value: '${t.quantity} per day'),
+                  GroupRow(title: 'Entries', value: '${t.quantity} per day'),
                 ]),
               ],
               if ((t.notes ?? '').isNotEmpty) ...[
@@ -270,7 +268,7 @@ class _TicketViewScreenState extends State<TicketViewScreen> {
               ],
               if (saved != null) ...[
                 const SizedBox(height: AppSpacing.lg),
-                Text('Saved on this phone for offline entry · ${DateFormat('d MMM, h:mm a').format(saved)}',
+                Text('Saved on this phone for offline entry · ${DateFormat('d MMM, h:mm a').format(saved)} · brightness up for the scanner',
                     textAlign: TextAlign.center, style: context.text.bodySmall),
               ],
             ],

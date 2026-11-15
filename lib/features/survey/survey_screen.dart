@@ -76,7 +76,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   @override
   Widget build(BuildContext context) {
     final s = _survey;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Share Feedback')),
       body: s == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())

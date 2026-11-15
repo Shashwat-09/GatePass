@@ -40,7 +40,7 @@ class _IntroScreenState extends State<IntroScreen> {
   @override
   Widget build(BuildContext context) {
     final last = _page == _slides.length - 1;
-    return Scaffold(
+    return GlassScaffold(
       body: SafeArea(
         child: Column(
           children: [

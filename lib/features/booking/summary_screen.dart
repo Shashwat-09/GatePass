@@ -30,7 +30,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(title: const Text('Order Summary'), backgroundColor: context.colors.groupedCanvas),
       body: SafeArea(
@@ -69,33 +69,36 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 ]),
               ]),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: context.colors.canvas,
-                border: Border(top: BorderSide(color: context.colors.separator, width: 0.5)),
-              ),
-              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm + 2, AppSpacing.md, AppSpacing.sm + 2),
-              child: Column(children: [
-                if (c.error.value != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(c.error.value!, textAlign: TextAlign.center, style: context.text.bodyMedium!.copyWith(color: context.colors.danger)),
+            SafeArea(
+              top: false,
+              minimum: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+                child: Column(children: [
+                  if (c.error.value != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(c.error.value!, textAlign: TextAlign.center, style: context.text.bodyMedium!.copyWith(color: context.colors.danger)),
+                    ),
+                  // Swipe to pay: a deliberate gesture for money, like Apple Pay's confirm.
+                  SwipeButton(
+                    key: const Key('swipe-pay'),
+                    knobKey: const Key('swipe-pay-knob'),
+                    label: pv == null ? 'Swipe to Continue' : (pv.price.payablePaise == 0 ? 'Swipe to Confirm Booking' : 'Swipe to Pay ${formatPaise(pv.price.payablePaise)}'),
+                    icon: CupertinoIcons.arrow_right,
+                    loading: c.loading.value || c.payState.value == PayState.verifying,
+                    enabled: !(c.totalQty == 0 || pv == null || c.previewLoading.value),
+                    onConfirm: () async {
+                      if (!await c.createOrder()) return;
+                      if (c.payState.value == PayState.done) {
+                        PaymentScreen.goToConfirmation();
+                      } else {
+                        Get.to(() => const PaymentScreen());
+                      }
+                    },
                   ),
-                PrimaryButton(
-                  label: pv == null ? 'Continue to Payment' : (pv.price.payablePaise == 0 ? 'Confirm Booking' : 'Pay ${formatPaise(pv.price.payablePaise)}'),
-                  loading: c.loading.value || c.payState.value == PayState.verifying,
-                  onPressed: c.totalQty == 0 || pv == null || c.previewLoading.value
-                      ? null
-                      : () async {
-                          if (!await c.createOrder()) return;
-                          if (c.payState.value == PayState.done) {
-                            PaymentScreen.goToConfirmation();
-                          } else {
-                            Get.to(() => const PaymentScreen());
-                          }
-                        },
-                ),
-              ]),
+                ]),
+              ),
             ),
           ]);
         }),

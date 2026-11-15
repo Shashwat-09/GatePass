@@ -21,6 +21,8 @@ import 'city_picker_screen.dart';
 import 'event_list_screen.dart';
 import 'filter_screen.dart';
 import 'search_screen.dart';
+import '../tickets/my_tickets_screen.dart';
+import '../tickets/ticket_view_screen.dart';
 
 /// Discover, laid out like a printed programme: this week's greeting, the
 /// editors' pick, collections, then what's coming up in date order.
@@ -30,7 +32,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Get.put(HomeController());
-    return Scaffold(
+    return GlassScaffold(
       body: SafeArea(
         bottom: false,
         child: Obx(() {
@@ -46,17 +48,19 @@ class HomeScreen extends StatelessWidget {
             final upcoming = [...vis]..sort((a, b) => (a.date ?? DateTime(2100)).compareTo(b.date ?? DateTime(2100)));
             final trending = [...vis]..sort((a, b) => b.viewCount.compareTo(a.viewCount));
             body = SliverList.list(children: [
-              _EditorsChoice(events: vis.take(5).toList()),
+              const _NextEvent(),
+              SectionHeader('Popular Now', action: _seeAll(c, 'Popular Events', const EventFilter(sort: 'popular'))),
+              _PopularNow(events: trending.take(6).toList()),
               _collections(context, c),
               SectionHeader('Coming up', action: _seeAll(c, 'All Events', const EventFilter())),
               _ComingUp(events: upcoming.take(6).toList()),
-              SectionHeader('Trending', action: _seeAll(c, 'Popular Events', const EventFilter(sort: 'popular'))),
-              _rail(context, trending),
+              SectionHeader('This Week', action: _seeAll(c, 'All Events', const EventFilter())),
+              _rail(context, upcoming.skip(6).isEmpty ? upcoming : upcoming.skip(6).toList()),
               if (c.explore.value?.artists.isNotEmpty ?? false) ...[
                 const SectionHeader('Artists'),
                 _artists(context, c.explore.value!.artists),
               ],
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: 120), // clear of the floating tab bar
             ]);
           }
           return CustomScrollView(slivers: [
@@ -71,91 +75,80 @@ class HomeScreen extends StatelessWidget {
 
   Widget _header(BuildContext context, HomeController c) {
     final now = DateTime.now();
-    final week = _isoWeek(now);
-    final first = (sl<AuthRepository>().currentUser?.name ?? '').trim().split(RegExp(r'\s+')).first;
-    final greet = now.hour < 12 ? 'Good morning' : now.hour < 17 ? 'Good afternoon' : 'Good evening';
+    final name = (sl<AuthRepository>().currentUser?.name ?? '').trim();
+    final first = name.split(RegExp(r'\s+')).first;
+    final initials = name.isEmpty ? '' : name.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
     final thisWeek = c.events.where((e) => e.date != null && e.date!.isAfter(now.subtract(const Duration(hours: 6))) && e.date!.isBefore(now.add(const Duration(days: 7)))).length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md + 4, AppSpacing.sm, AppSpacing.md + 4, AppSpacing.md),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
+          Semantics(
+            label: name.isEmpty ? 'You' : name,
+            excludeSemantics: true,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: GlassPanel(
+                radius: 22,
+                blur: true,
+                shadow: false,
+                child: Center(child: initials.isEmpty ? Icon(CupertinoIcons.person_fill, size: 20, color: context.colors.label) : Text(initials, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w700))),
+              ),
+            ),
+          ),
+          const Spacer(),
           _cityButton(context, c),
           const Spacer(),
-          _RoundIcon(icon: CupertinoIcons.search, label: 'Search', onTap: () => Get.to(() => const SearchScreen())),
+          GlassIconButton(icon: CupertinoIcons.search, tooltip: 'Search', onPressed: () => Get.to(() => const SearchScreen())),
           const SizedBox(width: AppSpacing.sm),
-          Obx(() => _RoundIcon(
-                icon: CupertinoIcons.bell,
-                label: c.unread.value > 0 ? 'Notifications, ${c.unread.value} unread' : 'Notifications',
-                dot: c.unread.value > 0,
-                onTap: () async {
-                  await Get.to(() => const NotificationsScreen());
-                  c.refreshUnread();
-                },
-              )),
+          Obx(() => Stack(clipBehavior: Clip.none, children: [
+                GlassIconButton(
+                  icon: CupertinoIcons.bell,
+                  tooltip: c.unread.value > 0 ? 'Notifications, ${c.unread.value} unread' : 'Notifications',
+                  onPressed: () async {
+                    await Get.to(() => const NotificationsScreen());
+                    c.refreshUnread();
+                  },
+                ),
+                if (c.unread.value > 0)
+                  Positioned(right: 9, top: 8, child: IgnorePointer(child: Container(width: 9, height: 9, decoration: BoxDecoration(color: context.colors.danger, shape: BoxShape.circle)))),
+              ])),
         ]),
-        const SizedBox(height: AppSpacing.md),
-        Text('THE PROGRAMME · WEEK $week', style: context.eyebrow),
-        const SizedBox(height: 6),
-        Semantics(
-          header: true,
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(text: first.isEmpty ? '$greet.' : '$greet, '),
-              if (first.isNotEmpty) TextSpan(text: '$first.', style: TextStyle(fontStyle: FontStyle.italic, color: context.colors.tint)),
-            ]),
-            style: context.serif(34, height: 1.1),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.lg),
+        Semantics(header: true, child: Text(first.isEmpty ? 'Hello' : 'Hello $first', style: context.serif(36, height: 1.05))),
+        const SizedBox(height: 4),
         Text(
-          thisWeek > 0 ? '$thisWeek ${thisWeek == 1 ? 'thing' : 'things'} to do in ${c.cityName} this week.' : 'Here’s what’s on in ${c.cityName}.',
+          thisWeek > 0 ? '$thisWeek ${thisWeek == 1 ? 'thing' : 'things'} on in ${c.cityName} this week' : 'Find your next night out',
           style: context.text.bodyLarge!.copyWith(color: context.colors.secondaryLabel),
         ),
       ]),
     );
   }
 
-  static int _isoWeek(DateTime d) {
-    final thursday = d.add(Duration(days: 4 - (d.weekday == 7 ? 7 : d.weekday)));
-    final jan1 = DateTime(thursday.year);
-    return 1 + thursday.difference(jan1).inDays ~/ 7;
-  }
-
   Widget _cityButton(BuildContext context, HomeController c) {
     // One live city (launch: Ahmedabad): just its name, nothing to change.
-    if (sl<LocalStorage>().getBool(StorageKeys.singleCity)) {
-      return Semantics(
-        label: 'City: ${c.cityName}',
-        excludeSemantics: true,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(CupertinoIcons.placemark, color: context.colors.tint, size: 22),
-            const SizedBox(width: 6),
-            Text(c.cityName, key: const Key('city-label'), style: context.text.titleMedium),
-          ]),
-        ),
-      );
-    }
+    final single = sl<LocalStorage>().getBool(StorageKeys.singleCity);
+    final pill = GlassPanel(
+      radius: 22,
+      blur: true,
+      shadow: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(CupertinoIcons.placemark, color: context.colors.tint, size: 18),
+        const SizedBox(width: 6),
+        Text(c.cityName, key: single ? const Key('city-label') : null, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w600)),
+        if (!single) ...[const SizedBox(width: 4), Icon(CupertinoIcons.chevron_down, size: 13, color: context.colors.secondaryLabel)],
+      ]),
+    );
+    // One live city (launch: Ahmedabad): just its name, nothing to change.
+    if (single) return Semantics(label: 'City: ${c.cityName}', excludeSemantics: true, child: pill);
     return Semantics(
-        button: true,
-        label: 'City: ${c.cityName}. Change city',
-        excludeSemantics: true,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: () => Get.to(() => const CityPickerScreen()),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(CupertinoIcons.placemark, color: context.colors.tint, size: 22),
-              const SizedBox(width: 6),
-              Text(c.cityName, style: context.text.titleMedium),
-              const SizedBox(width: 4),
-              Icon(CupertinoIcons.chevron_down, size: 14, color: context.colors.secondaryLabel),
-            ]),
-          ),
-        ),
-      );
+      button: true,
+      label: 'City: ${c.cityName}. Change city',
+      excludeSemantics: true,
+      child: PressScale(child: GestureDetector(onTap: () => Get.to(() => const CityPickerScreen()), child: pill)),
+    );
   }
 
   Widget _seeAll(HomeController c, String title, EventFilter f) =>
@@ -165,7 +158,6 @@ class HomeScreen extends StatelessWidget {
   Widget _collections(BuildContext context, HomeController c) {
     final cats = c.explore.value?.categories ?? const <FilterOption>[];
     if (cats.isEmpty) return const SizedBox.shrink();
-    const inks = [(UtsavArt.teal, UtsavArt.tealMid, Colors.white), (UtsavArt.marigold, UtsavArt.marigoldDeep, UtsavArt.ink), (UtsavArt.maroon, Color(0xFF94402D), Colors.white)];
     final side = 150.0 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SectionHeader('Collections', action: SeeAllButton(onPressed: () async {
@@ -180,35 +172,23 @@ class HomeScreen extends StatelessWidget {
           itemCount: cats.length,
           separatorBuilder: (_, __) => const SizedBox(width: 12),
           itemBuilder: (_, i) {
-            final (bg, deco, fg) = inks[i % inks.length];
             final cat = cats[i];
             return Semantics(
               button: true,
               label: '${cat.label}${cat.count == null ? '' : ', ${cat.count} events'}',
               excludeSemantics: true,
-              child: GestureDetector(
-                onTap: () => Get.to(() => EventListScreen(title: cat.label, cityId: c.city.value?.id, filter: EventFilter(categories: {cat.key}))),
-                child: Container(
-                  width: side * 1.2,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.lg)),
-                  child: Stack(children: [
-                    Positioned(
-                      right: i.isEven ? -side * 0.25 : null,
-                      left: i.isOdd ? -side * 0.2 : null,
-                      top: i.isEven ? -side * 0.25 : null,
-                      bottom: i.isOdd ? -side * 0.35 : null,
-                      child: Container(width: side * 0.75, height: side * 0.75, decoration: BoxDecoration(color: deco.withValues(alpha: 0.85), shape: BoxShape.circle)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (cat.count != null) Text('${cat.count} event${cat.count == 1 ? '' : 's'}', style: context.text.labelMedium!.copyWith(color: fg, fontWeight: FontWeight.w600)),
-                        const Spacer(),
-                        Text(cat.label, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.serif(22, color: fg, height: 1.1)),
-                      ]),
-                    ),
-                  ]),
+              child: PressScale(
+                child: GestureDetector(
+                  onTap: () => Get.to(() => EventListScreen(title: cat.label, cityId: c.city.value?.id, filter: EventFilter(categories: {cat.key}))),
+                  child: SizedBox(
+                    width: side * 1.1,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(18), child: PosterArt(seed: cat.key))),
+                      const SizedBox(height: 6),
+                      Text(cat.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w600)),
+                      if (cat.count != null) Text('${cat.count} event${cat.count == 1 ? '' : 's'}', style: context.text.bodySmall),
+                    ]),
+                  ),
                 ),
               ),
             );
@@ -264,42 +244,6 @@ class HomeScreen extends StatelessWidget {
       );
 }
 
-/// 44 pt round button on the paper (search, notifications).
-class _RoundIcon extends StatelessWidget {
-  const _RoundIcon({required this.icon, required this.label, required this.onTap, this.dot = false});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool dot;
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
-        child: Material(
-          color: context.colors.cell,
-          shape: CircleBorder(side: BorderSide(color: context.colors.separator)),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Stack(alignment: Alignment.center, children: [
-                Icon(icon, size: 20, color: context.colors.label),
-                if (dot)
-                  Positioned(
-                    right: 11,
-                    top: 10,
-                    child: Container(width: 8, height: 8, decoration: BoxDecoration(color: context.colors.accent, shape: BoxShape.circle, border: Border.all(color: context.colors.cell, width: 1.5))),
-                  ),
-              ]),
-            ),
-          ),
-        ),
-      );
-}
-
 /// Big date, the way a programme prints it: weekday, day, month.
 class DateBlock extends StatelessWidget {
   const DateBlock(this.date, {super.key, this.showWeekday = true, this.size = 40});
@@ -321,67 +265,99 @@ class DateBlock extends StatelessWidget {
   }
 }
 
-class _EditorsChoice extends StatelessWidget {
-  const _EditorsChoice({required this.events});
+/// "Your next event": the soonest ticket on this phone, one tap to the QR.
+class _NextEvent extends StatelessWidget {
+  const _NextEvent();
+  @override
+  Widget build(BuildContext context) {
+    if (!Get.isRegistered<MyTicketsController>()) return const SizedBox.shrink();
+    final tickets = Get.find<MyTicketsController>().upcoming;
+    return Obx(() {
+      final next = tickets.items.where((t) => t.date != null && t.date!.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList()
+        ..sort((a, b) => a.date!.compareTo(b.date!));
+      if (next.isEmpty) return const SizedBox.shrink();
+      final t = next.first;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+        child: Semantics(
+          button: true,
+          label: 'Your next event: ${t.eventTitle}, ${DateFormat('EEEE d MMMM').format(t.date!)}. Open ticket',
+          excludeSemantics: true,
+          child: PressScale(
+            child: GestureDetector(
+              onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
+              child: GlassPanel(
+                radius: 22,
+                padding: const EdgeInsets.all(10),
+                child: Row(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(width: 64, height: 64, child: PosterArt(seed: t.eventId.isEmpty ? t.eventTitle : t.eventId)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Your next event · ${DateFormat('EEE d MMM').format(t.date!)}', style: context.text.labelMedium!.copyWith(color: context.colors.secondaryLabel)),
+                      const SizedBox(height: 2),
+                      Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium!.copyWith(fontWeight: FontWeight.w700, height: 1.15)),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: context.colors.tintFill, shape: BoxShape.circle),
+                    child: const Icon(CupertinoIcons.qrcode, color: Colors.white, size: 20),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+/// Big picture cards, Apple-simple: the poster, then date, title, place and price.
+class _PopularNow extends StatelessWidget {
+  const _PopularNow({required this.events});
   final List<EventModel> events;
 
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) return const SizedBox.shrink();
-    final width = MediaQuery.sizeOf(context).width - AppSpacing.md * 2;
-    final artH = width * 0.82;
-    final textH = textBlockHeight(context, context.serif(22, height: 1.15), lines: 2) + textBlockHeight(context, context.text.bodyMedium, lines: 2) + 8;
-    final pageH = artH + 16 + (textH > 92 ? textH : 92);
+    const w = 270.0;
+    const art = w * 0.72;
+    final h = art + 10 + textBlockHeight(context, context.text.labelMedium) + textBlockHeight(context, context.text.titleMedium, lines: 2) + textBlockHeight(context, context.text.bodySmall) + 8;
     return SizedBox(
-      height: pageH,
-      child: PageView.builder(
-        controller: PageController(viewportFraction: events.length > 1 ? 0.94 : 1),
-        padEnds: false,
+      height: h,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         itemCount: events.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (_, i) {
           final e = events[i];
-          final when = e.date == null ? '' : DateFormat('h:mm a').format(e.date!);
-          final price = e.priceFrom > 0 ? 'from ${formatPaise(e.priceFrom.toInt())}' : 'Free';
-          return Padding(
-            padding: EdgeInsets.only(left: AppSpacing.md, right: events.length > 1 ? 0 : AppSpacing.md),
-            child: Semantics(
-              button: true,
-              label: 'Editor’s choice: ${e.title}, ${e.date == null ? '' : DateFormat('EEEE d MMMM').format(e.date!)}, ${e.venueName}, $price',
-              excludeSemantics: true,
+          final when = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM · h:mm a').format(e.date!);
+          final price = e.priceFrom > 0 ? 'From ${formatPaise(e.priceFrom.toInt())}' : 'Free';
+          return Semantics(
+            button: true,
+            label: '${e.title}, $when, ${e.venueName}, $price',
+            excludeSemantics: true,
+            child: PressScale(
               child: GestureDetector(
                 onTap: () => Get.toNamed(Routes.eventDetails, arguments: e),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SizedBox(
-                    height: artH,
-                    child: Stack(fit: StackFit.expand, children: [
-                      EventArt(e.imageUrl, radius: 22, memCacheWidth: 1080, seed: e.id),
-                      Positioned(
-                        left: 14,
-                        top: 14,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: UtsavArt.paper, borderRadius: BorderRadius.circular(AppRadius.pill)),
-                          child: Text('Editor’s Choice', style: context.text.labelMedium!.copyWith(color: UtsavArt.teal, fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 16),
-                  IntrinsicHeight(
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      DateBlock(e.date),
-                      VerticalDivider(width: 24, thickness: 1, color: context.colors.separator),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.serif(22, height: 1.15)),
-                          const SizedBox(height: 4),
-                          Text([e.venueName, if (when.isNotEmpty) when, price].join(' · '),
-                              maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel)),
-                        ]),
-                      ),
-                    ]),
-                  ),
-                ]),
+                child: SizedBox(
+                  width: w,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(height: art, width: w, child: EventArt(e.imageUrl, radius: 20, memCacheWidth: 760, seed: e.id)),
+                    const SizedBox(height: 10),
+                    Text(when.toUpperCase(), maxLines: 1, style: context.text.labelMedium!.copyWith(color: context.colors.secondaryLabel, fontWeight: FontWeight.w600)),
+                    Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium!.copyWith(fontWeight: FontWeight.w700, height: 1.2)),
+                    Text('${e.venueName} · $price', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+                  ]),
+                ),
               ),
             ),
           );
@@ -398,12 +374,17 @@ class _ComingUp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        child: Column(children: [
-          for (var i = 0; i < events.length; i++) ...[
-            if (i > 0) Divider(color: context.colors.separator, height: 1),
-            _row(context, events[i]),
-          ],
-        ]),
+        child: GlassPanel(
+          radius: 28,
+          shadow: false,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(children: [
+            for (var i = 0; i < events.length; i++) ...[
+              if (i > 0) Divider(color: context.colors.separator, height: 1),
+              _row(context, events[i]),
+            ],
+          ]),
+        ),
       );
 
   Widget _row(BuildContext context, EventModel e) {

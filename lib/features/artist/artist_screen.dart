@@ -49,7 +49,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   @override
   Widget build(BuildContext context) {
     final a = _a;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: Text(a?.name ?? widget.name ?? 'Artist')),
       body: _loading
           ? const StateView.loading()

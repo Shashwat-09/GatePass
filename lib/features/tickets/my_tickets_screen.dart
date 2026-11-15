@@ -10,7 +10,7 @@ import '../../core/di.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/ticket_repository.dart';
 import '../../widgets/common.dart';
-import '../../widgets/ticket_stub.dart';
+import '../../widgets/claim_card.dart';
 import 'claim_screen.dart';
 import 'ticket_view_screen.dart';
 
@@ -64,6 +64,10 @@ class MyTicketsController extends GetxController {
   late final history = PagedList<TicketModel>((p) => _repo.myTickets(scope: 'history', page: p));
   late final sent = PagedList<TransferModel>((p) => _repo.transfers(direction: 'sent', page: p));
   final exporting = false.obs;
+  /// Tickets friends sent to this number, waiting for a tap on Claim.
+  final waitingList = <TransferModel>[].obs;
+  final waiting = 0.obs;
+  final claiming = RxnString();
 
   @override
   void onInit() {
@@ -71,7 +75,29 @@ class MyTicketsController extends GetxController {
     refreshAll();
   }
 
-  Future<void> refreshAll() => Future.wait([upcoming.load(), received.load(), history.load(), sent.load()]);
+  Future<void> refreshAll() => Future.wait([upcoming.load(), received.load(), history.load(), sent.load(), loadWaiting()]);
+
+  Future<void> loadWaiting() async {
+    final r = await _repo.waiting();
+    if (!r.isOk) return;
+    waitingList.assignAll(r.data!);
+    waiting.value = r.data!.length;
+  }
+
+  /// One tap: the tickets become theirs and the real QR appears.
+  Future<TicketModel?> claim(TransferModel t) async {
+    claiming.value = t.id;
+    final r = await _repo.claimTransfer(t.id);
+    claiming.value = null;
+    if (!r.isOk) {
+      Delight.error();
+      Get.snackbar('Couldn’t claim', r.error ?? '');
+      await loadWaiting();
+      return null;
+    }
+    await Future.wait([loadWaiting(), received.load()]);
+    return r.data;
+  }
 
   Future<void> claimBack(TransferModel t) async {
     final r = await _repo.claimBack(t.id);
@@ -107,47 +133,40 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     final c = Get.put(MyTicketsController());
     final lists = [
       _tickets(c.upcoming, 'You haven’t booked a ticket yet'),
-      _tickets(c.received, 'No tickets received yet'),
+      _tickets(c.received, 'No tickets received yet', waiting: c),
       _transfers(c),
       _tickets(c.history, 'No past tickets yet'),
     ];
-    return Scaffold(
-      backgroundColor: context.colors.groupedCanvas,
+    return GlassScaffold(
       body: NestedScrollView(
         headerSliverBuilder: (context, _) => [
-          largeTitleBar(context, 'Tickets', background: context.colors.groupedCanvas, actions: [
-            IconButton(
-              tooltip: 'Claim tickets with a code',
-              padding: EdgeInsets.zero,
-              icon: Icon(CupertinoIcons.gift, color: context.colors.tint),
-              onPressed: () => Get.to(() => const ClaimScreen()),
+          SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.md, AppSpacing.md),
+                child: Row(children: [
+                  Expanded(child: Semantics(header: true, child: Text('My Tickets', style: context.serif(34)))),
+                  _GlassPill(label: 'Claim', tooltip: 'Claim tickets with a code', onTap: () => Get.to(() => const ClaimScreen())),
+                  const SizedBox(width: 8),
+                  Obx(() => GlassIconButton(
+                        icon: CupertinoIcons.arrow_down_to_line,
+                        tooltip: 'Export to Excel',
+                        onPressed: c.exporting.value ? null : c.export,
+                      )),
+                ]),
+              ),
             ),
-            Obx(() => IconButton(
-                  tooltip: 'Export to Excel',
-                  padding: EdgeInsets.zero,
-                  icon: c.exporting.value
-                      ? const CupertinoActivityIndicator()
-                      : Icon(CupertinoIcons.arrow_down_to_line, color: context.colors.tint),
-                  onPressed: c.exporting.value ? null : c.export,
-                )),
-          ]),
+          ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
-              child: SizedBox(
-                width: double.infinity,
-                child: CupertinoSlidingSegmentedControl<int>(
-                  groupValue: _segment,
-                  onValueChanged: (v) => setState(() => _segment = v ?? 0),
-                  children: {
-                    for (var i = 0; i < _segments.length; i++)
-                      i: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(_segments[i], style: context.text.titleSmall!.copyWith(fontWeight: _segment == i ? FontWeight.w600 : FontWeight.w400)),
-                      ),
-                  },
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm),
+              child: Obx(() => GlassSegments(
+                    labels: _segments,
+                    index: _segment,
+                    badges: [0, c.waiting.value, 0, 0],
+                    onChanged: (v) => setState(() => _segment = v),
+                  )),
             ),
           ),
         ],
@@ -156,10 +175,44 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     );
   }
 
-  Widget _tickets(PagedList<TicketModel> l, String empty) {
+  Widget _tickets(PagedList<TicketModel> l, String empty, {MyTicketsController? waiting}) {
     return Obx(() {
-      if (l.loading.value) return const StateView.loading();
-      if (l.error.value != null) return StateView.error(l.error.value!, onRetry: l.load);
+      final w = waiting?.waitingList.toList() ?? const <TransferModel>[];
+      final busy = waiting?.claiming.value;
+      if (l.loading.value && w.isEmpty) return const StateView.loading();
+      if (l.error.value != null && w.isEmpty) return StateView.error(l.error.value!, onRetry: l.load);
+      if (w.isNotEmpty) {
+        // Waiting to be claimed first (QR hidden), then what's already theirs.
+        return RefreshIndicator(
+          onRefresh: waiting!.refreshAll,
+          child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 120), children: [
+            for (final t in w)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: ClaimCard(
+                  compact: true,
+                  seed: t.eventId.isEmpty ? t.id : t.eventId,
+                  fromName: t.fromName ?? t.counterpart ?? 'A friend',
+                  quantity: t.quantity,
+                  eventTitle: t.eventTitle,
+                  startDate: t.startDate,
+                  venueName: t.venueName,
+                  tierName: t.tierName,
+                  busy: busy == t.id,
+                  onClaim: busy != null
+                      ? null
+                      : () async {
+                          final ticket = await waiting.claim(t);
+                          if (ticket == null || !context.mounted) return;
+                          await showSuccess(context, title: 'They’re Yours', message: 'Your QR is ready, and it works offline.');
+                          Get.to(() => TicketViewScreen(ticket: ticket));
+                        },
+                ),
+              ),
+            for (final t in l.items) _ticketCard(context, t),
+          ]),
+        );
+      }
       if (l.items.isEmpty) {
         return RefreshIndicator(
           onRefresh: l.load,
@@ -174,7 +227,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
             return false;
           },
           child: ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 120),
             itemCount: l.items.length + (l.hasMore ? 1 : 0) + (l.fromCache.value ? 1 : 0),
             itemBuilder: (context, i) {
               if (l.fromCache.value) {
@@ -191,47 +244,48 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     });
   }
 
-  /// A small ticket stub: event above the tear line, what gets you in below it.
+  /// A ticket in the list: event art, date, title, status, and a round arrow.
   Widget _ticketCard(BuildContext context, TicketModel t) {
     final c = context.colors;
     final status = ticketStatus(context, t);
     final when = t.date == null ? 'Date to be announced' : DateFormat('EEE d MMM · h:mm a').format(t.date!);
-    final what = [if (t.tierName.isNotEmpty) t.tierName, if (t.seatLabel != null) t.seatLabel!].join(' · ');
+    final what = [if (t.tierName.isNotEmpty) t.tierName, if (t.seatLabel != null) t.seatLabel!, 'Admit ${t.entryTotal}'].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Semantics(
         button: true,
         label: '${t.eventTitle}, $when, admit ${t.entryTotal}, ${status.label}',
         excludeSemantics: true,
-        child: GestureDetector(
-          onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
-          child: TicketStub(
-            ornate: true,
-            background: c.groupedCanvas,
-            notch: 10,
-            header: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 2),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(when.toUpperCase(), style: context.text.labelMedium!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                const SizedBox(height: 4),
-                Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.serif(20, color: Colors.white, height: 1.15)),
-                Text(t.venueName, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall!.copyWith(color: Colors.white.withValues(alpha: 0.88))),
-                if (t.receivedFrom != null) Text('From ${t.receivedFrom}', style: context.text.bodySmall!.copyWith(color: Colors.white.withValues(alpha: 0.88))),
-              ]),
-            ),
-            stub: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 12, 14),
+        child: PressScale(
+          child: GestureDetector(
+            onTap: () => Get.to(() => TicketViewScreen(ticket: t)),
+            child: GlassPanel(
+              radius: 28,
+              padding: const EdgeInsets.all(10),
               child: Row(children: [
-                Icon(CupertinoIcons.qrcode, size: 26, color: c.label),
-                const SizedBox(width: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: SizedBox(width: 64, height: 64, child: PosterArt(seed: t.eventId.isEmpty ? t.eventTitle : t.eventId)),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Admit ${t.entryTotal}', style: context.text.titleSmall),
-                    if (what.isNotEmpty) Text(what, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
+                    Text(when, style: context.text.labelMedium!.copyWith(color: c.secondaryLabel)),
+                    const SizedBox(height: 2),
+                    Text(t.eventTitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium!.copyWith(fontWeight: FontWeight.w700, height: 1.15)),
+                    const SizedBox(height: 2),
+                    Text('${status.label} · $what${t.receivedFrom != null ? ' · from ${t.receivedFrom}' : ''}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelMedium!.copyWith(color: status.color, fontWeight: FontWeight.w600)),
                   ]),
                 ),
-                TagPill(status.label, color: status.color),
-                Icon(CupertinoIcons.chevron_right, size: 16, color: c.tertiaryLabel),
+                const SizedBox(width: 8),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: c.tintedFill, shape: BoxShape.circle),
+                  child: Icon(CupertinoIcons.qrcode, size: 20, color: c.tint),
+                ),
+                const SizedBox(width: 4),
               ]),
             ),
           ),
@@ -254,7 +308,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
       return RefreshIndicator(
         onRefresh: l.load,
         child: ListView.builder(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 120),
           itemCount: l.items.length,
           itemBuilder: (context, i) => _transferCard(context, c, l.items[i]),
         ),
@@ -265,9 +319,10 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   Widget _transferCard(BuildContext context, MyTicketsController c, TransferModel t) {
     final status = switch (t.status) { 'pending' => 'Waiting to Be Claimed', 'claimed' => 'Delivered', _ => 'Claimed Back' };
     final color = t.status == 'claimed' ? context.colors.success : (t.isPending ? context.colors.warning : context.colors.secondaryLabel);
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: GlassPanel(
+        radius: 24,
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -316,4 +371,31 @@ class _OfflineBanner extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Glass pill button with a label (e.g. "Claim").
+class _GlassPill extends StatelessWidget {
+  const _GlassPill({required this.label, required this.onTap, required this.tooltip});
+  final String label;
+  final VoidCallback onTap;
+  final String tooltip;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: PressScale(
+          child: GestureDetector(
+            onTap: () {
+              Delight.tap();
+              onTap();
+            },
+            child: GlassPanel(
+              radius: 22,
+              blur: true,
+              shadow: false,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              child: Text(label, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ),
+      );
 }

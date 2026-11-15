@@ -151,13 +151,40 @@ class TicketRepository {
     await _storage.setJson(StorageKeys.recentRecipients, {'items': keep});
   }
 
-  /// The ticket a WhatsApp link (/r/<id>) points at, for the signed-in person.
-  Future<ApiResult<TicketModel>> openTicket(String id) async {
-    if (AppConfig.useMockData) return ApiResult.ok(MockData.tickets.first);
+  /// What a WhatsApp link (/r/<id>) or a push points at, for the signed-in
+  /// person: their ticket, or tickets waiting for them to claim.
+  Future<ApiResult<OpenResult>> open(String id) async {
+    if (AppConfig.useMockData) {
+      final w = MockData.waiting.where((t) => t.id == id && t.canClaim);
+      return ApiResult.ok(w.isNotEmpty ? OpenResult.claim(w.first) : OpenResult.ticket(MockData.tickets.first));
+    }
     final r = await _api.request(Endpoints.openTicket(id));
     if (!r.isOk) return r.cast();
-    unawaited(syncOffline()); // it's theirs now: keep it on the phone for the gate
-    return ApiResult.ok(TicketModel.fromJson(r.data as Map<String, dynamic>));
+    final d = r.data as Map<String, dynamic>;
+    if (d['kind'] == 'claim') return ApiResult.ok(OpenResult.claim(TransferModel.fromJson(d['transfer'] as Map<String, dynamic>)));
+    unawaited(syncOffline()); // it's theirs: keep it on the phone for the gate
+    return ApiResult.ok(OpenResult.ticket(TicketModel.fromJson((d['ticket'] ?? d) as Map<String, dynamic>)));
+  }
+
+  /// Tickets sent to this number, waiting (QR hidden) for a tap on Claim.
+  Future<ApiResult<List<TransferModel>>> waiting() async {
+    if (AppConfig.useMockData) return ApiResult.ok(MockData.waiting.where((t) => t.canClaim).toList());
+    final r = await _api.request(Endpoints.transfers, query: {'direction': 'received', 'limit': '50'});
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(Paged.fromJson(r.data, TransferModel.fromJson).items.where((t) => t.canClaim).toList());
+  }
+
+  /// One tap: the tickets become yours, with their own QR.
+  Future<ApiResult<TicketModel>> claimTransfer(String transferId) async {
+    if (AppConfig.useMockData) {
+      final i = MockData.waiting.indexWhere((t) => t.id == transferId);
+      if (i >= 0) MockData.waiting.removeAt(i);
+      return ApiResult.ok(MockData.tickets.first);
+    }
+    final r = await _api.request(Endpoints.claimTransfer(transferId), method: Method.post);
+    if (!r.isOk) return r.cast();
+    unawaited(syncOffline());
+    return ApiResult.ok(TicketModel.fromJson((r.data as Map<String, dynamic>)['ticket'] as Map<String, dynamic>));
   }
 
   Future<ApiResult<SharePreview>> preview(String code) async {

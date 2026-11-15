@@ -68,7 +68,7 @@ class _PromoScreenState extends State<PromoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Promo Codes')),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         Row(children: [

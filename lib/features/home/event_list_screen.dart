@@ -79,7 +79,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: Text(widget.title), actions: [
         IconButton(
           tooltip: 'Filters',

@@ -61,7 +61,7 @@ class _OtpScreenState extends State<OtpScreen> {
     final masked = _auth.phone.value.length >= 2
         ? _auth.phone.value.substring(_auth.phone.value.length - 2)
         : '';
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(),
       body: SafeArea(
         child: Padding(

@@ -11,6 +11,7 @@ import '../data/repositories/auth_repository.dart';
 import '../features/home/event_list_screen.dart';
 import '../data/repositories/ticket_repository.dart';
 import '../features/tickets/claim_screen.dart';
+import '../features/tickets/claim_transfer_screen.dart';
 import '../features/tickets/ticket_view_screen.dart';
 import '../features/web/web_view_screen.dart';
 import 'attribution.dart';
@@ -117,9 +118,15 @@ class DeepLinks {
   }
 
   static Future<void> _openTicket(String id) async {
-    final r = await sl<TicketRepository>().openTicket(id);
+    final r = await sl<TicketRepository>().open(id);
     if (r.isOk) {
-      Get.to(() => TicketViewScreen(ticket: r.data!));
+      final o = r.data!;
+      if (o.transfer != null) {
+        // Sent to this number and not claimed yet: the claim card (QR hidden).
+        Get.to(() => ClaimTransferScreen(transfer: o.transfer!));
+      } else {
+        Get.to(() => TicketViewScreen(ticket: o.ticket!));
+      }
     } else {
       Get.snackbar('Tickets', r.error ?? 'Couldn’t open these tickets.');
     }

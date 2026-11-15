@@ -97,7 +97,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final hint = Theme.of(context).hintColor;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(
         title: Text(widget.editing ? 'Edit profile' : 'Complete your profile'),
         automaticallyImplyLeading: widget.editing,

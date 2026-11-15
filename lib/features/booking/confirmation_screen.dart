@@ -24,7 +24,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
     final c = Get.find<BookingController>();
     final code = c.quote.value?.bookingCode ?? '—';
     final count = c.tickets.fold<int>(0, (n, t) => n + t.quantity);
-    return Scaffold(
+    return GlassScaffold(
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),

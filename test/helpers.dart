@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass/app/routes.dart';
 import 'package:gatepass/app/theme.dart';
 import 'package:gatepass/core/di.dart';
@@ -91,8 +92,8 @@ Future<Deps> setUpDeps({bool loggedIn = true, PushService? push}) async {
 
 /// Pumps [child] inside the real app shell (routes + theme) in light or dark mode.
 Widget app(Widget child, {ThemeMode mode = ThemeMode.light}) => GetMaterialApp(
-      theme: GatePassTheme.light(),
-      darkTheme: GatePassTheme.dark(),
+      theme: GlassTheme.light(),
+      darkTheme: GlassTheme.dark(),
       themeMode: mode,
       home: child,
       getPages: Routes.pages,
@@ -148,3 +149,11 @@ Map<String, dynamic> ticketJson(String id, {String status = 'active'}) => {
       'transferableUnits': 2,
       'receivedFrom': null,
     };
+
+
+/// Drags a SwipeButton's knob all the way (swipe to pay / send).
+Future<void> swipe(WidgetTester t, Key knob) async {
+  await t.ensureVisible(find.byKey(knob));
+  await t.drag(find.byKey(knob), const Offset(800, 0));
+  await t.pump();
+}

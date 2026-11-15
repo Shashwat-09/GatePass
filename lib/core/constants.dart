@@ -102,6 +102,8 @@ class Endpoints {
   static const claimTicket = 'api/ticket/claim';
   static const claimBack = 'api/ticket/claim-back';
   static const transfers = 'api/ticket/transfers';
+  static String claimTransfer(String id) => 'api/ticket/transfers/$id/claim'; // one tap: tickets sent to your number
+  static const waitingTransfers = 'api/ticket/transfers/waiting';
   static const sharedTicket = 'api/ticket/shared-ticket';
   static const exportLink = 'api/ticket/export-link';
   static const unreadCount = 'api/notifications/unread-count';

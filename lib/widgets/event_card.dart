@@ -19,7 +19,8 @@ class EventArt extends StatelessWidget {
   final String? seed;
   @override
   Widget build(BuildContext context) {
-    final ph = ArchArt(seed: seed ?? url);
+    // Glass look: the event's own colour mix; Utsav: arch-and-lattice art.
+    final Widget ph = GlassStyle.of(context) != null ? PosterArt(seed: seed ?? url) : ArchArt(seed: seed ?? url);
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: url.isEmpty

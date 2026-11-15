@@ -49,7 +49,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _c;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(
         title: Text(widget.title ?? Uri.tryParse(widget.url)?.host ?? ''),
         bottom: _progress > 0 && _progress < 100

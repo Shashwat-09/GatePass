@@ -171,7 +171,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Attendee Details')),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         RegistrationFormsView(key: _view, forms: widget.forms, attendees: widget.attendees, initial: widget.initial),

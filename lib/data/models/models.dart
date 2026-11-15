@@ -749,6 +749,15 @@ class TransferModel {
   final String? counterpart;
   final String? shareUrl;
   final DateTime? createdAt;
+  /// Received and waiting: the QR stays hidden until one tap on Claim.
+  final bool canClaim;
+  /// The sender's first name (received).
+  final String? fromName;
+  final String venueName;
+  final String tierName;
+  /// The ticket made when it was claimed (received).
+  final String? ticketId;
+  final String eventId;
 
   TransferModel({
     required this.id,
@@ -761,6 +770,12 @@ class TransferModel {
     this.counterpart,
     this.shareUrl,
     this.createdAt,
+    this.canClaim = false,
+    this.fromName,
+    this.venueName = '',
+    this.tierName = '',
+    this.ticketId,
+    this.eventId = '',
   });
 
   bool get isPending => status == 'pending';
@@ -776,7 +791,21 @@ class TransferModel {
         counterpart: j['counterpart']?.toString(),
         shareUrl: j['shareUrl']?.toString(),
         createdAt: DateTime.tryParse((j['createdAt'] ?? '').toString())?.toLocal(),
+        canClaim: j['canClaim'] == true,
+        fromName: j['fromName']?.toString(),
+        venueName: (j['venueName'] ?? '').toString(),
+        tierName: (j['tierName'] ?? '').toString(),
+        ticketId: j['ticketId']?.toString(),
+        eventId: (j['eventId'] ?? '').toString(),
       );
+}
+
+/// What a WhatsApp / push link opens: the ticket, or tickets waiting to be claimed.
+class OpenResult {
+  const OpenResult.ticket(TicketModel this.ticket) : transfer = null;
+  const OpenResult.claim(TransferModel this.transfer) : ticket = null;
+  final TicketModel? ticket;
+  final TransferModel? transfer;
 }
 
 /// Result of sharing tickets.

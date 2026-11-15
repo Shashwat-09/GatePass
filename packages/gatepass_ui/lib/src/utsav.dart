@@ -3,6 +3,7 @@
 // Inter. Fonts are bundled in this package (assets/fonts, SIL OFL).
 import 'package:flutter/material.dart';
 
+import 'glass.dart';
 import 'theme.dart';
 
 class UtsavPalette {
@@ -77,14 +78,19 @@ class GatePassTheme {
 
 /// Display-serif helper for one-off big numerals and prices (dates, totals).
 extension UtsavText on BuildContext {
-  TextStyle serif(double size, {Color? color, FontWeight weight = FontWeight.w600, FontStyle? style, double? height}) => TextStyle(
-        fontFamily: GatePassTheme.displayFont,
-        fontSize: size,
-        fontWeight: weight,
-        fontStyle: style,
-        height: height,
-        color: color ?? colors.label,
-      );
+  /// In the glass look this is Inter bold, tightly set (Apple display style).
+  TextStyle serif(double size, {Color? color, FontWeight weight = FontWeight.w600, FontStyle? style, double? height}) {
+    final glass = Theme.of(this).extension<GlassStyle>() != null;
+    return TextStyle(
+      fontFamily: glass ? GlassTheme.font : GatePassTheme.displayFont,
+      fontSize: size,
+      fontWeight: glass ? FontWeight.w700 : weight,
+      fontStyle: glass ? null : style,
+      letterSpacing: glass ? -size * 0.022 : null,
+      height: height,
+      color: color ?? colors.label,
+    );
+  }
 
   /// Letter-spaced small caps line in ochre ("THE PROGRAMME · WEEK 47").
   TextStyle get eyebrow => text.labelMedium!.copyWith(color: colors.accentText, fontWeight: FontWeight.w700, letterSpacing: 1.4);

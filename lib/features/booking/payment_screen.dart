@@ -63,7 +63,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) c.abandon();
       },
-      child: Scaffold(
+      child: GlassScaffold(
         backgroundColor: context.colors.groupedCanvas,
         appBar: AppBar(title: const Text('Payment'), backgroundColor: context.colors.groupedCanvas),
         body: SafeArea(
@@ -116,10 +116,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ]),
                   ),
                 if (q.gateway == 'mock') ..._testMode(busy) else
-                  PrimaryButton(
-                    label: 'Pay ${formatPaise(q.payablePaise)}',
+                  SwipeButton(
+                    key: const Key('swipe-pay-gateway'),
+                    label: 'Swipe to Pay ${formatPaise(q.payablePaise)}',
                     loading: busy,
-                    onPressed: () async => _onPaid(await c.pay()),
+                    onConfirm: () async => _onPaid(await c.pay()),
                   ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -148,10 +149,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ]),
         ),
         const SizedBox(height: AppSpacing.sm),
-        PrimaryButton(
+        SwipeButton(
+          key: const Key('swipe-pay-test'),
+          knobKey: const Key('swipe-pay-test-knob'),
           label: 'Simulate Successful Payment',
           loading: busy,
-          onPressed: () async => _onPaid(await c.confirmWith({'mockResult': 'success'})),
+          onConfirm: () async => _onPaid(await c.confirmWith({'mockResult': 'success'})),
         ),
         TextButton(
           onPressed: busy ? null : () => c.confirmWith({'mockResult': 'failure'}),

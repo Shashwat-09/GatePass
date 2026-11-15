@@ -112,7 +112,7 @@ class _SelectSeatScreenState extends State<SelectSeatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(
         toolbarHeight: 64,
         title: Column(mainAxisSize: MainAxisSize.min, children: [

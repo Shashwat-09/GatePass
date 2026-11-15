@@ -27,6 +27,7 @@ import 'package:gatepass/widgets/price_breakdown.dart';
 import 'package:gatepass/core/di.dart';
 import 'package:gatepass/services/storage/local_storage.dart';
 import 'package:gatepass/features/tickets/ticket_view_screen.dart';
+import 'package:gatepass_ui/theme.dart' show BlurredQr, GlassTheme;
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -59,7 +60,7 @@ void main() {
         await t.pumpWidget(app(TicketViewScreen(ticket: TicketModel.fromJson(ticketJson('t1'))), mode: mode));
         await t.pumpAndSettle();
         expect(find.byType(QrImageView), findsOneWidget);
-        expect(find.text('Share Tickets'), findsOneWidget);
+        expect(find.text('Send to Friends'), findsOneWidget);
         // Invoice and other extras live in the "More" menu.
         await t.tap(find.byTooltip('More'));
         await t.pumpAndSettle();
@@ -80,7 +81,7 @@ void main() {
         expect(find.text('₹1,942.21'), findsOneWidget);
         expect(find.textContaining('Test mode'), findsOneWidget);
         expect(find.textContaining('Tickets held for'), findsOneWidget);
-        await t.tap(find.text('Simulate Successful Payment'));
+        await swipe(t, const Key('swipe-pay-test-knob'));
         await t.pumpAndSettle();
         expect(find.text('Booking Confirmed'), findsOneWidget);
         expect(d.backend.callsTo('api/payment/process-order').single.body['gatewayPayload'], {'mockResult': 'success'});
@@ -102,10 +103,9 @@ void main() {
     addTearDown(t.view.reset);
     await t.pumpWidget(app(TicketViewScreen(ticket: TicketModel.fromJson(ticketJson('t1')))));
     await t.pumpAndSettle();
-    await t.ensureVisible(find.byKey(const Key('share-tickets')));
-    await t.tap(find.byKey(const Key('share-tickets')));
+    await swipe(t, const Key('share-knob'));
     await t.pumpAndSettle();
-    expect(find.text('Share Tickets'), findsNWidgets(2)); // button + sheet title
+    expect(find.text('Share Tickets'), findsOneWidget); // the sheet's title
     expect(find.text('Add Someone'), findsOneWidget); // nothing to send yet
     await t.enterText(find.byKey(const Key('share-phone')), '9876543210');
     await t.pumpAndSettle();
@@ -122,7 +122,7 @@ void main() {
     expect(find.text('Send to a Friend'), findsOneWidget); // one ticket left
     final qr = t.widget<QrImageView>(find.byType(QrImageView));
     expect(qr, isNotNull);
-    expect(find.textContaining('ADMIT 1', findRichText: true), findsOneWidget); // admits 1 now
+    expect(find.text('Admit 1'), findsOneWidget); // admits 1 now
   });
 
   testWidgets('Share sheet: several friends at once, recents are one tap, counts can’t exceed what you have', (t) async {
@@ -197,7 +197,7 @@ void main() {
     await t.tap(find.text('Neon Nights'));
     await t.pumpAndSettle();
     expect(find.byType(QrImageView), findsOneWidget);
-    expect(find.text('Share Tickets'), findsNothing); // can't share offline
+    expect(find.text('Send to Friends'), findsNothing); // can't share offline
   });
 
   testWidgets('Claim screen previews a share code and claims it', (t) async {
@@ -209,9 +209,11 @@ void main() {
     d.backend.json('GET', 'api/ticket/my-tickets', {'items': [ticketJson('t7')], 'page': 1, 'limit': 50, 'total': 1});
     await t.pumpWidget(GetMaterialApp(home: const ClaimScreen(code: 'ABC123DEF456'), getPages: Routes.pages));
     await t.pumpAndSettle();
-    expect(find.text('Asha sent you'), findsOneWidget);
-    expect(find.text('2 tickets · Neon Nights'), findsOneWidget);
-    await t.tap(find.text('Add to My Tickets'));
+    expect(find.text('Asha sent you 2 tickets'), findsOneWidget);
+    expect(find.text('Neon Nights'), findsOneWidget);
+    expect(find.byType(BlurredQr), findsOneWidget); // no QR until it's claimed
+    await t.tap(find.text('Claim Your Tickets'));
+    await t.pump(const Duration(seconds: 2));
     await t.pumpAndSettle();
     expect(d.backend.callsTo('api/ticket/claim').single.body, {'code': 'ABC123DEF456'});
   });
@@ -240,7 +242,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('Central GST (CGST) @ 9%'), findsOneWidget);
     expect(find.textContaining('State GST (SGST) @ 9%'), findsOneWidget);
-    expect(find.text('Pay ₹1,447.49'), findsOneWidget);
+    expect(find.text('Swipe to Pay ₹1,447.49'), findsOneWidget);
 
     await t.tap(find.text('Apply Promo Code'));
     await t.pumpAndSettle();
@@ -253,7 +255,7 @@ void main() {
     await t.tap(find.text('Use Coins'));
     await t.pumpAndSettle();
     expect(find.text('Coins applied'), findsOneWidget);
-    expect(find.text('Pay ₹1,347.49'), findsOneWidget);
+    expect(find.text('Swipe to Pay ₹1,347.49'), findsOneWidget);
     expect(d.backend.callsTo('api/payment/quote').last.body['useCoins'], true);
   });
 
@@ -286,7 +288,7 @@ void main() {
     c.inc(c.event.tiers.first);
     await t.pumpWidget(GetMaterialApp(home: const SummaryScreen(), getPages: Routes.pages));
     await t.pumpAndSettle();
-    await t.tap(find.text('Confirm Booking'));
+    await swipe(t, const Key('swipe-pay-knob'));
     await t.pumpAndSettle();
     expect(find.text('Booking Confirmed'), findsOneWidget);
     expect(d.payments.opened, 0);
@@ -736,5 +738,41 @@ void main() {
     await t.pumpWidget(app(Scaffold(body: PriceBreakdownView(c))));
     expect(find.text('₹50'), findsOneWidget);
     expect(find.textContaining('CGST'), findsOneWidget);
+  });
+
+  testWidgets('Received: tickets a friend sent wait with a blurred QR; one tap on Claim makes them yours', (t) async {
+    t.view.physicalSize = const Size(1080, 2400);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    final waiting = {
+      'id': 'tr-1', 'direction': 'received', 'status': 'pending', 'quantity': 2, 'eventId': 'e1', 'eventTitle': 'Neon Nights',
+      'startDate': '2030-01-01T18:00:00Z', 'tierName': 'General', 'method': 'phone', 'counterpart': 'Asha Rao', 'fromName': 'Asha',
+      'venueName': 'Riverside', 'canClaim': true, 'ticketId': null, 'createdAt': '2029-12-01T10:00:00Z',
+    };
+    var claimed = false;
+    d.backend.on('GET', 'api/ticket/transfers', (req) async => FakeBackend.ok({
+          'items': req.url.queryParameters['direction'] == 'received' && !claimed ? [waiting] : [],
+          'page': 1, 'limit': 50, 'total': claimed ? 0 : 1,
+        }));
+    d.backend.on('GET', 'api/ticket/my-tickets', (req) async => FakeBackend.ok({
+          'items': claimed && req.url.queryParameters['source'] == 'received' ? [{...ticketJson('t9'), 'receivedFrom': 'Asha Rao'}] : [],
+          'page': 1, 'limit': 20, 'total': 0,
+        }));
+    d.backend.on('POST', 'api/ticket/transfers/tr-1/claim', (_) async {
+      claimed = true;
+      return FakeBackend.ok({'ticket': {...ticketJson('t9'), 'receivedFrom': 'Asha Rao'}});
+    });
+    await t.pumpWidget(GetMaterialApp(home: const MyTicketsScreen(), getPages: Routes.pages, theme: GlassTheme.dark()));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Received'));
+    await t.pumpAndSettle();
+    expect(find.text('Asha sent you 2 tickets'), findsOneWidget);
+    expect(find.byType(BlurredQr), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing); // the real QR doesn't exist yet
+    await t.tap(find.text('Claim Your Tickets'));
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+    expect(d.backend.callsTo('api/ticket/transfers/tr-1/claim'), hasLength(1));
+    expect(find.byType(QrImageView), findsOneWidget); // opened on their new ticket
   });
 }

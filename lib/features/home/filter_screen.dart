@@ -40,7 +40,7 @@ class _FilterScreenState extends State<FilterScreen> {
   @override
   Widget build(BuildContext context) {
     final o = _opts;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Filters'), actions: [
         TextButton(
           onPressed: () => setState(() {

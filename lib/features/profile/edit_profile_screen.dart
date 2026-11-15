@@ -97,7 +97,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final phone = _auth.currentUser?.phone ?? '';
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Edit Account Details')),
       body: SafeArea(
         child: Form(

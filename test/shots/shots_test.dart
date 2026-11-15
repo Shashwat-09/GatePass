@@ -110,8 +110,8 @@ void main() {
       key: key,
       child: GetMaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: GatePassTheme.light(),
-        darkTheme: GatePassTheme.dark(),
+        theme: GlassTheme.light(),
+        darkTheme: GlassTheme.dark(),
         themeMode: mode,
         getPages: Routes.pages,
         initialRoute: route,

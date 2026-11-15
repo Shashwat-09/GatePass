@@ -48,7 +48,7 @@ class _VouchersScreenState extends State<VouchersScreen> {
   @override
   Widget build(BuildContext context) {
     String label(String t) => '${t[0].toUpperCase()}${t.substring(1)}${_counts[t] != null ? ' (${_counts[t]})' : ''}';
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(title: const Text('My Vouchers'), backgroundColor: context.colors.groupedCanvas),
       body: Column(children: [

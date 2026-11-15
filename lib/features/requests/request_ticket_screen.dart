@@ -71,7 +71,7 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
   Widget build(BuildContext context) {
     final t = widget.tier;
     final hint = Theme.of(context).hintColor;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Request Tickets')),
       body: _forms == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())

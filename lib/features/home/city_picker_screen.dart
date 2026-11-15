@@ -103,7 +103,7 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Select City'), automaticallyImplyLeading: !widget.firstRun),
       body: Column(children: [
         Padding(

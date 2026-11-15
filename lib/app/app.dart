@@ -13,8 +13,9 @@ class GatePassApp extends StatelessWidget {
     return GetMaterialApp(
       title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
-      theme: GatePassTheme.light(),
-      darkTheme: GatePassTheme.dark(),
+      // Liquid glass (owner's design): a colour mesh, frosted panels, lime actions.
+      theme: GlassTheme.light(),
+      darkTheme: GlassTheme.dark(),
       themeMode: ThemeMode.system,
       initialRoute: Routes.splash,
       getPages: Routes.pages,

@@ -105,7 +105,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget build(BuildContext context) {
     final e = _event;
     if (e == null) {
-      return Scaffold(
+      return GlassScaffold(
         appBar: AppBar(),
         body: _loading ? const StateView.loading() : StateView.error(_error ?? 'Event not found', onRetry: _load),
       );
@@ -120,14 +120,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       if (e.ageLimit == null || e.ageLimit == '0' || e.ageLimit!.isEmpty) 'All ages' else e.ageLimit!,
     ].join(' · ').toUpperCase();
 
-    return Scaffold(
+    return GlassScaffold(
+      // The page takes the event's own colour mix.
+      extendBody: true,
       body: RefreshIndicator(
         onRefresh: _load,
         child: CustomScrollView(slivers: [
           SliverAppBar(
             expandedHeight: heroH,
             pinned: true,
-            backgroundColor: context.colors.canvas,
+            backgroundColor: Colors.transparent,
             automaticallyImplyLeading: false,
             leading: Padding(padding: const EdgeInsets.only(left: 8), child: _circle(CupertinoIcons.chevron_left, 'Back', () => Get.back())),
             actions: [
@@ -138,7 +140,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             flexibleSpace: FlexibleSpaceBar(
               background: GestureDetector(
                 onTap: images.isEmpty ? null : () => Get.to(() => GalleryViewer(images: images)),
-                child: EventArt(images.isEmpty ? '' : images.first, radius: 0, memCacheWidth: 1080, seed: e.id),
+                // The art melts into the page's colour mesh below it.
+                child: ShaderMask(
+                  shaderCallback: (r) => const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.white, Colors.white, Colors.transparent], stops: [0, 0.7, 1]).createShader(r),
+                  blendMode: BlendMode.dstIn,
+                  child: EventArt(images.isEmpty ? '' : images.first, radius: 0, memCacheWidth: 1080, seed: e.id),
+                ),
               ),
             ),
           ),
@@ -146,7 +153,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (eyebrow.isNotEmpty) Text(eyebrow, style: context.eyebrow),
+                if (eyebrow.isNotEmpty) Text(eyebrow, style: context.text.labelMedium!.copyWith(color: context.colors.secondaryLabel, fontWeight: FontWeight.w600, letterSpacing: 0.4)),
                 const SizedBox(height: 6),
                 Semantics(header: true, child: Text(e.title, style: context.serif(30, height: 1.12))),
                 if (e.organizer != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text('By ${e.organizer}', style: context.text.bodyMedium!.copyWith(color: hint))),
@@ -244,26 +251,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   /// White round button over the art (back, calendar, share).
-  Widget _circle(IconData icon, String label, VoidCallback onTap) => Tooltip(
-      message: label,
-      excludeFromSemantics: true,
-      child: Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
-        child: Center(
-          child: Material(
-            color: UtsavArt.paper,
-            shape: const CircleBorder(),
-            elevation: 0,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20, color: UtsavArt.ink)),
-            ),
-          ),
-        ),
-      ));
+  Widget _circle(IconData icon, String label, VoidCallback onTap) =>
+      Center(child: GlassIconButton(icon: icon, tooltip: label, onPressed: onTap));
 
   String? _duration(int? m) {
     if (m == null || m <= 0) return null;
@@ -275,36 +264,34 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   /// Date and venue, the two facts people check twice.
   Widget _infoCard(EventModel e) {
     final c = context.colors;
-    final dateStr = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM yyyy · h:mm a').format(e.date!);
     final addr = e.venueAddress ?? '';
     // Don't repeat the city when the address already ends with it.
     final place = [addr, if (!addr.toLowerCase().contains(e.city.toLowerCase())) e.city].where((x) => x.isNotEmpty).join(', ');
-    Widget row(IconData icon, String title, String? sub, {Widget? trailing}) => Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(children: [
-            Icon(icon, color: c.tint, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: context.text.titleMedium),
-                if (sub != null && sub.isNotEmpty) Text(sub, style: context.text.bodySmall),
-              ]),
+    Widget chip(IconData icon, String title, String? sub, {VoidCallback? onTap}) => Expanded(
+          child: PressScale(
+            enabled: onTap != null,
+            child: GestureDetector(
+              onTap: onTap,
+              child: GlassPanel(
+                radius: 24,
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(icon, color: c.label, size: 20),
+                  const SizedBox(height: 10),
+                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w700)),
+                  if (sub != null && sub.isNotEmpty) Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.labelMedium!.copyWith(color: c.secondaryLabel)),
+                ]),
+              ),
             ),
-            if (trailing != null) trailing,
-          ]),
+          ),
         );
-    return Container(
-      decoration: BoxDecoration(color: c.cell, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: c.separator)),
-      child: Column(children: [
-        row(CupertinoIcons.calendar, dateStr, _duration(e.durationMinutes)),
-        Divider(height: 1, color: c.separator),
-        row(CupertinoIcons.placemark, e.venueName, place,
-            trailing: e.mapLink == null
-                ? null
-                : TextButton(
-                    onPressed: () => openLink(e.mapLink!),
-                    child: Text('Directions', style: context.text.titleSmall!.copyWith(color: c.tint, decoration: TextDecoration.underline, decorationColor: c.tint)),
-                  )),
+    final day = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM').format(e.date!);
+    final time = e.date == null ? null : [DateFormat('h:mm a').format(e.date!), _duration(e.durationMinutes)?.replaceFirst('About ', '')].whereType<String>().join(' · ');
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        chip(CupertinoIcons.calendar, day, time),
+        const SizedBox(width: 12),
+        chip(CupertinoIcons.placemark, e.venueName, e.mapLink == null ? place : 'Directions', onTap: e.mapLink == null ? null : () => openLink(e.mapLink!)),
       ]),
     );
   }
@@ -376,21 +363,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 : e.badge.isBookable
                     ? (e.hasSeatMap ? 'Select Seats' : 'Get Tickets')
                     : e.badge.label;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
-      decoration: BoxDecoration(
-        color: context.colors.canvas,
-        border: Border(top: BorderSide(color: context.colors.separator, width: 0.5)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('From', style: context.text.bodySmall),
-            Text(e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free', style: context.serif(26, height: 1.1)),
-          ]),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
+    return CheckoutBar(
+      caption: 'From',
+      amount: e.priceFrom > 0 ? formatPaise(e.priceFrom.toInt()) : 'Free',
+      button: Builder(builder: (context) {
+        return SizedBox(
             child: PrimaryButton(
               label: label,
               loading: _notifyBusy,
@@ -406,9 +383,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   : SelectTicketScreen(event: e))
                           : null,
             ),
-          ),
-        ]),
-      ),
+          );
+      }),
     );
   }
 

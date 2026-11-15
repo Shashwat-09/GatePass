@@ -24,6 +24,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   late int _index;
   final _tabs = const [HomeScreen(), MyTicketsScreen(), ProfileScreen()];
+  // Registered here so the tab bar can badge tickets waiting to be claimed.
+  final _tickets = Get.put(MyTicketsController());
 
   @override
   void initState() {
@@ -43,70 +45,21 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Tickets waiting to be claimed show as a badge on the Tickets tab.
+    final waiting = _tickets.waiting;
+    Widget bar(int badge) => GlassTabBar(
+          index: _index,
+          onTap: (i) => setState(() => _index = i),
+          items: [
+            const GlassTab(icon: CupertinoIcons.house, activeIcon: CupertinoIcons.house_fill, label: 'Home'),
+            GlassTab(icon: CupertinoIcons.ticket, activeIcon: CupertinoIcons.ticket_fill, label: 'Tickets', badge: badge),
+            const GlassTab(icon: CupertinoIcons.person, activeIcon: CupertinoIcons.person_fill, label: 'Profile'),
+          ],
+        );
+    return GlassScaffold(
+      extendBody: true,
       body: IndexedStack(index: _index, children: _tabs),
-      bottomNavigationBar: UtsavTabBar(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
-        items: const [
-          (CupertinoIcons.compass, CupertinoIcons.compass_fill, 'Discover'),
-          (CupertinoIcons.ticket, CupertinoIcons.ticket_fill, 'Tickets'),
-          (CupertinoIcons.person, CupertinoIcons.person_fill, 'Profile'),
-        ],
-      ),
-    );
-  }
-}
-
-/// Tab bar on paper: the selected tab's symbol sits in a filled teal disc,
-/// its label in teal; the others are quiet outlines. Navigation only.
-class UtsavTabBar extends StatelessWidget {
-  const UtsavTabBar({super.key, required this.index, required this.onTap, required this.items});
-  final int index;
-  final ValueChanged<int> onTap;
-  final List<(IconData, IconData, String)> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return DecoratedBox(
-      decoration: BoxDecoration(color: c.canvas, border: Border(top: BorderSide(color: c.separator, width: 0.5))),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 62,
-          child: Row(children: [
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  selected: i == index,
-                  label: '${items[i].$3} tab',
-                  excludeSemantics: true,
-                  child: InkResponse(
-                    onTap: () => onTap(i),
-                    radius: 36,
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      AnimatedContainer(
-                        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180),
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(color: i == index ? c.tintFill : Colors.transparent, shape: BoxShape.circle),
-                        child: Icon(i == index ? items[i].$2 : items[i].$1, size: i == index ? 18 : 24, color: i == index ? Colors.white : c.secondaryLabel),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(items[i].$3,
-                          style: context.text.labelMedium!.copyWith(
-                            color: i == index ? c.tint : c.secondaryLabel,
-                            fontWeight: i == index ? FontWeight.w700 : FontWeight.w500,
-                          )),
-                    ]),
-                  ),
-                ),
-              ),
-          ]),
-        ),
-      ),
+      bottomNavigationBar: Obx(() => bar(waiting.value)),
     );
   }
 }

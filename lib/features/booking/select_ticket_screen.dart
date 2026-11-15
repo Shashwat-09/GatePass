@@ -30,7 +30,7 @@ class SelectTicketScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Get.put(BookingController())..start(event);
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(title: const Text('Tickets'), backgroundColor: context.colors.groupedCanvas),
       body: ListView(

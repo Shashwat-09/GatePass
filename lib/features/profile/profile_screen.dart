@@ -63,7 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = _auth.currentUser;
     final name = (user?.name ?? '').trim();
     final initials = name.isEmpty ? '' : name.split(RegExp(r'\s+')).take(2).map((w) => w[0].toUpperCase()).join();
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Profile', background: context.colors.groupedCanvas),
@@ -128,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             footer: 'Deleting your account erases your personal details. Past bookings are kept for tax records without your name.',
             children: [GroupRow(title: 'Delete Account', destructive: true, onTap: _confirmDelete)],
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 120), // clear of the floating tab bar
         ]),
       ]),
     );

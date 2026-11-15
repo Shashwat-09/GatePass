@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'delight.dart';
+import 'glass.dart';
 import 'theme.dart';
 
 /// Primary call-to-action button with a built-in loading state.
@@ -26,19 +27,21 @@ class PrimaryButton extends StatelessWidget {
             Delight.press();
             onPressed!();
           };
+    final glass = GlassStyle.of(context);
+    final Widget content = loading
+        ? Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: glass?.onTintFill ?? context.colors.secondaryLabel)),
+            const SizedBox(width: 10),
+            Text(label),
+          ])
+        : Text(label);
     return SizedBox(
       width: double.infinity,
       child: PressScale(
         enabled: tap != null,
         child: ElevatedButton(
           onPressed: tap,
-          child: loading
-              ? Row(mainAxisSize: MainAxisSize.min, children: [
-                  SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.secondaryLabel)),
-                  const SizedBox(width: 10),
-                  Text(label),
-                ])
-              : Text(label),
+          child: content,
         ),
       ),
     );
@@ -238,12 +241,19 @@ class InsetGroup extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, 6),
             child: Semantics(header: true, child: Text(header!.toUpperCase(), style: context.text.bodySmall)),
           ),
-        Material(
-          color: context.colors.cell,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: rows),
-        ),
+        if (GlassStyle.of(context) != null)
+          GlassPanel(
+            radius: 24,
+            shadow: false,
+            child: Material(type: MaterialType.transparency, borderRadius: BorderRadius.circular(24), clipBehavior: Clip.antiAlias, child: Column(children: rows)),
+          )
+        else
+          Material(
+            color: context.colors.cell,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: rows),
+          ),
         if (footer != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.md, 6, AppSpacing.md, 0),
@@ -378,8 +388,8 @@ Widget largeTitleBar(BuildContext context, String title, {Widget? leading, List<
       largeTitle: Text(title),
       leading: leading,
       trailing: actions.isEmpty ? null : Row(mainAxisSize: MainAxisSize.min, children: actions),
-      backgroundColor: (background ?? context.colors.canvas).withValues(alpha: 0.92),
-      border: Border(bottom: BorderSide(color: context.colors.separator, width: 0.0)),
+      backgroundColor: GlassStyle.of(context) != null ? GlassStyle.of(context)!.chrome.withValues(alpha: 0.0) : (background ?? context.colors.canvas).withValues(alpha: 0.92),
+      border: GlassStyle.of(context) != null ? null : Border(bottom: BorderSide(color: context.colors.separator, width: 0.0)),
       // Several tabs stay alive in an IndexedStack: no shared hero between them.
       transitionBetweenRoutes: false,
       stretch: false,
@@ -393,6 +403,30 @@ class CheckoutBar extends StatelessWidget {
   final Widget button;
   @override
   Widget build(BuildContext context) {
+    if (GlassStyle.of(context) != null) {
+      // Floating glass bar: amount on the left, the lime action on the right.
+      return SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+          child: GlassPanel(
+            radius: 36,
+            blur: true,
+            color: GlassStyle.of(context)!.chrome,
+            padding: const EdgeInsets.fromLTRB(22, 8, 8, 8),
+            child: Row(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(caption, style: context.text.bodySmall),
+                Text(amount, style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700, fontFeatures: const [FontFeature.tabularFigures()])),
+              ]),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: button),
+            ]),
+          ),
+        ),
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: context.colors.canvas,

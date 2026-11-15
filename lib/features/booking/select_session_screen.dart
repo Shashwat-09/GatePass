@@ -42,7 +42,7 @@ class _SelectSessionScreenState extends State<SelectSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final t = _tree;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Select Date & Time')),
       body: t == null
           ? (_error != null ? StateView.error(_error!, onRetry: _load) : const StateView.loading())

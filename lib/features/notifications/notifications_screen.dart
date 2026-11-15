@@ -42,7 +42,7 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Get.put(NotificationsController());
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: const Text('Notifications')),
       body: Obx(() {
         if (c.loading.value) return const StateView.loading();

@@ -230,6 +230,7 @@ class AppTheme {
     String? displayFont,
     double buttonRadius = AppRadius.md,
     double buttonHeight = 50,
+    Color onTintFill = Colors.white,
   }) {
     final isDark = b == Brightness.dark;
     final scheme = ColorScheme(
@@ -263,8 +264,8 @@ class AppTheme {
     final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(buttonRadius));
     final prominent = ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.fill : p.tintFill),
-      foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.secondaryLabel : Colors.white),
-      overlayColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.12)),
+      foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.secondaryLabel : onTintFill),
+      overlayColor: WidgetStatePropertyAll(onTintFill.withValues(alpha: 0.12)),
       minimumSize: WidgetStatePropertyAll(Size(64, buttonHeight)),
       padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20)),
       elevation: const WidgetStatePropertyAll(0),

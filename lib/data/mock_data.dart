@@ -78,6 +78,15 @@ class MockData {
     ),
   ];
 
+  /// Tickets a friend sent that wait for a tap on Claim (demo).
+  static final waiting = <TransferModel>[
+    TransferModel(
+      id: 'TR-DEMO-1', direction: 'received', status: 'pending', quantity: 2, eventTitle: 'Standup Central: Open Mic',
+      startDate: DateTime.now().add(const Duration(days: 9)), method: 'phone', counterpart: 'Kabir Mehta', fromName: 'Kabir',
+      venueName: 'The Box, Ahmedabad', tierName: 'Front Row', canClaim: true, eventId: 'e2',
+    ),
+  ];
+
   static final tickets = <TicketModel>[
     TicketModel(
       id: 'TKT-0001',

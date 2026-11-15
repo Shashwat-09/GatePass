@@ -54,7 +54,7 @@ class _BundleScreenState extends State<BundleScreen> {
   Widget build(BuildContext context) {
     final hint = Theme.of(context).hintColor;
     final allNights = b.nights >= b.dates.length;
-    return Scaffold(
+    return GlassScaffold(
       appBar: AppBar(title: Text(b.name)),
       body: ListView(padding: const EdgeInsets.all(AppSpacing.md), children: [
         Text(widget.event.title, style: context.text.titleMedium!),

@@ -248,10 +248,10 @@ void main() {
 
     d.backend.json('GET', 'api/ticket/open/$id', ticketJson('t7'));
     d.backend.json('GET', 'api/ticket/my-tickets', {'items': [], 'page': 1, 'limit': 50, 'total': 0});
-    final r = await sl<TicketRepository>().openTicket(id);
-    expect(r.data!.id, 't7');
+    final r = await sl<TicketRepository>().open(id);
+    expect(r.data!.ticket!.id, 't7');
     d.backend.on('GET', 'api/ticket/open/$id', (_) async => FakeBackend.err('FORBIDDEN', 'These tickets were sent to +91 ••••• •1234. Sign in with that number to see them.', 403));
-    expect((await sl<TicketRepository>().openTicket(id)).error, contains('Sign in with that number'));
+    expect((await sl<TicketRepository>().open(id)).error, contains('Sign in with that number'));
   });
 
   test('app config: one live city (Ahmedabad) comes through; several means the picker', () {
