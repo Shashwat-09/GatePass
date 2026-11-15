@@ -9,12 +9,39 @@ enum Role { customer, staff, organiser, admin, distributor, reseller }
 
 Role _role(dynamic v) => Role.values.firstWhere((r) => r.name == v, orElse: () => Role.customer);
 
+/// Someone's jobs on single events (counts), e.g. scanner at two events.
+class TeamRoles {
+  const TeamRoles({this.events = 0, this.organiser = 0, this.eventAdmin = 0, this.seller = 0, this.scanner = 0, this.pendingChanges = 0});
+  factory TeamRoles.fromJson(Map j) {
+    final r = (j['eventRoles'] as Map?) ?? const {};
+    int n(Object? v) => (v as num?)?.toInt() ?? 0;
+    return TeamRoles(
+      events: n(j['events']), organiser: n(r['organiser']), eventAdmin: n(r['eventAdmin']), seller: n(r['seller']), scanner: n(r['scanner']),
+      pendingChanges: n(j['pendingChanges']),
+    );
+  }
+  final int events;
+  final int organiser;
+  final int eventAdmin;
+  final int seller;
+  final int scanner;
+  /// Admins: changes waiting for approval.
+  final int pendingChanges;
+}
+
 class Me {
-  const Me({required this.id, required this.name, required this.phone, required this.role, List<Role>? roles}) : _roles = roles;
+  const Me({required this.id, required this.name, required this.phone, required this.role, List<Role>? roles, this.team = const TeamRoles()})
+      : _roles = roles;
   factory Me.fromJson(Map j) {
     final roles = (j['roles'] as List?)?.map(_role).toList();
-    return Me(id: _str(j['id']), name: _str(j['name']), phone: _str(j['phone']), role: _role(j['role']), roles: roles);
+    return Me(
+      id: _str(j['id']), name: _str(j['name']), phone: _str(j['phone']), role: _role(j['role']), roles: roles,
+      team: j['team'] is Map ? TeamRoles.fromJson(j['team'] as Map) : const TeamRoles(),
+    );
   }
+  Me withTeam(TeamRoles t) => Me(id: id, name: name, phone: phone, role: role, roles: _roles, team: t);
+  /// Jobs on single events (event admin, seller, scanner), from api/organiser/me.
+  final TeamRoles team;
   final String id;
   final String name;
   final String phone;
@@ -29,7 +56,9 @@ class Me {
   /// Sales, ticket types, approvals, comp and box-office tickets.
   bool get canManage => has(Role.organiser) || isAdmin;
   /// Check-in at the gate.
-  bool get canScan => has(Role.staff) || has(Role.organiser) || isAdmin;
+  bool get canScan => has(Role.staff) || has(Role.organiser) || isAdmin || team.eventAdmin > 0 || team.scanner > 0;
+  /// Anything in the Organiser app: events they run, sell for or scan at.
+  bool get inOrganiserApp => canScan || canManage || team.events > 0;
   /// Partner vouchers at the counter.
   bool get canRedeemVouchers => has(Role.staff) || isAdmin;
   /// B2B: sets seller prices, confirms payments, sees the margin.
@@ -60,7 +89,10 @@ class Paged<T> {
 }
 
 class OrgEvent {
-  const OrgEvent({required this.id, required this.title, required this.venueName, this.status = 'live', this.startDate, this.sold, this.capacity});
+  const OrgEvent({
+    required this.id, required this.title, required this.venueName, this.status = 'live', this.startDate, this.sold, this.capacity,
+    this.myRole, this.pendingChanges = 0,
+  });
   factory OrgEvent.fromJson(Map j) => OrgEvent(
         id: _str(j['id']),
         title: _str(j['title']),
@@ -69,7 +101,17 @@ class OrgEvent {
         startDate: _date(j['startDate']),
         sold: j['sold'] == null ? null : _int(j['sold']),
         capacity: j['capacity'] == null ? null : _int(j['capacity']),
+        myRole: j['myRole']?.toString(),
+        pendingChanges: j['pendingChanges'] == null ? 0 : _int(j['pendingChanges']),
       );
+  OrgEvent copyWith({String? status, String? title, String? venueName, DateTime? startDate}) => OrgEvent(
+        id: id, title: title ?? this.title, venueName: venueName ?? this.venueName, status: status ?? this.status,
+        startDate: startDate ?? this.startDate, sold: sold, capacity: capacity, myRole: myRole, pendingChanges: pendingChanges,
+      );
+  /// admin | organiser | event_admin | seller | scanner (null: gate staff list).
+  final String? myRole;
+  /// Changes waiting for GatePass approval.
+  final int pendingChanges;
   final String id;
   final String title;
   final String venueName;
@@ -138,9 +180,15 @@ class TierInfo {
 }
 
 class EventDetail {
-  const EventDetail({required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms(), this.fee = const FeeRule()});
+  const EventDetail({
+    required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms(), this.fee = const FeeRule(),
+    this.access = 'manager', this.pendingChanges = 0, this.fields = const {},
+  });
   factory EventDetail.fromJson(Map j) => EventDetail(
         event: OrgEvent.fromJson(j),
+        access: _str(j['myAccess']).isEmpty ? 'manager' : _str(j['myAccess']),
+        pendingChanges: j['pendingChanges'] == null ? 0 : _int(j['pendingChanges']),
+        fields: {for (final k in EventForm.keys) if (j[k] != null) k: j[k]},
         statusNote: j['statusNote']?.toString(),
         tiers: [for (final t in (j['tiers'] as List? ?? const [])) TierInfo.fromJson(t as Map)],
         b2bEnabled: j['b2bEnabled'] == true,
@@ -153,6 +201,19 @@ class EventDetail {
       );
   /// The booking fee that applies (rate set by GatePass; who pays: the organiser can switch).
   final FeeRule fee;
+  /// This person's job here: admin | manager (organiser or event admin) | seller | scanner.
+  final String access;
+  bool get isAdmin => access == 'admin';
+  /// Runs the event: sales, ticket types, team, settings.
+  bool get canManage => access == 'admin' || access == 'manager';
+  /// Comp and box-office tickets.
+  bool get canIssue => canManage || access == 'seller';
+  /// The gate.
+  bool get canScan => canManage || access == 'scanner';
+  /// Main-detail changes waiting for GatePass.
+  final int pendingChanges;
+  /// The editable details as the server has them (prefills Edit Details).
+  final Map<String, dynamic> fields;
   final OrgEvent event;
   final List<TierInfo> tiers;
   final String? statusNote;
@@ -796,4 +857,99 @@ class SyncResult {
   final String result;
   final String? message;
   final bool conflict;
+}
+
+
+/// The event details form (create and edit). Keys match api/organiser/events.
+class EventForm {
+  static const keys = ['title', 'cityId', 'genre', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'description', 'cardImageUrl', 'ageLimit', 'maxPerUser', 'ticketNotes'];
+}
+
+/// What happened to a save: done, or waiting for GatePass approval.
+class SaveResult {
+  const SaveResult({required this.id, this.pendingChange});
+  final String id;
+  final String? pendingChange;
+  bool get waiting => pendingChange != null;
+}
+
+/// Someone's job on one event.
+class TeamMember {
+  const TeamMember({required this.id, required this.role, this.name, this.phone});
+  factory TeamMember.fromJson(Map j) => TeamMember(id: _str(j['id']), role: _str(j['role']), name: j['name']?.toString(), phone: j['phone']?.toString());
+  final String id;
+  /// event_admin | seller | scanner
+  final String role;
+  final String? name;
+  final String? phone;
+  String get display => (name ?? '').trim().isNotEmpty ? name! : '+91 ${phone ?? ''}';
+  static String roleLabel(String r) => switch (r) {
+        'event_admin' => 'Event Admin',
+        'seller' => 'Ticket Seller',
+        'scanner' => 'Gate Scanner',
+        'organiser' => 'Organiser',
+        'admin' => 'GatePass Admin',
+        _ => r,
+      };
+  static String roleHint(String r) => switch (r) {
+        'event_admin' => 'Runs the event and its team. Date, venue and publishing changes go to GatePass for approval.',
+        'seller' => 'Issues complimentary and box-office tickets.',
+        'scanner' => 'Checks tickets at the gate. Nothing else.',
+        _ => '',
+      };
+}
+
+class TeamInfo {
+  const TeamInfo({this.organiserName, this.organiserPhone, this.members = const []});
+  factory TeamInfo.fromJson(Map j) {
+    final o = j['organiser'] as Map?;
+    return TeamInfo(
+      organiserName: o?['name']?.toString(),
+      organiserPhone: o?['phone']?.toString(),
+      members: [for (final m in (j['items'] as List? ?? const [])) TeamMember.fromJson(m as Map)],
+    );
+  }
+  final String? organiserName;
+  final String? organiserPhone;
+  final List<TeamMember> members;
+}
+
+/// One line of a change: what it was, what it would become.
+class ChangeField {
+  const ChangeField(this.label, this.from, this.to);
+  final String label;
+  final String? from;
+  final String? to;
+}
+
+/// A change waiting for (or decided by) GatePass approval.
+class EventChangeItem {
+  const EventChangeItem({
+    required this.id, required this.eventId, required this.eventTitle, required this.kind, required this.title, required this.status,
+    this.fields = const [], this.requestedByName, this.requestedByPhone, this.note, this.createdAt,
+  });
+  factory EventChangeItem.fromJson(Map j) {
+    final by = j['requestedBy'] as Map? ?? const {};
+    return EventChangeItem(
+      id: _str(j['id']), eventId: _str(j['eventId']), eventTitle: _str(j['eventTitle']), kind: _str(j['kind']), title: _str(j['title']),
+      status: _str(j['status']),
+      fields: [for (final f in (j['fields'] as List? ?? const [])) ChangeField(_str((f as Map)['label']), f['from']?.toString(), f['to']?.toString())],
+      requestedByName: by['name']?.toString(), requestedByPhone: by['phone']?.toString(), note: j['note']?.toString(), createdAt: _date(j['createdAt']),
+    );
+  }
+  final String id;
+  final String eventId;
+  final String eventTitle;
+  /// details | status | session_add | session_update
+  final String kind;
+  final String title;
+  /// pending | approved | rejected | withdrawn
+  final String status;
+  final List<ChangeField> fields;
+  final String? requestedByName;
+  final String? requestedByPhone;
+  final String? note;
+  final DateTime? createdAt;
+  bool get pending => status == 'pending';
+  String get requester => (requestedByName ?? '').trim().isNotEmpty ? requestedByName! : (requestedByPhone == null ? 'Someone' : '+91 $requestedByPhone');
 }

@@ -5,11 +5,11 @@ import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../app/session.dart';
-import '../../core/config.dart';
-import '../../core/format.dart';
-import '../../data/demo_api.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/config.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/demo_api.dart';
+import 'package:gatepass_staff/data/models.dart';
 import '../../gate/gate_controller.dart';
 
 /// Builds the camera view; tests swap in a fake one.

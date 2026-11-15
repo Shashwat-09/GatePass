@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass_organiser/app/app.dart';
-import 'package:gatepass_organiser/app/session.dart';
-import 'package:gatepass_organiser/data/demo_api.dart';
-import 'package:gatepass_organiser/data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/data/demo_api.dart';
+import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_organiser/features/approvals/approvals_screen.dart';
-import 'package:gatepass_organiser/features/auth/login_screen.dart';
+import 'package:gatepass_staff/features/auth/login_screen.dart';
+import 'package:gatepass_organiser/features/events/changes_screen.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
+import 'package:gatepass_organiser/features/events/team_screen.dart';
+import 'package:gatepass_organiser/main.dart' show configureOrganiserShell;
 import 'package:gatepass_organiser/features/events/events_screen.dart';
 import 'package:gatepass_organiser/features/issue/issue_screen.dart';
 import 'package:gatepass_organiser/features/scan/scan_screen.dart';
-import 'package:gatepass_organiser/gate/gate_store.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 import 'package:get/get.dart';
 
 late DemoVendorApi api;
 
-Future<void> boot(WidgetTester t, Widget home, {Role role = Role.organiser, Brightness brightness = Brightness.light, Size size = const Size(390, 844)}) async {
+Future<void> boot(WidgetTester t, Widget home,
+    {Role role = Role.organiser, String? job, Brightness brightness = Brightness.light, Size size = const Size(390, 844)}) async {
   Get.reset();
-  api = DemoVendorApi(latency: Duration.zero, role: role);
+  configureOrganiserShell();
+  api = DemoVendorApi(latency: Duration.zero, role: role, job: job);
   final s = Get.put(Session(api: api, store: MemoryGateStore()), permanent: true);
   s.me.value = (await api.me()).data;
   t.view.physicalSize = size * 3;
@@ -202,5 +207,89 @@ void main() {
     await t.tap(find.text('Record Sale & Send'));
     await t.pumpAndSettle();
     expect(find.textContaining('for ₹799 paid by UPI'), findsOneWidget);
+  });
+
+  testWidgets('GatePass admin adds an event: a draft, ready for ticket types and the team', (t) async {
+    await boot(t, const EventsScreen(), role: Role.admin);
+    await t.tap(find.byKey(const Key('new-event')));
+    await t.pumpAndSettle();
+    expect(find.text('New Event'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('f-title')), 'Garba Night 2026');
+    await t.enterText(find.byKey(const Key('f-venue')), 'GMDC Ground');
+    await t.tap(find.byKey(const Key('save-event')));
+    await t.pumpAndSettle();
+    expect(find.text('Pick when it starts.'), findsOneWidget);
+    await t.tap(find.byKey(const Key('f-start')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Done'));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('save-event')));
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    // Opens the new event (a draft).
+    expect(find.text('Garba Night 2026'), findsWidgets);
+    expect(find.text('Draft'), findsWidgets);
+    expect(find.byKey(const Key('team')), findsOneWidget);
+  });
+
+  testWidgets('event admin: editing a published event goes to GatePass; the admin approves it', (t) async {
+    await boot(t, const EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions: Live at the Lawn', venueName: 'Empress Garden, Pune', myRole: 'event_admin')), job: 'event_admin');
+    expect(find.text('You: Event Admin'), findsOneWidget);
+    await t.scrollUntilVisible(find.byKey(const Key('edit-details')), 300, scrollable: listScroll);
+    await t.tap(find.byKey(const Key('edit-details')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('go to GatePass for approval'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('f-venue')), 'Empress Garden Lawn 2, Pune');
+    await t.tap(find.byKey(const Key('save-event')));
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Sent for Approval'), findsOneWidget);
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.byKey(const Key('pending-changes')), -300, scrollable: listScroll);
+    expect(find.byKey(const Key('pending-changes')), findsOneWidget);
+    // Nothing changed for customers yet.
+    expect((await api.event(DemoVendorApi.e1)).data!.event.venueName, 'Empress Garden, Pune');
+
+    // GatePass approves from the inbox.
+    api.role = Role.admin;
+    api.job = null;
+    Session.to.me.value = (await api.me()).data;
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(MaterialApp(home: const ChangesScreen()));
+    await t.pumpAndSettle();
+    expect(find.text('Empress Garden Lawn 2, Pune'), findsOneWidget);
+    final approve = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('approve-')).first;
+    await t.tap(approve);
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+    expect((await api.event(DemoVendorApi.e1)).data!.event.venueName, 'Empress Garden Lawn 2, Pune');
+  });
+
+  testWidgets('ticket seller sees Issue Tickets only; gate scanner sees check-in only', (t) async {
+    await boot(t, const EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions', venueName: 'Empress Garden', myRole: 'seller')), job: 'seller');
+    expect(find.byKey(const Key('seller-issue')), findsOneWidget);
+    expect(find.text('Scan Tickets'), findsNothing);
+    expect(find.text('Sales'), findsNothing);
+    expect(find.byKey(const Key('team')), findsNothing);
+
+    await boot(t, const EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions', venueName: 'Empress Garden', myRole: 'scanner')), job: 'scanner');
+    expect(find.text('Scan Tickets'), findsOneWidget);
+    expect(find.textContaining('people in'), findsOneWidget);
+    expect(find.byKey(const Key('seller-issue')), findsNothing);
+    expect(find.text('Sales'), findsNothing);
+    expect(find.byKey(const Key('edit-details')), findsNothing);
+  });
+
+  testWidgets('team: add a gate scanner by number', (t) async {
+    await boot(t, const TeamScreen(event: tonight), role: Role.admin);
+    expect(find.text('Meera Shah'), findsOneWidget);
+    await t.tap(find.byKey(const Key('add-member')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('member-phone')), '9876543210');
+    await t.enterText(find.byKey(const Key('member-name')), 'Gate 2');
+    await t.tap(find.byKey(const Key('member-add')));
+    await t.pumpAndSettle();
+    expect(find.text('Gate 2'), findsOneWidget);
+    expect((await api.team(DemoVendorApi.e1)).data!.members.where((m) => m.role == 'scanner').length, 2);
   });
 }

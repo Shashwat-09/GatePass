@@ -18,7 +18,23 @@ abstract class VendorApi {
   Future<ApiResult<Paged<OrgEvent>>> events(Me me, {int page = 1});
   Future<ApiResult<EventDetail>> event(String id);
   Future<ApiResult<EventSummary>> summary(String id);
-  Future<ApiResult<void>> setStatus(String id, String status, {String? note});
+  /// Admins: applied now (null). Others: the id of the change waiting for GatePass.
+  Future<ApiResult<String?>> setStatus(String id, String status, {String? note});
+
+  // ── creating and editing events, team, approvals ──
+  /// Cities an event can be in (admins: all; others: live ones).
+  Future<ApiResult<List<CityItem>>> eventCities(Me me);
+  /// Create (id null) or edit an event. Edits to a published event's main details wait for approval.
+  Future<ApiResult<SaveResult>> saveEvent(String? id, Map<String, dynamic> body);
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity});
+  Future<ApiResult<TeamInfo>> team(String eventId);
+  Future<ApiResult<void>> addMember(String eventId, {required String phone, required String role, String? name});
+  Future<ApiResult<void>> removeMember(String eventId, String memberId);
+  Future<ApiResult<List<EventChangeItem>>> eventChanges(String eventId);
+  /// Admin inbox.
+  Future<ApiResult<List<EventChangeItem>>> pendingChanges();
+  Future<ApiResult<void>> decideChange(String id, {required bool approve, String? note});
+  Future<ApiResult<void>> withdrawChange(String id);
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale);
 
   Future<ApiResult<GateStats>> gateStats(String eventId);
@@ -109,11 +125,21 @@ class HttpVendorApi implements VendorApi {
     if (!r.isOk) return r.cast();
     final d = r.data as Map;
     await _tokens.save(accessToken: '${d['accessToken']}', refreshToken: '${d['refreshToken']}');
-    return ApiResult.ok(Me.fromJson(d['user'] as Map));
+    return ApiResult.ok(await _withTeam(Me.fromJson(d['user'] as Map)));
   }
 
   @override
-  Future<ApiResult<Me>> me() async => (await _api.request('api/user')).map((d) => Me.fromJson(d as Map));
+  Future<ApiResult<Me>> me() async {
+    final r = await _api.request('api/user');
+    if (!r.isOk) return r.cast();
+    return ApiResult.ok(await _withTeam(Me.fromJson(r.data as Map)));
+  }
+
+  /// Adds the person's jobs on single events (event admin, seller, scanner).
+  Future<Me> _withTeam(Me me) async {
+    final t = await _api.request('api/organiser/me', timeout: const Duration(seconds: 8));
+    return t.isOk && t.data is Map ? me.withTeam(TeamRoles.fromJson(t.data as Map)) : me;
+  }
 
   @override
   Future<void> logout() async {
@@ -124,7 +150,7 @@ class HttpVendorApi implements VendorApi {
 
   @override
   Future<ApiResult<Paged<OrgEvent>>> events(Me me, {int page = 1}) async {
-    if (me.canManage) {
+    if (me.canManage || me.team.events > 0) {
       final r = await _api.request('api/organiser/events', query: {'page': '$page', 'limit': '20'});
       return r.map((d) => _paged(d, OrgEvent.fromJson));
     }
@@ -143,9 +169,60 @@ class HttpVendorApi implements VendorApi {
       (await _api.request('api/organiser/events/$id/summary')).map((d) => EventSummary.fromJson(d as Map));
 
   @override
-  Future<ApiResult<void>> setStatus(String id, String status, {String? note}) async =>
+  Future<ApiResult<String?>> setStatus(String id, String status, {String? note}) async =>
       (await _api.request('api/organiser/events/$id/status', method: Method.post, body: {'status': status, if (note != null && note.isNotEmpty) 'note': note}))
-          .map((_) {});
+          .map((d) => (d as Map?)?['pendingChange']?.toString());
+
+  @override
+  Future<ApiResult<List<CityItem>>> eventCities(Me me) async {
+    if (me.isAdmin) return adminCities();
+    return (await _api.request('api/city/cities', query: {'limit': '50'}))
+        .map((d) => [for (final c in ((d as Map)['items'] as List? ?? const [])) CityItem.fromJson(c as Map)]);
+  }
+
+  @override
+  Future<ApiResult<SaveResult>> saveEvent(String? id, Map<String, dynamic> body) async {
+    final r = id == null
+        ? await _api.request('api/organiser/events', method: Method.post, body: body)
+        : await _api.request('api/organiser/events/$id', method: Method.put, body: body);
+    return r.map((d) => SaveResult(id: '${(d as Map)['id']}', pendingChange: d['pendingChange']?.toString()));
+  }
+
+  @override
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity}) async =>
+      (await _api.request('api/organiser/events/$eventId/tiers', method: Method.post, body: {'name': name, 'pricePaise': pricePaise, 'quantity': quantity})).map((_) {});
+
+  @override
+  Future<ApiResult<TeamInfo>> team(String eventId) async =>
+      (await _api.request('api/organiser/events/$eventId/members')).map((d) => TeamInfo.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<void>> addMember(String eventId, {required String phone, required String role, String? name}) async =>
+      (await _api.request('api/organiser/events/$eventId/members', method: Method.post, body: {
+        'phone': phone, 'role': role, if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      })).map((_) {});
+
+  @override
+  Future<ApiResult<void>> removeMember(String eventId, String memberId) async =>
+      (await _api.request('api/organiser/events/$eventId/members/$memberId', method: Method.delete)).map((_) {});
+
+  @override
+  Future<ApiResult<List<EventChangeItem>>> eventChanges(String eventId) async => (await _api.request('api/organiser/events/$eventId/changes'))
+      .map((d) => [for (final c in ((d as Map)['items'] as List? ?? const [])) EventChangeItem.fromJson(c as Map)]);
+
+  @override
+  Future<ApiResult<List<EventChangeItem>>> pendingChanges() async => (await _api.request('api/organiser/changes', query: {'limit': '50'}))
+      .map((d) => [for (final c in ((d as Map)['items'] as List? ?? const [])) EventChangeItem.fromJson(c as Map)]);
+
+  @override
+  Future<ApiResult<void>> decideChange(String id, {required bool approve, String? note}) async =>
+      (await _api.request('api/organiser/changes/$id/${approve ? 'approve' : 'reject'}', method: Method.post, body: {
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      })).map((_) {});
+
+  @override
+  Future<ApiResult<void>> withdrawChange(String id) async =>
+      (await _api.request('api/organiser/changes/$id', method: Method.delete)).map((_) {});
 
   @override
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale) async =>

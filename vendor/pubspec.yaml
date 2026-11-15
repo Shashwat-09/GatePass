@@ -1,5 +1,5 @@
 name: gatepass_organiser
-description: "GatePass Organiser — check-in, sales and tools for organisers and gate staff."
+description: "GatePass Organiser: add and run events, event teams, check-in, sales."
 publish_to: "none"
 version: 0.1.0+1
 
@@ -13,6 +13,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   gatepass_ui:
     path: ../packages/gatepass_ui
+  gatepass_staff:
+    path: ../packages/gatepass_staff
 
   get: ^4.6.6
   http: ^1.2.2
@@ -27,7 +29,6 @@ dependencies:
   share_plus: ^13.3.1
   url_launcher: ^6.3.3
   qr_flutter: ^4.1.0
-  razorpay_flutter: ^1.4.7
 
 dev_dependencies:
   flutter_test:

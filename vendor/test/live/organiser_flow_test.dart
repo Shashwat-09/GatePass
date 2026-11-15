@@ -6,11 +6,11 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gatepass_organiser/core/api_client.dart';
-import 'package:gatepass_organiser/core/token_store.dart';
-import 'package:gatepass_organiser/data/models.dart';
-import 'package:gatepass_organiser/data/vendor_api.dart';
-import 'package:gatepass_organiser/gate/gate_store.dart';
+import 'package:gatepass_staff/core/api_client.dart';
+import 'package:gatepass_staff/core/token_store.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/data/vendor_api.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 import 'package:gatepass_organiser/gate/offline_validator.dart';
 
 const live = bool.fromEnvironment('LIVE_API');

@@ -6,9 +6,9 @@ import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-import '../../app/session.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
 import 'cities_screen.dart';
 import 'fee_settings_screen.dart';
 

@@ -8,17 +8,24 @@ import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../app/session.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
 import '../approvals/approvals_screen.dart';
 import '../issue/issue_screen.dart';
 import '../scan/scan_screen.dart';
+import 'changes_screen.dart';
+import 'event_form_screen.dart';
 import 'events_screen.dart';
+import 'team_screen.dart';
 import 'terms_screen.dart';
 
-/// One event: the way into check-in, then (for organisers) today's numbers,
-/// ticket types and the tools that change the event.
+/// One event, shaped by the person's job on it:
+///  - GatePass admin, organiser, event admin: numbers, ticket types, team,
+///    details (main-detail changes wait for GatePass unless you're GatePass),
+///    status, comps, B2B, booking fee, settlement and the gate.
+///  - Ticket seller: comp and box-office tickets only.
+///  - Gate scanner (and gate staff): check-in only.
 class EventScreen extends StatefulWidget {
   const EventScreen({super.key, required this.event});
   final OrgEvent event;
@@ -45,25 +52,41 @@ class _EventScreenState extends State<EventScreen> {
     _load();
   }
 
+  /// Gate staff without a job on this event see check-in only.
+  bool get _hasJob => _me.isAdmin || _event.myRole != null || _me.canManage;
+
   Future<void> _load() async {
     final api = Session.to.api;
     setState(() => _error = null);
-    if (_me.canManage) {
-      final rs = await Future.wait([api.summary(_event.id), api.event(_event.id)]);
-      final comps = await api.comps(_event.id);
-      _comps = comps.data;
+    if (_hasJob) {
+      final d = await api.event(_event.id);
       if (!mounted) return;
-      final s = rs[0];
-      final d = rs[1];
+      if (!d.isOk) {
+        setState(() {
+          _loading = false;
+          _error = d.error;
+        });
+        return;
+      }
+      final detail = d.data!;
+      final s = detail.canManage ? await api.summary(_event.id) : null;
+      final comps = detail.canIssue ? await api.comps(_event.id) : null;
+      final g = !detail.canManage && detail.canScan ? await api.gateStats(_event.id) : null;
+      if (!mounted) return;
       setState(() {
         _loading = false;
-        if (!s.isOk || !d.isOk) {
-          _error = s.error ?? d.error;
+        if (s != null && !s.isOk) {
+          _error = s.error;
           return;
         }
-        _summary = s.data as EventSummary;
-        _detail = d.data as EventDetail;
-        _event = _detail!.event;
+        _detail = detail;
+        _summary = s?.data;
+        _comps = comps?.data;
+        _gate = g?.data;
+        _event = OrgEvent(
+          id: detail.event.id, title: detail.event.title, venueName: detail.event.venueName, status: detail.event.status,
+          startDate: detail.event.startDate, sold: _event.sold, capacity: _event.capacity, myRole: _event.myRole, pendingChanges: detail.pendingChanges,
+        );
       });
     } else {
       final g = await api.gateStats(_event.id);
@@ -133,7 +156,14 @@ class _EventScreenState extends State<EventScreen> {
     }
     final r = await Session.to.api.setStatus(_event.id, pick, note: note);
     if (!mounted) return;
-    _toast(r.isOk ? 'Event is now ${statusLabel(pick).toLowerCase()}' : r.error!);
+    if (!r.isOk) {
+      Delight.error();
+      _toast(r.error!);
+    } else if (r.data != null) {
+      await showSuccess(context, title: 'Sent for Approval', message: 'GatePass will look at it. Nothing changes for customers until it’s approved.');
+    } else {
+      _toast('Event is now ${statusLabel(pick).toLowerCase()}');
+    }
     _load();
   }
 
@@ -173,7 +203,7 @@ class _EventScreenState extends State<EventScreen> {
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Event')),
       body: _loading
           ? const StateView.loading()
-          : _error != null && _summary == null
+          : _error != null && _summary == null && _detail == null
               ? StateView.error(_error!, onRetry: _load)
               : RefreshIndicator.adaptive(onRefresh: _load, child: _content()),
     );
@@ -182,6 +212,10 @@ class _EventScreenState extends State<EventScreen> {
   Widget _content() {
     final e = _event;
     final s = _summary;
+    final d = _detail;
+    final manage = d?.canManage ?? false;
+    final scan = d == null || d.canScan;
+    final job = d == null ? null : _event.myRole;
     return ListView(padding: const EdgeInsets.only(bottom: AppSpacing.xl), children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md + AppSpacing.md, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
@@ -189,29 +223,131 @@ class _EventScreenState extends State<EventScreen> {
           Text(e.title, style: context.text.headlineSmall),
           const SizedBox(height: 4),
           Text('${formatEventDate(e.startDate)}\n${e.venueName}', style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel)),
-          if (_me.canManage) ...[
-            const SizedBox(height: AppSpacing.sm),
-            TagPill(statusLabel(e.status), color: e.status == 'draft' ? null : statusColor(context, e.status)),
-            if (_detail?.statusNote != null && _detail!.statusNote!.isNotEmpty && e.status != 'live')
-              Padding(padding: const EdgeInsets.only(top: 6), child: Text(_detail!.statusNote!, style: context.text.bodySmall)),
-          ],
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            if (manage) TagPill(statusLabel(e.status), color: e.status == 'draft' ? null : statusColor(context, e.status)),
+            if (job != null && job != 'admin' && job != 'organiser') TagPill('You: ${TeamMember.roleLabel(job)}'),
+          ]),
+          if (manage && _detail?.statusNote != null && _detail!.statusNote!.isNotEmpty && e.status != 'live')
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(_detail!.statusNote!, style: context.text.bodySmall)),
         ]),
       ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
-        child: PrimaryButton(label: 'Scan Tickets', onPressed: e.status == 'live' || e.status == 'postponed' ? _scan : null),
-      ),
-      if (s != null) ...[
+      if (manage && (d?.pendingChanges ?? 0) > 0) _waiting(d!.pendingChanges),
+      if (scan)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
+          child: PrimaryButton(label: 'Scan Tickets', onPressed: e.status == 'live' || e.status == 'postponed' ? _scan : null),
+        ),
+      if (d != null && d.access == 'seller') ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
+          child: PrimaryButton(key: const Key('seller-issue'), label: 'Issue Tickets', onPressed: _issue),
+        ),
+        _sellerInfo(d),
+      ],
+      if (s != null && manage) ...[
         _checkIns(s.entriesUsed, s.entriesTotal),
         _sales(s),
         _tiers(_detail?.tiers ?? s.tiers),
+        _setup(d!),
         if (_detail != null) _b2b(_detail!),
-        if (_detail != null && _me.canManage) _bookingFee(_detail!),
+        if (_detail != null) _bookingFee(_detail!),
         _actions(s),
         if (_detail != null) _terms(_detail!),
-      ] else
+      ] else if (scan)
         _checkIns(_gate?.entriesUsed, _gate?.entriesTotal),
     ]);
+  }
+
+  Future<void> _issue() async {
+    await Get.to(() => IssueScreen(event: _event, tiers: _detail?.tiers ?? _summary?.tiers ?? const []));
+    _load();
+  }
+
+  /// "2 changes waiting for GatePass" → the list (withdraw from there).
+  Widget _waiting(int n) => InsetGroup(children: [
+        GroupRow(
+          key: const Key('pending-changes'),
+          icon: CupertinoIcons.hourglass,
+          title: '$n change${n == 1 ? '' : 's'} waiting for GatePass',
+          subtitle: 'Customers see them once approved',
+          onTap: () async {
+            await Get.to(() => ChangesScreen(event: _event));
+            _load();
+          },
+        ),
+      ]);
+
+  /// Sellers: what they can still give away or sell.
+  Widget _sellerInfo(EventDetail d) => InsetGroup(header: 'Tickets left', footer: 'Tickets you issue go to the number you enter. They appear in that person’s GatePass app.', children: [
+        for (final t in d.tiers.where((t) => t.isActive))
+          GroupRow(title: t.name, value: '${formatCount(t.remaining)} left', subtitle: t.pricePaise == 0 ? 'Free' : formatPaise(t.pricePaise), chevron: false),
+        if (_comps != null)
+          GroupRow(
+            title: 'Complimentary',
+            value: _comps!.free == null ? '${_comps!.used} issued' : '${_comps!.used} of ${_comps!.free}',
+            chevron: false,
+          ),
+      ]);
+
+  /// Details, ticket types and team: the event admin's toolkit.
+  Widget _setup(EventDetail d) => InsetGroup(
+        header: 'Set up',
+        footer: d.isAdmin || _event.status == 'draft'
+            ? null
+            : 'Date, venue and other main details, and publishing, go to GatePass for approval. Ticket types and the team change at once.',
+        children: [
+          GroupRow(
+            key: const Key('edit-details'),
+            icon: CupertinoIcons.pencil,
+            title: 'Edit Details',
+            subtitle: 'Title, date, venue, poster, about',
+            onTap: () async {
+              await Get.to(() => EventFormScreen(detail: d), fullscreenDialog: true);
+              _load();
+            },
+          ),
+          GroupRow(key: const Key('add-tier'), icon: CupertinoIcons.ticket, title: 'Add Ticket Type', onTap: _addTier),
+          GroupRow(
+            key: const Key('team'),
+            icon: CupertinoIcons.person_2,
+            title: 'Team',
+            subtitle: 'Event admins, ticket sellers, gate scanners',
+            onTap: () => Get.to(() => TeamScreen(event: _event)),
+          ),
+        ],
+      );
+
+  Future<void> _addTier() async {
+    final name = TextEditingController();
+    final price = TextEditingController();
+    final qty = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Ticket Type'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(key: const Key('tier-name'), controller: name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(hintText: 'Name (e.g. Early Bird)')),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(key: const Key('tier-price'), controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(prefixText: '₹ ', hintText: 'Price (0 = free)')),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(key: const Key('tier-qty'), controller: qty, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'How many')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(key: const Key('tier-save'), onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final p = price.text.trim().isEmpty ? 0 : parseRupees(price.text);
+    final q = int.tryParse(qty.text.trim());
+    if (name.text.trim().isEmpty || p == null || q == null || q < 1) return _toast('Add a name, a price and how many');
+    final r = await Session.to.api.addTier(_event.id, name: name.text.trim(), pricePaise: p, quantity: q);
+    if (!mounted) return;
+    r.isOk ? Delight.success() : Delight.error();
+    _toast(r.isOk ? '${name.text.trim()} added' : r.error!);
+    _load();
   }
 
   Widget _checkIns(int? used, int? total) {
@@ -422,7 +558,7 @@ class _EventScreenState extends State<EventScreen> {
     final t = d.terms;
     return InsetGroup(
       header: 'Event terms',
-      footer: _me.isAdmin ? 'You set these for each event. Organisers see them read-only.' : 'Set by GatePass for this event.',
+      footer: d.isAdmin ? 'You set these for each event. Organisers see them read-only.' : 'Set by GatePass for this event.',
       children: [
         GroupRow(title: 'Online commission', value: _pct(t.commissionPct)),
         GroupRow(title: 'Box office commission', value: _pct(t.boxOfficePct)),
@@ -430,7 +566,7 @@ class _EventScreenState extends State<EventScreen> {
         GroupRow(title: 'Free comps', value: t.compFree == null ? 'No limit' : '${t.compFree}'),
         GroupRow(title: 'Fee per extra comp', value: t.compFeePaise == 0 ? 'Needs approval' : formatPaise(t.compFeePaise)),
         GroupRow(title: 'Booking fee', value: d.fee.label, subtitle: '${d.fee.organiserPays ? 'Organiser pays' : 'Customer pays'}${d.fee.b2b ? ' · B2B sellers pay it too' : ''}'),
-        if (_me.isAdmin)
+        if (d.isAdmin)
           GroupRow(
             icon: CupertinoIcons.pencil,
             title: 'Edit Terms',
@@ -481,7 +617,7 @@ class _EventScreenState extends State<EventScreen> {
                 : _comps!.left == 0
                     ? (_comps!.feePaise > 0 ? 'Allowance used · extra comps cost ${formatPaise(_comps!.feePaise)} each' : 'Allowance used · ask GatePass for more')
                     : '${_comps!.left} free comps left',
-            onTap: _comps!.free != null && !_me.isAdmin ? _requestComps : null,
+            onTap: _comps!.free != null && !(_detail?.isAdmin ?? _me.isAdmin) ? _requestComps : null,
           ),
         GroupRow(
           icon: CupertinoIcons.money_dollar_circle,

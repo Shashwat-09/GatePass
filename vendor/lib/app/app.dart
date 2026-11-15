@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:get/get.dart';
 
-import '../core/config.dart';
-import '../features/auth/launch_screen.dart';
+import 'package:gatepass_staff/app/shell.dart';
+import 'package:gatepass_staff/features/auth/launch_screen.dart';
 
 class OrganiserApp extends StatelessWidget {
   const OrganiserApp({super.key, this.home});
@@ -12,7 +12,7 @@ class OrganiserApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GetMaterialApp(
-        title: VendorConfig.appName,
+        title: StaffShell.appName,
         debugShowCheckedModeBanner: false,
         // Same "Utsav" brand as the customer app (packages/gatepass_ui).
         theme: GatePassTheme.light(),

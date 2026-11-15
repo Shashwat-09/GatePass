@@ -3,12 +3,12 @@ import 'dart:math';
 
 import 'package:get/get.dart';
 
-import '../core/config.dart';
-import '../data/models.dart';
-import '../data/vendor_api.dart';
-import 'gate_store.dart';
+import 'package:gatepass_staff/core/config.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/data/vendor_api.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 import 'offline_validator.dart';
-import 'qr.dart';
+import 'package:gatepass_staff/gate/qr.dart';
 
 /// Check-in for one event. Every scan goes to the server first; with no
 /// answer in a few seconds it is checked on the phone against the offline

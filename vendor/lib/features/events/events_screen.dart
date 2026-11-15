@@ -5,16 +5,18 @@ import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../app/session.dart';
-import '../../core/config.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
-import '../account/account_screen.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/config.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/features/account/account_screen.dart';
+import 'event_form_screen.dart';
 import 'event_screen.dart';
 import 'terms_screen.dart';
 
-/// Home: the events this account works. Organisers see their own events with
-/// sales; gate staff see the live events they can check in.
+/// Home: the events this account works. GatePass admins see every event and
+/// add new ones; organisers and event admins their events with sales; sellers
+/// and scanners the events they work; gate staff the live events to check in.
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
   @override
@@ -66,9 +68,18 @@ class _EventsScreenState extends State<EventsScreen> {
     return _segment == 0 ? up : past;
   }
 
+  Future<void> _newEvent() async {
+    final r = await Get.to<SaveResult>(() => const EventFormScreen(), fullscreenDialog: true);
+    await _load();
+    if (r == null || !mounted) return;
+    final e = _items.where((x) => x.id == r.id).firstOrNull;
+    if (e != null) Get.to(() => EventScreen(event: e));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final manage = _me.canManage;
+    final manage = _me.canManage || _me.team.eventAdmin > 0;
+    final canAdd = _me.isAdmin || _me.has(Role.organiser);
     Widget body;
     if (_loading) {
       body = const SliverFillRemaining(hasScrollBody: false, child: StateView.loading());
@@ -79,13 +90,13 @@ class _EventsScreenState extends State<EventsScreen> {
         hasScrollBody: false,
         child: StateView.empty(_segment == 1
             ? 'No past events'
-            : manage
-                ? 'No upcoming events.\nCreate one in the web console.'
-                : 'No events to check in right now.\nAsk the organiser to add you.'),
+            : canAdd
+                ? 'No upcoming events.\nTap + to add one.'
+                : 'No events right now.\nAsk GatePass or the event’s admin to add you.'),
       );
     } else {
       body = SliverList.list(children: [
-        InsetGroup(children: [for (final e in _shown) _EventRow(event: e, showSales: manage)]),
+        InsetGroup(children: [for (final e in _shown) _EventRow(event: e, showSales: manage && e.myRole != 'seller' && e.myRole != 'scanner', onBack: _load)]),
         if (_more && _segment == 1)
           Center(child: TextButton(onPressed: () => _load(next: true), child: const Text('Load More'))),
       ]);
@@ -94,6 +105,13 @@ class _EventsScreenState extends State<EventsScreen> {
       backgroundColor: context.colors.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Events', background: context.colors.groupedCanvas, actions: [
+          if (canAdd)
+            IconButton(
+              key: const Key('new-event'),
+              tooltip: 'New Event',
+              icon: Icon(CupertinoIcons.add_circled, color: context.colors.tint),
+              onPressed: _newEvent,
+            ),
           IconButton(
             tooltip: 'Account',
             icon: Icon(CupertinoIcons.person_crop_circle, color: context.colors.tint),
@@ -119,10 +137,10 @@ class _EventsScreenState extends State<EventsScreen> {
         else
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
         body,
-        if (manage && !_loading)
+        if (canAdd && !_loading)
           SliverToBoxAdapter(
             child: InsetGroup(
-              footer: 'Create events, ticket types and seat maps in the web console.',
+              footer: 'Seat maps, extra shows and the rest live in the web console.',
               children: [
                 GroupRow(
                   icon: CupertinoIcons.globe,
@@ -146,16 +164,20 @@ Color statusColor(BuildContext context, String status) => switch (status) {
     };
 
 class _EventRow extends StatelessWidget {
-  const _EventRow({required this.event, required this.showSales});
+  const _EventRow({required this.event, required this.showSales, required this.onBack});
   final OrgEvent event;
   final bool showSales;
+  final Future<void> Function() onBack;
 
   @override
   Widget build(BuildContext context) {
     final e = event;
     final cap = e.capacity ?? 0;
     return InkWell(
-      onTap: () => Get.to(() => EventScreen(event: e)),
+      onTap: () async {
+        await Get.to(() => EventScreen(event: e));
+        onBack();
+      },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 12, AppSpacing.sm, 12),
         child: Row(children: [
@@ -164,6 +186,13 @@ class _EventRow extends StatelessWidget {
               Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleMedium),
               const SizedBox(height: 2),
               Text('${formatEventDate(e.startDate)}\n${e.venueName}', style: context.text.bodySmall),
+              if (e.myRole != null && e.myRole != 'admin' && e.myRole != 'organiser' || e.pendingChanges > 0) ...[
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 4, children: [
+                  if (e.myRole != null && e.myRole != 'admin' && e.myRole != 'organiser') TagPill('You: ${TeamMember.roleLabel(e.myRole!)}'),
+                  if (e.pendingChanges > 0) TagPill('${e.pendingChanges} waiting for GatePass', color: context.colors.warning),
+                ]),
+              ],
               if (showSales) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Row(children: [

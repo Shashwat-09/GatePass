@@ -4,9 +4,9 @@ import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:intl/intl.dart';
 
-import '../../app/session.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
 
 /// Request-to-book tickets: approve (free tickets are issued at once; paid
 /// ones can then be bought) or decline with a reason the guest sees.

@@ -29,19 +29,26 @@ class _Ticket {
 }
 
 class _Event {
-  _Event(this.e, this.tiers);
+  _Event(this.e, this.tiers, {Map<String, dynamic>? fields}) : fields = fields ?? {};
   OrgEvent e;
   final List<TierInfo> tiers;
   String? note;
+  final Map<String, dynamic> fields;
+  final team = <TeamMember>[];
 }
 
 /// In-memory backend for `USE_MOCK=true` builds and widget tests. It signs
 /// real Ed25519 ticket QRs, so the offline checks run exactly as at a gate.
 class DemoVendorApi implements VendorApi {
-  DemoVendorApi({this.latency = const Duration(milliseconds: 250), this.role = Role.organiser});
+  DemoVendorApi({this.latency = const Duration(milliseconds: 250), this.role = Role.organiser, this.job});
 
   final Duration latency;
   Role role;
+
+  /// Demo: a job on one event instead of an account role (event_admin | seller | scanner).
+  String? job;
+  final _changes = <EventChangeItem>[];
+  final _pendingPayloads = <String, Map<String, dynamic>>{};
 
   /// Demo switch: gate calls fail as if the phone had no connection.
   bool offline = false;
@@ -162,7 +169,10 @@ class DemoVendorApi implements VendorApi {
   }
 
   /// Demo identities: admin is also the distributor (like the owner's account).
-  Me _me(String phone) => switch (role) {
+  Me _me(String phone) => job != null
+      ? Me(id: 'demo-team', name: 'Demo ${TeamMember.roleLabel(job!)}', phone: phone, role: Role.customer,
+          team: TeamRoles(events: 1, eventAdmin: job == 'event_admin' ? 1 : 0, seller: job == 'seller' ? 1 : 0, scanner: job == 'scanner' ? 1 : 0))
+      : switch (role) {
         Role.admin => Me(id: 'demo', name: 'Demo Admin', phone: phone, role: Role.admin, roles: const [Role.admin, Role.distributor]),
         Role.reseller => const Me(id: _s1, name: 'Ravi Tickets', phone: '9811100001', role: Role.reseller),
         Role.staff => Me(id: 'demo', name: 'Demo Gate Staff', phone: phone, role: Role.staff),
@@ -178,8 +188,12 @@ class DemoVendorApi implements VendorApi {
     final list = _events.values.map((x) {
       final sold = x.tiers.fold<int>(0, (n, t) => n + t.sold);
       final cap = x.tiers.fold<int>(0, (n, t) => n + t.quantity);
-      return OrgEvent(id: x.e.id, title: x.e.title, venueName: x.e.venueName, status: x.e.status, startDate: x.e.startDate, sold: sold, capacity: cap);
-    }).where((e) => me.canManage || (e.status == 'live' && !e.isPast)).toList();
+      return OrgEvent(
+        id: x.e.id, title: x.e.title, venueName: x.e.venueName, status: x.e.status, startDate: x.e.startDate, sold: sold, capacity: cap,
+        myRole: job ?? (role == Role.admin ? 'admin' : role == Role.organiser ? 'organiser' : null),
+        pendingChanges: _changes.where((c) => c.eventId == x.e.id && c.pending).length,
+      );
+    }).where((e) => job != null ? e.id == e1 : me.canManage || (e.status == 'live' && !e.isPast)).toList();
     return ApiResult.ok(Paged(list, total: list.length));
   }
 
@@ -191,6 +205,8 @@ class DemoVendorApi implements VendorApi {
     final x = _events[id];
     if (x == null) return _missing();
     return ApiResult.ok(EventDetail(
+        access: _access, pendingChanges: _changes.where((c) => c.eventId == id && c.pending).length,
+        fields: {'title': x.e.title, 'venueName': x.e.venueName, 'startDate': x.e.startDate?.toIso8601String(), ...x.fields},
         event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, b2bEnabled: _b2bOn[id] ?? false,
         terms: (_terms[id] ?? const EventTerms()).copyWith(fee: _fee(id)), fee: _fee(id)));
   }
@@ -219,15 +235,189 @@ class DemoVendorApi implements VendorApi {
     ));
   }
 
+  String get _access => switch (job) {
+        'event_admin' => 'manager',
+        'seller' => 'seller',
+        'scanner' => 'scanner',
+        _ => role == Role.admin ? 'admin' : 'manager',
+      };
+
+  /// Organisers and event admins: published events' main details wait for GatePass.
+  String _ask(String eventId, String kind, String title, List<ChangeField> fields, Map<String, dynamic> payload) {
+    final id = 'chg-${_changes.length + 1}';
+    _changes.insert(0, EventChangeItem(
+      id: id, eventId: eventId, eventTitle: _events[eventId]!.e.title, kind: kind, title: title, status: 'pending', fields: fields,
+      requestedByName: 'Demo ${job == null ? 'Organiser' : TeamMember.roleLabel(job!)}', createdAt: DateTime.now(),
+    ));
+    _pendingPayloads[id] = payload;
+    return id;
+  }
+
   @override
-  Future<ApiResult<void>> setStatus(String id, String status, {String? note}) async {
+  Future<ApiResult<String?>> setStatus(String id, String status, {String? note}) async {
     await _wait();
     final x = _events[id];
     if (x == null) return _missing();
+    if (_access != 'admin' && _access != 'manager') return const ApiResult.fail('Your role on this event can’t do that', statusCode: 403);
+    if (_access != 'admin') {
+      return ApiResult.ok(_ask(id, 'status', 'status change', [ChangeField('Status', statusLabel(x.e.status), statusLabel(status)), if (note != null && note.isNotEmpty) ChangeField('Message to ticket holders', null, note)],
+          {'status': status, 'note': note}));
+    }
+    return (await _applyStatus(id, status, note)).map((_) => null);
+  }
+
+  Future<ApiResult<void>> _applyStatus(String id, String status, String? note) async {
+    final x = _events[id]!;
     if (status == 'live' && !x.tiers.any((t) => t.isActive)) return const ApiResult.fail('Put at least one ticket type on sale before publishing', statusCode: 400);
     if (status == 'draft' && x.tiers.any((t) => t.sold > 0)) return const ApiResult.fail('Tickets are sold — postpone or cancel instead', statusCode: 400);
-    x.e = OrgEvent(id: x.e.id, title: x.e.title, venueName: x.e.venueName, status: status, startDate: x.e.startDate);
+    x.e = x.e.copyWith(status: status);
     x.note = note;
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<List<CityItem>>> eventCities(Me me) async {
+    final all = await adminCities();
+    return all.map((l) => me.isAdmin ? l : l.where((c) => c.isActive).toList());
+  }
+
+  @override
+  Future<ApiResult<SaveResult>> saveEvent(String? id, Map<String, dynamic> body) async {
+    await _wait();
+    if (id == null) {
+      if (role != Role.admin && role != Role.organiser || job != null) return const ApiResult.fail('Only GatePass can add events', statusCode: 403);
+      final nid = _uuid();
+      _events[nid] = _Event(
+        OrgEvent(id: nid, title: '${body['title']}', venueName: '${body['venueName']}', status: 'draft', startDate: DateTime.tryParse('${body['startDate']}'),
+            myRole: role == Role.admin ? 'admin' : 'organiser'),
+        [],
+        fields: Map.of(body),
+      );
+      return ApiResult.ok(SaveResult(id: nid));
+    }
+    final x = _events[id];
+    if (x == null) return _missing();
+    if (_access != 'admin' && _access != 'manager') return const ApiResult.fail('Your role on this event can’t do that', statusCode: 403);
+    if (_access != 'admin' && x.e.status != 'draft') {
+      final old = {'title': x.e.title, 'venueName': x.e.venueName, 'startDate': x.e.startDate?.toIso8601String(), ...x.fields};
+      final changed = Map.fromEntries(body.entries.where((e) => '${old[e.key] ?? ''}' != '${e.value ?? ''}'));
+      if (changed.isEmpty) return ApiResult.ok(SaveResult(id: id));
+      return ApiResult.ok(SaveResult(id: id, pendingChange: _ask(id, 'details', 'event details change', [
+        for (final e in changed.entries) ChangeField(_label(e.key), old[e.key]?.toString(), e.value?.toString()),
+      ], changed)));
+    }
+    _applyDetails(x, body);
+    return ApiResult.ok(SaveResult(id: id));
+  }
+
+  static String _label(String k) => const {
+        'title': 'Title', 'venueName': 'Venue', 'venueAddress': 'Address', 'startDate': 'Starts', 'endDate': 'Ends', 'description': 'Description',
+        'genre': 'Genre', 'cityId': 'City', 'cardImageUrl': 'Poster', 'ageLimit': 'Age limit', 'maxPerUser': 'Most per person', 'ticketNotes': 'Ticket notes',
+        'mapLink': 'Map link',
+      }[k] ??
+      k;
+
+  void _applyDetails(_Event x, Map<String, dynamic> body) {
+    x.fields.addAll(body);
+    x.e = x.e.copyWith(
+      title: body['title']?.toString(), venueName: body['venueName']?.toString(),
+      startDate: body['startDate'] == null ? null : DateTime.tryParse('${body['startDate']}'),
+    );
+  }
+
+  @override
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity}) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    x.tiers.add(TierInfo(id: 't-${_uuid().substring(0, 6)}', name: name, pricePaise: pricePaise, quantity: quantity, sold: 0, remaining: quantity));
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<TeamInfo>> team(String eventId) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    if (x.team.isEmpty && eventId == e1) {
+      x.team.addAll(const [
+        TeamMember(id: 'm1', role: 'event_admin', name: 'Meera Shah', phone: '9820000011'),
+        TeamMember(id: 'm2', role: 'seller', name: 'Box Office 1', phone: '9820000012'),
+        TeamMember(id: 'm3', role: 'scanner', name: 'Gate 1', phone: '9820000013'),
+      ]);
+    }
+    return ApiResult.ok(TeamInfo(organiserName: 'Sunburn Events', organiserPhone: '9000000001', members: List.of(x.team)));
+  }
+
+  @override
+  Future<ApiResult<void>> addMember(String eventId, {required String phone, required String role, String? name}) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    final i = x.team.indexWhere((m) => m.phone == phone);
+    final m = TeamMember(id: i >= 0 ? x.team[i].id : 'm-${_uuid().substring(0, 6)}', role: role, name: name ?? (i >= 0 ? x.team[i].name : null), phone: phone);
+    if (i >= 0) {
+      x.team[i] = m;
+    } else {
+      x.team.add(m);
+    }
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<void>> removeMember(String eventId, String memberId) async {
+    await _wait();
+    _events[eventId]?.team.removeWhere((m) => m.id == memberId);
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<List<EventChangeItem>>> eventChanges(String eventId) async {
+    await _wait();
+    return ApiResult.ok(_changes.where((c) => c.eventId == eventId).toList());
+  }
+
+  @override
+  Future<ApiResult<List<EventChangeItem>>> pendingChanges() async {
+    await _wait();
+    if (_changes.isEmpty && role == Role.admin && job == null) {
+      // Something to decide in the demo.
+      _ask(e2, 'details', 'event details change', const [ChangeField('Starts', 'Fri, 7:30 pm', 'Sat, 8:00 pm'), ChangeField('Venue', 'The Box, Pune', 'The Box Annexe, Pune')],
+          {'venueName': 'The Box Annexe, Pune'});
+    }
+    return ApiResult.ok(_changes.where((c) => c.pending).toList());
+  }
+
+  @override
+  Future<ApiResult<void>> decideChange(String id, {required bool approve, String? note}) async {
+    await _wait();
+    final i = _changes.indexWhere((c) => c.id == id);
+    if (i < 0) return _missing();
+    final c = _changes[i];
+    if (!c.pending) return ApiResult.fail('This change was already ${c.status}', statusCode: 409);
+    if (approve) {
+      final p = _pendingPayloads[id] ?? const {};
+      if (c.kind == 'status') {
+        final r = await _applyStatus(c.eventId, '${p['status']}', p['note']?.toString());
+        if (!r.isOk) return r;
+      } else {
+        _applyDetails(_events[c.eventId]!, p);
+      }
+    }
+    _changes[i] = EventChangeItem(
+      id: c.id, eventId: c.eventId, eventTitle: c.eventTitle, kind: c.kind, title: c.title, status: approve ? 'approved' : 'rejected',
+      fields: c.fields, requestedByName: c.requestedByName, note: note, createdAt: c.createdAt,
+    );
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<void>> withdrawChange(String id) async {
+    await _wait();
+    final i = _changes.indexWhere((c) => c.id == id);
+    if (i < 0) return _missing();
+    final c = _changes[i];
+    _changes[i] = EventChangeItem(id: c.id, eventId: c.eventId, eventTitle: c.eventTitle, kind: c.kind, title: c.title, status: 'withdrawn', fields: c.fields, createdAt: c.createdAt);
     return const ApiResult.ok(null);
   }
 

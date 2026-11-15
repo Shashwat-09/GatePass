@@ -1,6 +1,6 @@
-import '../data/models.dart';
-import 'gate_store.dart';
-import 'qr.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
+import 'package:gatepass_staff/gate/qr.dart';
 
 /// Offline list as downloaded from `gate/events/:id/manifest`.
 class Manifest {

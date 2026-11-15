@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 ///   flutter build apk --release --dart-define=BASE_URL=https://api.yourdomain.com/
 ///   flutter run --dart-define=USE_MOCK=true        # demo data, no server
 class VendorConfig {
-  static const String appName = 'GatePass Organiser';
 
   /// Built-in demo data and a demo gate (try the app with no backend).
   static const bool demo = bool.fromEnvironment('USE_MOCK', defaultValue: false);

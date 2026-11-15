@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gatepass_organiser/data/demo_api.dart';
-import 'package:gatepass_organiser/data/models.dart';
+import 'package:gatepass_staff/data/demo_api.dart';
+import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_organiser/gate/gate_controller.dart';
-import 'package:gatepass_organiser/gate/gate_store.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 
 void main() {
   const organiser = Me(id: 'o', name: 'Org', phone: '9000000001', role: Role.organiser);

@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 
-import '../../app/session.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
 
 /// Admin: platform booking-fee defaults. Events without their own settings
 /// follow these; a change applies to checkouts from now on.

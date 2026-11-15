@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gatepass_organiser/data/models.dart';
-import 'package:gatepass_organiser/gate/gate_store.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 import 'package:gatepass_organiser/gate/offline_validator.dart';
-import 'package:gatepass_organiser/gate/qr.dart';
+import 'package:gatepass_staff/gate/qr.dart';
 
 const ev = '11111111-2222-4333-8444-555555555555';
 const other = '99999999-2222-4333-8444-555555555555';

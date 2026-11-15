@@ -5,6 +5,7 @@ import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
 import '../../app/session.dart';
+import '../../app/shell.dart';
 import 'login_screen.dart';
 
 class NoAccessScreen extends StatelessWidget {
@@ -21,11 +22,10 @@ class NoAccessScreen extends StatelessWidget {
             const Spacer(),
             Icon(CupertinoIcons.lock_shield, size: 56, color: context.colors.secondaryLabel),
             const SizedBox(height: AppSpacing.md),
-            Text('No Organiser Access', style: context.text.headlineSmall, textAlign: TextAlign.center),
+            Text(StaffShell.noAccessTitle, style: context.text.headlineSmall, textAlign: TextAlign.center),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              '${me == null ? 'This number' : '+91 ${me.phone}'} isn’t set up as an organiser or gate staff. '
-              'Ask the event’s organiser or GatePass support to give this number access, then sign in again.',
+              '${me == null ? 'This number' : '+91 ${me.phone}'}: ${StaffShell.noAccessMessage}',
               textAlign: TextAlign.center,
               style: context.text.bodyLarge!.copyWith(color: context.colors.secondaryLabel),
             ),

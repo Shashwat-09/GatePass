@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 
-import '../../app/session.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/data/models.dart';
 
 /// Admin: where GatePass is live. Launch is Ahmedabad only; switching another
 /// city on makes the customer app show the city picker and "Use my current

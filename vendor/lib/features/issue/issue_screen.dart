@@ -5,9 +5,9 @@ import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
-import '../../app/session.dart';
-import '../../core/format.dart';
-import '../../data/models.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/core/format.dart';
+import 'package:gatepass_staff/data/models.dart';
 
 /// Complimentary tickets, or tickets sold at the box office (cash, UPI, card),
 /// sent to a phone number. They appear in the guest's GatePass app on sign-in.

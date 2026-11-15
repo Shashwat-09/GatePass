@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 
 import '../../app/session.dart';
 import '../../core/config.dart';
+import '../../app/shell.dart';
 import 'otp_screen.dart';
 
 /// Sign in with the same phone number the organiser or staff account uses.
@@ -63,18 +64,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('FOR EVENT TEAMS & SELLERS',
+                        Text(StaffShell.eyebrow,
                             style: context.text.labelSmall!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                         const SizedBox(height: 8),
-                        Text('GatePass\nOrganiser', style: context.serif(30, color: Colors.white, height: 1.05)),
+                        Text(StaffShell.appName.replaceFirst(' ', '\n'), style: context.serif(30, color: Colors.white, height: 1.05)),
                       ]),
                     ),
-                    const Icon(CupertinoIcons.qrcode_viewfinder, color: UtsavArt.marigold, size: 44),
+                    Icon(StaffShell.icon, color: UtsavArt.marigold, size: 44),
                   ]),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text('Check in guests, follow sales, sell and manage your events. Sign in with the number on your account.',
+              Text('${StaffShell.tagline} Sign in with the number on your account.',
                   style: context.text.bodyLarge!.copyWith(color: context.colors.secondaryLabel)),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(

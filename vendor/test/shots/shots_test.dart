@@ -8,24 +8,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gatepass_organiser/app/session.dart';
-import 'package:gatepass_organiser/data/demo_api.dart';
-import 'package:gatepass_organiser/data/models.dart';
-import 'package:gatepass_organiser/features/account/account_screen.dart';
-import 'package:gatepass_organiser/features/b2b/distributor_home.dart';
-import 'package:gatepass_organiser/features/b2b/seller_home.dart';
+import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/data/demo_api.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/features/account/account_screen.dart';
+import 'package:gatepass_organiser/features/events/changes_screen.dart';
+import 'package:gatepass_organiser/features/events/event_form_screen.dart';
+import 'package:gatepass_organiser/features/events/team_screen.dart';
+import 'package:gatepass_organiser/main.dart' show configureOrganiserShell;
 import 'package:gatepass_organiser/features/events/fee_settings_screen.dart';
 import 'package:gatepass_organiser/features/events/terms_screen.dart';
 import 'package:gatepass_organiser/features/home/vendor_home.dart';
 import 'package:gatepass_organiser/features/approvals/approvals_screen.dart';
-import 'package:gatepass_organiser/features/auth/login_screen.dart';
-import 'package:gatepass_organiser/features/auth/no_access_screen.dart';
+import 'package:gatepass_staff/features/auth/login_screen.dart';
+import 'package:gatepass_staff/features/auth/no_access_screen.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
 import 'package:gatepass_organiser/features/events/events_screen.dart';
 import 'package:gatepass_organiser/features/issue/issue_screen.dart';
 import 'package:gatepass_organiser/features/scan/scan_screen.dart';
 import 'package:gatepass_organiser/gate/gate_controller.dart';
-import 'package:gatepass_organiser/gate/gate_store.dart';
+import 'package:gatepass_staff/gate/gate_store.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:get/get.dart';
 
@@ -71,9 +73,10 @@ void main() {
   final key = GlobalKey();
 
   Future<void> shoot(WidgetTester t, String name, Widget Function() build,
-      {ThemeMode mode = ThemeMode.light, Role role = Role.organiser, Future<void> Function()? before, bool settle = true}) async {
+      {ThemeMode mode = ThemeMode.light, Role role = Role.organiser, String? job, Future<void> Function()? before, bool settle = true}) async {
     Get.reset();
-    api = DemoVendorApi(latency: Duration.zero, role: role);
+    configureOrganiserShell();
+    api = DemoVendorApi(latency: Duration.zero, role: role, job: job);
     final s = Get.put(Session(api: api, store: MemoryGateStore()), permanent: true);
     s.me.value = (await api.me()).data;
     t.view.physicalSize = const Size(390 * 2, 844 * 2);
@@ -147,26 +150,16 @@ void main() {
     });
     testWidgets('account ${mode.name}', (t) => shoot(t, 'account', () => const AccountScreen(), mode: mode));
     testWidgets('home-admin ${mode.name}', (t) => shoot(t, 'home-admin', () => const VendorHome(), mode: mode, role: Role.admin));
-    testWidgets('distribute ${mode.name}', (t) => shoot(t, 'distribute', () => const DistributorHome(), mode: mode, role: Role.admin));
-    testWidgets('dist-prices ${mode.name}', (t) async {
-      final ev = (await DemoVendorApi(latency: Duration.zero).b2bEvents()).data!.first;
-      await shoot(t, 'dist-prices', () => B2bEventScreen(event: ev), mode: mode, role: Role.admin);
+    testWidgets('event-new ${mode.name}', (t) => shoot(t, 'event-new', () => const EventFormScreen(), mode: mode, role: Role.admin));
+    testWidgets('event-edit-approval ${mode.name}', (t) async {
+      final d = (await DemoVendorApi(latency: Duration.zero, job: 'event_admin').event(DemoVendorApi.e1)).data!;
+      await shoot(t, 'event-edit-approval', () => EventFormScreen(detail: d), mode: mode, job: 'event_admin');
     });
-    testWidgets('dist-orders ${mode.name}', (t) => shoot(t, 'dist-orders', () => const DistributorOrdersScreen(), mode: mode, role: Role.admin));
-    testWidgets('dist-books ${mode.name}', (t) => shoot(t, 'dist-books', () => const DistributorReportScreen(), mode: mode, role: Role.admin));
-    testWidgets('sell ${mode.name}', (t) => shoot(t, 'sell', () => const SellerHome(), mode: mode, role: Role.reseller));
-    testWidgets('sell-buy ${mode.name}', (t) => shoot(t, 'sell-buy', () => const SellerHome(), mode: mode, role: Role.reseller, before: () async {
-          await t.tap(find.byKey(const Key('buy-t-ga')));
-          await t.pumpAndSettle();
-          await t.enterText(find.byKey(const Key('r0-phone')), '9876501234');
-          await t.enterText(find.byKey(const Key('r0-sale')), '700');
-        }));
-    testWidgets('sell-pay ${mode.name}', (t) => shoot(t, 'sell-pay', () => const SellerHome(), mode: mode, role: Role.reseller, before: () async {
-          await t.tap(find.byKey(const Key('buy-t-ga')));
-          await t.pumpAndSettle();
-          await t.enterText(find.byKey(const Key('r0-phone')), '9876501234');
-          await t.tap(find.byKey(const Key('place-order')));
-        }));
+    testWidgets('team ${mode.name}', (t) => shoot(t, 'team', () => const TeamScreen(event: tonight), mode: mode, role: Role.admin));
+    testWidgets('approvals-inbox ${mode.name}', (t) => shoot(t, 'approvals-inbox', () => const ChangesScreen(), mode: mode, role: Role.admin));
+    testWidgets('event-seller ${mode.name}', (t) => shoot(t, 'event-seller', () => const EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions: Live at the Lawn', venueName: 'Empress Garden, Pune', myRole: 'seller')), mode: mode, job: 'seller'));
+    testWidgets('event-scanner ${mode.name}', (t) => shoot(t, 'event-scanner', () => const EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions: Live at the Lawn', venueName: 'Empress Garden, Pune', myRole: 'scanner')), mode: mode, job: 'scanner'));
+    testWidgets('events-event-admin ${mode.name}', (t) => shoot(t, 'events-event-admin', () => const EventsScreen(), mode: mode, job: 'event_admin'));
     testWidgets('event-terms ${mode.name}', (t) => shoot(t, 'event-terms', () => const EventScreen(event: tonight), mode: mode, role: Role.admin, before: () async {
           await t.drag(find.byType(ListView), const Offset(0, -1700));
         }));

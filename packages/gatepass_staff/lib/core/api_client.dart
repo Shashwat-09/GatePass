@@ -34,7 +34,7 @@ class ApiResult<T> {
   ApiResult<R> map<R>(R Function(T data) f) => isOk ? ApiResult.ok(f(data as T), statusCode: statusCode) : cast<R>();
 }
 
-enum Method { get, post, put }
+enum Method { get, post, put, delete }
 
 /// JSON client: bearer auth, single-flight refresh on 401, session expiry.
 class ApiClient {
@@ -73,6 +73,7 @@ class ApiClient {
         Method.get => _client.get(uri, headers: _headers()),
         Method.post => _client.post(uri, headers: _headers(), body: payload),
         Method.put => _client.put(uri, headers: _headers(), body: payload),
+        Method.delete => _client.delete(uri, headers: _headers(), body: payload),
       }
           .timeout(timeout ?? VendorConfig.networkTimeout);
       if (res.statusCode == 401 && hadToken && retryOnAuth) {

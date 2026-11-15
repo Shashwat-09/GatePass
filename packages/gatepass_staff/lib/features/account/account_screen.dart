@@ -9,9 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/session.dart';
 import '../../core/config.dart';
 import '../../data/demo_api.dart';
-import '../../data/models.dart';
 import '../auth/login_screen.dart';
-import '../home/vendor_home.dart';
+import '../../app/shell.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -126,7 +125,7 @@ class _AccountScreenState extends State<AccountScreen> {
           GroupRow(
             icon: CupertinoIcons.envelope,
             title: 'Contact Support',
-            onTap: () => launchUrl(Uri(scheme: 'mailto', path: VendorConfig.supportEmail, query: 'subject=GatePass Organiser')),
+            onTap: () => launchUrl(Uri(scheme: 'mailto', path: VendorConfig.supportEmail, query: 'subject=${StaffShell.appName}')),
           ),
         ]),
         if (demo != null)
@@ -136,26 +135,22 @@ class _AccountScreenState extends State<AccountScreen> {
               chevron: false,
               trailing: Switch.adaptive(value: demo.offline, onChanged: (v) => setState(() => demo.offline = v)),
             ),
-            for (final (r, label) in const [
-              (Role.admin, 'Admin + Distributor'),
-              (Role.organiser, 'Organiser'),
-              (Role.reseller, 'B2B Seller'),
-              (Role.staff, 'Gate Staff'),
-            ])
+            for (final (r, job, label) in StaffShell.demoRoles)
               GroupRow(
-                key: Key('demo-${r.name}'),
+                key: Key('demo-${job ?? r.name}'),
                 title: label,
                 chevron: false,
-                trailing: demo.role == r ? Icon(CupertinoIcons.checkmark_alt, color: context.colors.tint) : null,
+                trailing: demo.role == r && demo.job == job ? Icon(CupertinoIcons.checkmark_alt, color: context.colors.tint) : null,
                 onTap: () async {
                   demo.role = r;
+                  demo.job = job;
                   Session.to.me.value = (await demo.me()).data;
-                  Get.offAll(() => const VendorHome());
+                  Get.offAll(() => StaffShell.home());
                 },
               ),
           ]),
         InsetGroup(children: [GroupRow(title: 'Sign Out', destructive: true, onTap: _signOut)]),
-        Center(child: Text('${VendorConfig.appName} 0.1.0', style: context.text.bodySmall)),
+        Center(child: Text('${StaffShell.appName} 0.1.0', style: context.text.bodySmall)),
       ]),
     );
   }

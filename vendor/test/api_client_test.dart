@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gatepass_organiser/core/api_client.dart';
-import 'package:gatepass_organiser/core/token_store.dart';
-import 'package:gatepass_organiser/data/models.dart';
-import 'package:gatepass_organiser/data/vendor_api.dart';
+import 'package:gatepass_staff/core/api_client.dart';
+import 'package:gatepass_staff/core/token_store.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:gatepass_staff/data/vendor_api.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
