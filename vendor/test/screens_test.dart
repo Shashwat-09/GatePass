@@ -255,7 +255,7 @@ void main() {
     api.job = null;
     Session.to.me.value = (await api.me()).data;
     await t.pumpWidget(const SizedBox());
-    await t.pumpWidget(MaterialApp(home: const ChangesScreen()));
+    await t.pumpWidget(const MaterialApp(home: ChangesScreen()));
     await t.pumpAndSettle();
     expect(find.text('Empress Garden Lawn 2, Pune'), findsOneWidget);
     final approve = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('approve-')).first;

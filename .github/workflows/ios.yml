@@ -38,6 +38,10 @@ jobs:
             dir: vendor
             artifact: gatepass-organiser-ios
             demo_defines: --dart-define=USE_MOCK=true
+          - name: GatePass B2B
+            dir: b2b
+            artifact: gatepass-b2b-ios
+            demo_defines: --dart-define=USE_MOCK=true
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
