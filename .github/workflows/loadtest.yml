@@ -1,0 +1,96 @@
+# Load test against the Google Cloud server (loadtest/README.md).
+# Start it by changing loadtest/run.env and pushing (or "Run workflow").
+# It makes a test event and test accounts, optionally resizes the server, plays
+# an event night with k6, prints a summary, then deletes the test data and
+# puts the server back to automatic.
+name: Load test
+
+on:
+  push:
+    branches: [release-readiness, main]
+    paths: ['loadtest/run.env']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: loadtest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Settings
+        run: |
+          set -a; . deploy/gcp/project.env; . loadtest/run.env; set +a
+          for k in GCP_PROJECT_ID GCP_PROJECT_NUMBER GCP_REGION GCP_WIF_PROVIDER SIZE MINUTES GATE_TOTAL GATE_PEAK BUY_RATE BUY_MINUTES RUSH_TICKETS SHARE_RATE BROWSE_RATE USERS; do echo "$k=${!k}" >> "$GITHUB_ENV"; done
+          echo "API=https://gatepass-api-${GCP_PROJECT_NUMBER}.${GCP_REGION}.run.app" >> "$GITHUB_ENV"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: gatepass-deployer@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Jobs secret
+        run: |
+          S=$(gcloud secrets versions access latest --secret JOBS_SECRET --project "$GCP_PROJECT_ID")
+          echo "::add-mask::$S"
+          echo "JOBS=$S" >> "$GITHUB_ENV"
+
+      - name: Server size for this run
+        if: env.SIZE != 'current'
+        run: |
+          MODE=$([ "$SIZE" = big ] && echo on || echo off)
+          WANT=$(curl -fsS -X POST "$API/api/internal/loadtest/boost" -H "x-jobs-secret: $JOBS" -H 'content-type: application/json' -d "{\"mode\":\"$MODE\",\"hours\":2}" | jq -r ".data.tiers.$SIZE")
+          echo "Waiting for the database to be $WANT…"
+          for i in $(seq 1 60); do
+            S=$(curl -sS -X POST "$API/api/internal/loadtest/boost-status" -H "x-jobs-secret: $JOBS" || true)
+            T=$(echo "$S" | jq -r '.data.current.tier // empty'); R=$(echo "$S" | jq -r '.data.current.restarting // empty'); E=$(echo "$S" | jq -r '.data.current.lastError // empty')
+            echo "tier=$T restarting=$R ${E:+error=$E}"
+            [ "$T" = "$WANT" ] && [ "$R" = false ] && curl -fsS "$API/health" >/dev/null && break
+            sleep 20
+          done
+          [ "$T" = "$WANT" ] || { echo "The server didn't reach $WANT"; exit 1; }
+          sleep 30
+
+      - name: Test data (event, accounts, tickets)
+        run: |
+          curl -fsS -X POST "$API/api/internal/loadtest/seed" -H "x-jobs-secret: $JOBS" -H 'content-type: application/json' \
+            -d "{\"users\":$USERS,\"scanners\":30,\"rush\":$RUSH_TICKETS}" | jq '.data' > seed.json
+          TOTAL=$((GATE_TOTAL + 2000))
+          echo '[]' > tickets.json
+          for FROM in $(seq 0 1000 $((TOTAL - 1))); do
+            curl -fsS --retry 3 -X POST "$API/api/internal/loadtest/tickets" -H "x-jobs-secret: $JOBS" -H 'content-type: application/json' \
+              -d "{\"from\":$FROM,\"count\":1000}" | jq '.data.tickets' > batch.json
+            jq -s '.[0] + .[1]' tickets.json batch.json > t.json && mv t.json tickets.json
+          done
+          jq --slurpfile t tickets.json '. + {tickets: $t[0]}' seed.json > data.json
+          echo "users=$(jq '.users|length' data.json) scanners=$(jq '.scanners|length' data.json) tickets=$(jq '.tickets|length' data.json)"
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: Event night (k6)
+        continue-on-error: true
+        run: |
+          k6 run --quiet loadtest/k6/gatepass.js -e BASE_URL="$API" -e DATA="$GITHUB_WORKSPACE/data.json" -e SIZE="$SIZE" \
+            -e MINUTES="$MINUTES" -e GATE_TOTAL="$GATE_TOTAL" -e GATE_PEAK="$GATE_PEAK" -e BUY_RATE="$BUY_RATE" -e BUY_MINUTES="$BUY_MINUTES" \
+            -e SHARE_RATE="$SHARE_RATE" -e BROWSE_RATE="$BROWSE_RATE" | tee summary.txt
+          cat summary.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Server after the run
+        if: always() && env.JOBS != ''
+        run: |
+          curl -sS -X POST "$API/api/internal/loadtest/boost-status" -H "x-jobs-secret: $JOBS" | jq '.data.current'
+
+      - name: Clean up and back to automatic
+        if: always() && env.JOBS != ''
+        run: |
+          curl -sS -X POST "$API/api/internal/loadtest/cleanup" -H "x-jobs-secret: $JOBS" | jq '.data'
+          curl -sS -X POST "$API/api/internal/loadtest/boost" -H "x-jobs-secret: $JOBS" -H 'content-type: application/json' -d '{"mode":"auto"}' | jq '.data.desired'

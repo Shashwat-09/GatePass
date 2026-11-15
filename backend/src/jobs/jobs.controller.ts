@@ -2,6 +2,7 @@ import { Controller, Headers, HttpCode, Logger, Module, OnModuleDestroy, OnModul
 import { timingSafeEqual } from 'crypto';
 import { B2bModule } from '../b2b/b2b.controller';
 import { B2bService } from '../b2b/b2b.service';
+import { BoostService } from '../boost/boost.service';
 import { BookingModule } from '../booking/booking.module';
 import { BookingService } from '../booking/booking.service';
 import { ApiError } from '../common/api-error';
@@ -32,6 +33,7 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
     private readonly b2b: B2bService,
     private readonly kv: KvStore,
     private readonly messaging: MessagingService,
+    private readonly boost: BoostService,
   ) {}
 
   onModuleInit() {
@@ -70,6 +72,7 @@ export class JobsController implements OnModuleInit, OnModuleDestroy {
       expiredB2bOrders: await run('b2b.expireDue', () => this.b2b.expireDue()),
       pushes: await run('push.flush', () => this.push.flush()),
       whatsapp: await run('whatsapp.flush', () => this.messaging.flush()),
+      boost: await run('boost.reconcile', () => this.boost.reconcile()),
       kvSwept: this.kv instanceof PostgresKv ? await run('kv.sweep', () => (this.kv as PostgresKv).sweep()) : 0,
     };
   }

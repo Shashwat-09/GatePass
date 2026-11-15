@@ -59,7 +59,7 @@ jobs:
         if: steps.cfg.outputs.ready == 'true'
         run: |
           URL="https://gatepass-api-${GCP_PROJECT_NUMBER}.${GCP_REGION}.run.app/"
-          ENV="^|^NODE_ENV=production|PUBLIC_BASE_URL=${URL}|KV_DRIVER=postgres|JOBS_MODE=http|STORAGE_DRIVER=gcs|GCS_BUCKET=${GCP_PROJECT_ID}-gatepass-uploads|DB_POOL_MAX=5|TRUST_PROXY=true|DB_MIGRATE_ON_BOOT=true"
+          ENV="^|^NODE_ENV=production|PUBLIC_BASE_URL=${URL}|KV_DRIVER=postgres|JOBS_MODE=http|STORAGE_DRIVER=gcs|GCS_BUCKET=${GCP_PROJECT_ID}-gatepass-uploads|DB_POOL_MAX=5|TRUST_PROXY=true|DB_MIGRATE_ON_BOOT=true|BOOST_DRIVER=gcp|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCP_REGION=${GCP_REGION}"
           [ -n "$API_ENV" ] && ENV="${ENV}|${API_ENV}"
           SECRETS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,URL_SIGNING_SECRET=URL_SIGNING_SECRET:latest,OTP_PEPPER=OTP_PEPPER:latest,JOBS_SECRET=JOBS_SECRET:latest,TICKET_SIGNING_KEY=TICKET_SIGNING_KEY:latest"
           # Test server: the sign-in code for invited testers.

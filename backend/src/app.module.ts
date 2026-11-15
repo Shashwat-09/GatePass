@@ -15,6 +15,8 @@ import { DbModule } from './db/db.module';
 import { EventsModule } from './events/events.module';
 import { ExtrasModule } from './extras/extras.module';
 import { JobsModule } from './jobs/jobs.controller';
+import { BoostModule } from './boost/boost.service';
+import { LoadTestModule } from './loadtest/loadtest.controller';
 import { B2bModule } from './b2b/b2b.controller';
 import { GateModule } from './gate/gate.module';
 import { HealthModule } from './health/health.module';
@@ -52,6 +54,8 @@ import { UsersModule } from './users/users.module';
     SettingsModule,
     AttributionModule,
     OrganiserModule,
+    BoostModule,
+    LoadTestModule,
     JobsModule,
     B2bModule,
   ],

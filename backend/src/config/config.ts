@@ -100,6 +100,12 @@ export interface AppConfig {
    * there would stall).
    */
   jobs: { mode: 'timers' | 'http'; secret: string };
+  /**
+   * Event boost: a bigger database (and warm app copies) around event days and
+   * sale openings. `gcp` resizes Cloud SQL / Cloud Run through their APIs;
+   * `none` only works out the schedule (dev, tests, other hosts).
+   */
+  boost: { driver: 'gcp' | 'none'; project: string; region: string; sqlInstance: string; runService: string; smallTier: string; bigTier: string; minInstances: number };
   /** Form uploads: local disk (UPLOAD_DIR) or a Cloud Storage bucket (shared by every instance). */
   storage: { driver: 'local' | 'gcs'; bucket: string };
   /** Push notifications: FCM (service account), `log` (tests/dev), or off. */
@@ -306,6 +312,16 @@ export function loadConfig(): AppConfig {
     seatHoldSec: num('SEAT_HOLD_SECONDS', 600),
     sweeperEnabled: bool('BOOKING_SWEEPER', env !== 'test') && str('JOBS_MODE', 'timers') !== 'http',
     jobs: { mode: (str('JOBS_MODE', 'timers') as 'timers' | 'http'), secret: str('JOBS_SECRET', '')! },
+    boost: {
+      driver: (str('BOOST_DRIVER', 'none') as 'gcp' | 'none'),
+      project: str('GCP_PROJECT_ID', '')!,
+      region: str('GCP_REGION', 'asia-south1')!,
+      sqlInstance: str('BOOST_SQL_INSTANCE', 'gatepass-db')!,
+      runService: str('BOOST_RUN_SERVICE', 'gatepass-api')!,
+      smallTier: str('BOOST_SMALL_TIER', 'db-f1-micro')!,
+      bigTier: str('BOOST_BIG_TIER', 'db-custom-2-7680')!,
+      minInstances: Number(str('BOOST_MIN_INSTANCES', '2')),
+    },
     storage: { driver: (str('STORAGE_DRIVER', 'local') as 'local' | 'gcs'), bucket: str('GCS_BUCKET', '')! },
     push: pushConfig(env, errors),
     whatsapp: {
@@ -356,6 +372,9 @@ export function loadConfig(): AppConfig {
   }
 
   if (!['meta', 'log', 'none'].includes(cfg.whatsapp.driver)) errors.push('WHATSAPP_PROVIDER must be meta|log|none');
+  if (!['gcp', 'none'].includes(cfg.boost.driver)) errors.push('BOOST_DRIVER must be gcp|none');
+  if (cfg.boost.driver === 'gcp' && !cfg.boost.project) errors.push('BOOST_DRIVER=gcp needs GCP_PROJECT_ID');
+  if (!Number.isInteger(cfg.boost.minInstances) || cfg.boost.minInstances < 0 || cfg.boost.minInstances > 20) errors.push('BOOST_MIN_INSTANCES must be 0–20');
   if (cfg.whatsapp.driver === 'meta' && (!cfg.whatsapp.token || !cfg.whatsapp.phoneNumberId)) {
     errors.push('WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID are required for WHATSAPP_PROVIDER=meta');
   }

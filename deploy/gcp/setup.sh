@@ -113,7 +113,8 @@ API_SA="${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com"
 DEPLOY_SA="gatepass-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$API_SA" >/dev/null 2>&1 || gcloud iam service-accounts create "$SERVICE" --display-name "GatePass API" >/dev/null
 gcloud iam service-accounts describe "$DEPLOY_SA" >/dev/null 2>&1 || gcloud iam service-accounts create gatepass-deployer --display-name "GatePass GitHub deploys" >/dev/null
-for role in roles/cloudsql.client roles/secretmanager.secretAccessor; do
+# cloudsql.editor + run.developer: the event boost resizes the database and keeps app copies warm (backend/src/boost).
+for role in roles/cloudsql.client roles/secretmanager.secretAccessor roles/cloudsql.editor roles/run.developer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${API_SA}" --role "$role" --condition None >/dev/null
 done
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" --member "serviceAccount:${API_SA}" --role roles/storage.objectAdmin >/dev/null
@@ -121,6 +122,10 @@ for role in roles/run.admin roles/artifactregistry.writer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${DEPLOY_SA}" --role "$role" --condition None >/dev/null
 done
 gcloud iam service-accounts add-iam-policy-binding "$API_SA" --member "serviceAccount:${DEPLOY_SA}" --role roles/iam.serviceAccountUser >/dev/null
+# The API updates its own Cloud Run service (event boost), which needs to act as itself.
+gcloud iam service-accounts add-iam-policy-binding "$API_SA" --member "serviceAccount:${API_SA}" --role roles/iam.serviceAccountUser >/dev/null
+# The load test (loadtest/, .github/workflows/loadtest.yml) reads the jobs secret to make test data.
+gcloud secrets add-iam-policy-binding JOBS_SECRET --member "serviceAccount:${DEPLOY_SA}" --role roles/secretmanager.secretAccessor >/dev/null
 ok "API: $API_SA"
 ok "Deployer: $DEPLOY_SA"
 
