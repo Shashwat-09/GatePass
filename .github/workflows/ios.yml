@@ -135,3 +135,28 @@ jobs:
             -exportPath build/ipa -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
             -authenticationKeyID ${{ secrets.ASC_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }}
+
+  # Every push: the three unsigned IPAs go on the private "ios-test" pre-release.
+  publish:
+    name: Publish test IPAs
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-unsigned'
+          merge-multiple: true
+      - name: Upload to the ios-test pre-release
+        run: |
+          mv gatepass-ios-unsigned.ipa GatePass.ipa
+          mv gatepass-organiser-ios-unsigned.ipa GatePass-Organiser.ipa
+          mv gatepass-b2b-ios-unsigned.ipa GatePass-B2B.ipa
+          gh release view ios-test -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create ios-test -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" --title "iOS test builds" --notes "Unsigned IPAs."
+          gh release upload ios-test GatePass.ipa GatePass-Organiser.ipa GatePass-B2B.ipa -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit ios-test -R "$GITHUB_REPOSITORY" --notes "Unsigned IPAs from commit ${GITHUB_SHA::7}, pointed at the live test server. Install with Sideloadly or AltStore."
