@@ -82,7 +82,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       return;
     }
     await _load();
-    if (r.data == true) Get.snackbar('We’ll let you know', 'You’ll get a notification when tickets open.');
+    if (r.data == true && mounted) {
+      await showSuccess(context, title: 'We’ll Let You Know', message: 'You’ll get a notification the moment tickets go live.');
+    }
   }
 
   void _share(EventModel e) {
@@ -388,16 +390,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Widget _openingSoon(EventModel e) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(color: context.colors.fill, borderRadius: BorderRadius.circular(AppRadius.md)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Countdown(target: e.badge.opensAt!, onDone: _load),
-          const SizedBox(height: 4),
-          Text('Opens ${DateFormat('EEE d MMM · h:mm a').format(e.badge.opensAt!)}', style: context.text.bodyMedium),
+  /// Tickets aren't on sale yet: when they go live, a countdown, and Notify Me.
+  Widget _openingSoon(EventModel e) {
+    final c = context.colors;
+    final at = e.badge.opensAt!;
+    return GlassPanel(
+      key: const Key('goes-live'),
+      radius: 22,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('TICKETS GO LIVE', style: context.text.labelMedium!.copyWith(color: c.tint, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+        const SizedBox(height: 4),
+        Text(DateFormat('EEEE d MMMM · h:mm a').format(at), style: context.text.titleLarge!.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Countdown(target: at, onDone: _load),
+        const SizedBox(height: AppSpacing.md),
+        Row(children: [
+          Icon(e.notifyMe ? CupertinoIcons.bell_fill : CupertinoIcons.bell, size: 20, color: e.notifyMe ? c.success : c.secondaryLabel),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(e.notifyMe ? 'We’ll send you a notification the moment tickets go live.' : 'Get a notification the moment tickets go live.',
+                style: context.text.bodySmall),
+          ),
         ]),
-      );
+      ]),
+    );
+  }
 
   Widget _guide(List<LabelValue> items) => Wrap(
         spacing: AppSpacing.sm,

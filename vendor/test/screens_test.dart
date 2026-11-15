@@ -6,6 +6,7 @@ import 'package:gatepass_staff/data/demo_api.dart';
 import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_organiser/features/approvals/approvals_screen.dart';
 import 'package:gatepass_staff/features/auth/login_screen.dart';
+import 'package:gatepass_organiser/features/events/boost_screen.dart';
 import 'package:gatepass_organiser/features/events/changes_screen.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
 import 'package:gatepass_organiser/features/events/team_screen.dart';
@@ -291,5 +292,20 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Gate 2'), findsOneWidget);
     expect((await api.team(DemoVendorApi.e1)).data!.members.where((m) => m.role == 'scanner').length, 2);
+  });
+
+  testWidgets('admin: Server Boost shows the automatic schedule and boosts now for 6 hours', (t) async {
+    await boot(t, const BoostScreen(), role: Role.admin);
+    expect(find.text('Normal'), findsOneWidget);
+    expect(find.textContaining('Event day ·'), findsOneWidget);
+    expect(find.textContaining('Ticket sales open ·'), findsOneWidget);
+    await t.tap(find.byKey(const Key('boost-6')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('restarts once'), findsOneWidget);
+    await t.tap(find.byKey(const Key('boost-confirm')));
+    await t.pumpAndSettle();
+    expect(find.text('Boosted'), findsOneWidget);
+    expect(find.textContaining('Back to automatic at'), findsOneWidget);
+    expect((await api.boost()).data!.mode, 'on');
   });
 }

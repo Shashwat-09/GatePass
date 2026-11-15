@@ -411,6 +411,34 @@ class DemoVendorApi implements VendorApi {
     return const ApiResult.ok(null);
   }
 
+  String _boostMode = 'auto';
+  DateTime? _boostUntil;
+
+  @override
+  Future<ApiResult<BoostStatus>> boost() async {
+    await _wait();
+    final now = DateTime.now();
+    final tonight = DateTime(now.year, now.month, now.day, 20);
+    final manual = _boostMode != 'auto' && (_boostUntil == null || _boostUntil!.isAfter(now));
+    final big = manual ? _boostMode == 'on' : false;
+    return ApiResult.ok(BoostStatus(
+      mode: manual ? _boostMode : 'auto', until: manual ? _boostUntil : null, size: big ? 'big' : 'small', desiredSize: big ? 'big' : 'small',
+      reason: manual ? (big ? 'Boosted by an admin' : 'Kept small by an admin') : 'No event or sale opening soon', reasonUntil: tonight,
+      tier: big ? 'db-custom-2-7680' : 'db-f1-micro', bigTier: 'db-custom-2-7680', smallTier: 'db-f1-micro', warmCopies: 2,
+      upcoming: [
+        BoostWindow(start: tonight, end: tonight.add(const Duration(hours: 30)), reason: 'event_day', title: 'Sunset Sessions: Live at the Lawn'),
+        BoostWindow(start: tonight.add(const Duration(days: 4)), end: tonight.add(const Duration(days: 4, hours: 19)), reason: 'sale_opens', title: 'Indie Film Night'),
+      ],
+    ));
+  }
+
+  @override
+  Future<ApiResult<BoostStatus>> setBoost(String mode, {int? hours}) async {
+    _boostMode = mode;
+    _boostUntil = mode == 'auto' ? null : DateTime.now().add(Duration(hours: hours ?? 12));
+    return boost();
+  }
+
   @override
   Future<ApiResult<void>> withdrawChange(String id) async {
     await _wait();

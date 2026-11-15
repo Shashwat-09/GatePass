@@ -31,6 +31,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final _max = TextEditingController();
   DateTime? _start;
   DateTime? _end;
+  /// When ticket sales open (null: on sale as soon as it's published).
+  DateTime? _opens;
   String? _cityId;
   List<CityItem> _cities = const [];
   bool _saving = false;
@@ -56,6 +58,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     _max.text = f['maxPerUser'] == null ? '' : '${f['maxPerUser']}';
     _start = DateTime.tryParse('${f['startDate'] ?? ''}')?.toLocal();
     _end = DateTime.tryParse('${f['endDate'] ?? ''}')?.toLocal();
+    _opens = DateTime.tryParse('${f['opensAt'] ?? ''}')?.toLocal();
     _cityId = f['cityId']?.toString();
     _was = _body();
     _loadCities();
@@ -87,12 +90,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
       'maxPerUser': int.tryParse(_max.text.trim()),
       'startDate': _start?.toUtc().toIso8601String(),
       'endDate': _end?.toUtc().toIso8601String(),
+      'opensAt': _opens?.toUtc().toIso8601String(),
     };
   }
 
-  Future<void> _pick(bool start) async {
+  Future<void> _pick(bool start, {bool opens = false}) async {
     final now = DateTime.now();
-    final base = (start ? _start : _end) ?? _start?.add(const Duration(hours: 4)) ?? DateTime(now.year, now.month, now.day + 7, 19);
+    final base = opens
+        ? (_opens ?? DateTime(now.year, now.month, now.day + 1, 12))
+        : (start ? _start : _end) ?? _start?.add(const Duration(hours: 4)) ?? DateTime(now.year, now.month, now.day + 7, 19);
     var picked = base;
     await showCupertinoModalPopup<void>(
       context: context,
@@ -119,7 +125,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ),
     );
     if (!mounted) return;
-    setState(() => start ? _start = picked : _end = picked);
+    setState(() {
+      if (opens) {
+        _opens = picked;
+      } else if (start) {
+        _start = picked;
+      } else {
+        _end = picked;
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -128,6 +142,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     if (body['venueName'] == null) return setState(() => _error = 'Add the venue.');
     if (_start == null) return setState(() => _error = 'Pick when it starts.');
     if (_end != null && _end!.isBefore(_start!)) return setState(() => _error = 'The end must be after the start.');
+    if (_opens != null && _opens!.isAfter(_start!)) return setState(() => _error = 'Ticket sales must open before the event starts.');
     if (_isNew && _cityId == null) return setState(() => _error = 'Pick a city.');
     final poster = body['cardImageUrl'] as String?;
     if (poster != null && !poster.startsWith('https://')) return setState(() => _error = 'The poster link must start with https://');
@@ -200,7 +215,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
         _group('When', [
           GroupRow(key: const Key('f-start'), title: 'Starts', value: _start == null ? 'Pick' : formatEventDate(_start), onTap: () => _pick(true)),
           GroupRow(key: const Key('f-end'), title: 'Ends', value: _end == null ? 'Optional' : formatEventDate(_end), onTap: () => _pick(false)),
-        ]),
+        ], footer: null),
+        _group('Ticket sales', [
+          GroupRow(
+            key: const Key('f-opens'),
+            title: 'Sales open',
+            value: _opens == null ? 'When published' : formatEventDate(_opens),
+            onTap: () => _pick(false, opens: true),
+          ),
+          if (_opens != null && _isNew) GroupRow(title: 'Open When Published Instead', chevron: false, onTap: () => setState(() => _opens = null)),
+        ], footer: 'Before this time customers see “Tickets go live …” with a countdown and a Notify Me button. GatePass boosts the server the night before.'),
         _group('Where', [
           if (_cities.isNotEmpty)
             GroupRow(

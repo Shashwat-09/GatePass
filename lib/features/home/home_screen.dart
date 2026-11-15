@@ -324,7 +324,7 @@ class _PopularNow extends StatelessWidget {
         itemBuilder: (_, i) {
           final e = events[i];
           final when = e.date == null ? 'Date to be announced' : DateFormat('EEE d MMM · h:mm a').format(e.date!);
-          final price = e.priceFrom > 0 ? 'From ${formatPaise(e.priceFrom.toInt())}' : 'Free';
+          final price = goLiveOrPrice(e);
           return Semantics(
             button: true,
             label: '${e.title}, $when, ${e.venueName}, $price',

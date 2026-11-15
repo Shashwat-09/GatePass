@@ -35,6 +35,11 @@ abstract class VendorApi {
   Future<ApiResult<List<EventChangeItem>>> pendingChanges();
   Future<ApiResult<void>> decideChange(String id, {required bool approve, String? note});
   Future<ApiResult<void>> withdrawChange(String id);
+
+  // ── event boost (admins) ──
+  Future<ApiResult<BoostStatus>> boost();
+  /// mode: on (boost now) | off (hold small) for [hours], or auto.
+  Future<ApiResult<BoostStatus>> setBoost(String mode, {int? hours});
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale);
 
   Future<ApiResult<GateStats>> gateStats(String eventId);
@@ -223,6 +228,13 @@ class HttpVendorApi implements VendorApi {
   @override
   Future<ApiResult<void>> withdrawChange(String id) async =>
       (await _api.request('api/organiser/changes/$id', method: Method.delete)).map((_) {});
+
+  @override
+  Future<ApiResult<BoostStatus>> boost() async => (await _api.request('api/admin/boost')).map((d) => BoostStatus.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<BoostStatus>> setBoost(String mode, {int? hours}) async =>
+      (await _api.request('api/admin/boost', method: Method.put, body: {'mode': mode, if (hours != null) 'hours': hours})).map((d) => BoostStatus.fromJson(d as Map));
 
   @override
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale) async =>

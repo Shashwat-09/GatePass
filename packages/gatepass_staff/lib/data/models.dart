@@ -862,7 +862,7 @@ class SyncResult {
 
 /// The event details form (create and edit). Keys match api/organiser/events.
 class EventForm {
-  static const keys = ['title', 'cityId', 'genre', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'description', 'cardImageUrl', 'ageLimit', 'maxPerUser', 'ticketNotes'];
+  static const keys = ['title', 'cityId', 'genre', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'opensAt', 'description', 'cardImageUrl', 'ageLimit', 'maxPerUser', 'ticketNotes'];
 }
 
 /// What happened to a save: done, or waiting for GatePass approval.
@@ -952,4 +952,57 @@ class EventChangeItem {
   final DateTime? createdAt;
   bool get pending => status == 'pending';
   String get requester => (requestedByName ?? '').trim().isNotEmpty ? requestedByName! : (requestedByPhone == null ? 'Someone' : '+91 $requestedByPhone');
+}
+
+
+/// One stretch when the server is boosted automatically.
+class BoostWindow {
+  const BoostWindow({required this.start, required this.end, required this.reason, required this.title});
+  factory BoostWindow.fromJson(Map j) => BoostWindow(
+        start: _date(j['start']) ?? DateTime.now(), end: _date(j['end']) ?? DateTime.now(), reason: _str(j['reason']), title: _str(j['title']));
+  final DateTime start;
+  final DateTime end;
+  /// event_day | sale_opens
+  final String reason;
+  final String title;
+  String get reasonLabel => reason == 'sale_opens' ? 'Ticket sales open' : 'Event day';
+}
+
+/// Event boost: the server size now, why, and what's coming.
+class BoostStatus {
+  const BoostStatus({
+    required this.mode, this.until, required this.size, required this.desiredSize, required this.reason, this.reasonUntil,
+    this.tier, this.restarting = false, this.lastError, this.connected = true, this.upcoming = const [], this.bigTier = '', this.smallTier = '', this.warmCopies = 0,
+  });
+  factory BoostStatus.fromJson(Map j) {
+    final d = (j['desired'] as Map?) ?? const {};
+    final c = (j['current'] as Map?) ?? const {};
+    final t = (j['tiers'] as Map?) ?? const {};
+    return BoostStatus(
+      mode: _str(j['mode']), until: _date(j['until']), size: _str(j['size']),
+      desiredSize: _str(d['size']), reason: _str(d['reason']), reasonUntil: _date(d['until']),
+      tier: c['tier']?.toString(), restarting: c['restarting'] == true, lastError: c['lastError']?.toString(),
+      connected: j['driver'] != 'none',
+      upcoming: [for (final w in (j['upcoming'] as List? ?? const [])) BoostWindow.fromJson(w as Map)],
+      bigTier: _str(t['big']), smallTier: _str(t['small']), warmCopies: _int(t['warmCopies']),
+    );
+  }
+  /// auto | on | off
+  final String mode;
+  final DateTime? until;
+  /// big | small (what it was last set to)
+  final String size;
+  final String desiredSize;
+  final String reason;
+  final DateTime? reasonUntil;
+  final String? tier;
+  final bool restarting;
+  final String? lastError;
+  /// False when the server can't resize itself (not on Google Cloud).
+  final bool connected;
+  final List<BoostWindow> upcoming;
+  final String bigTier;
+  final String smallTier;
+  final int warmCopies;
+  bool get boosted => size == 'big';
 }

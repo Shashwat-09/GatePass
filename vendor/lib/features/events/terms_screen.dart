@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
+import 'boost_screen.dart';
 import 'cities_screen.dart';
 import 'fee_settings_screen.dart';
 
@@ -369,6 +370,13 @@ class _CompRequestsRowState extends State<CompRequestsRow> {
             await Get.to(() => const CompRequestsScreen());
             _load();
           },
+        ),
+        GroupRow(
+          key: const Key('server-boost'),
+          icon: CupertinoIcons.bolt,
+          title: 'Server Boost',
+          subtitle: 'Automatic the night before events and sales',
+          onTap: () => Get.to(() => const BoostScreen()),
         ),
         GroupRow(
           key: const Key('cities'),

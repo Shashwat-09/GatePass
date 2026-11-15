@@ -9,6 +9,13 @@ import 'common.dart';
 import 'event_badge.dart';
 import 'utsav_art.dart';
 
+/// "Tickets live Sat 22 Nov" while sales haven't opened; otherwise the price.
+String goLiveOrPrice(EventModel e) {
+  final at = e.badge.opensAt;
+  if (e.badge.key == 'opening_soon' && at != null) return 'Tickets live ${DateFormat('EEE d MMM, h:mm a').format(at)}';
+  return e.priceFrom > 0 ? 'From ${formatPaise(e.priceFrom.toInt())}' : 'Free';
+}
+
 /// Event art; events without a picture (or while it loads) get generated
 /// arch-and-lattice art, varied by [seed], instead of a grey box.
 class EventArt extends StatelessWidget {
@@ -48,7 +55,7 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateStr = event.date == null ? '' : DateFormat('EEE d MMM · h:mm a').format(event.date!);
-    final price = event.priceFrom > 0 ? 'From ${formatPaise(event.priceFrom.toInt())}' : 'Free';
+    final price = goLiveOrPrice(event);
     return Semantics(
       button: true,
       label: '${event.title}, ${dateStr.isEmpty ? event.venueName : dateStr}, $price',
