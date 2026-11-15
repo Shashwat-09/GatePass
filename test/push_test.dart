@@ -10,6 +10,7 @@ import 'package:gatepass/features/vouchers/voucher_detail_screen.dart';
 import 'package:gatepass/services/network/api_service.dart';
 import 'package:gatepass/services/push/push_coordinator.dart';
 import 'package:gatepass/services/push/push_service.dart';
+import 'package:gatepass/features/tickets/claim_transfer_screen.dart';
 import 'package:get/get.dart';
 
 import 'helpers.dart';
@@ -76,6 +77,19 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(VoucherDetailScreen), findsNothing);
     expect(find.byType(NotificationsScreen), findsOneWidget);
+  });
+
+  testWidgets('a "tickets for you" push opens the claim card', (t) async {
+    d.backend.json('GET', 'api/ticket/open/tr-9', {'kind': 'claim', 'transfer': {
+      'id': 'tr-9', 'direction': 'received', 'status': 'pending', 'quantity': 2, 'eventId': 'e1', 'eventTitle': 'Neon Nights',
+      'fromName': 'Asha', 'counterpart': 'Asha Rao', 'canClaim': true, 'venueName': 'Riverside', 'tierName': 'General',
+    }});
+    await t.pumpWidget(app(const Scaffold(body: SizedBox())));
+    await sl<PushCoordinator>().onSignedIn();
+    push.tapsC.add({'type': 'ticket_waiting', 'route': 'open/tr-9'});
+    await t.pumpAndSettle();
+    expect(find.byType(ClaimTransferScreen), findsOneWidget);
+    expect(find.text('Asha sent you 2 tickets'), findsOneWidget);
   });
 
   testWidgets('inbox items open their screen', (t) async {

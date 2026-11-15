@@ -13,6 +13,8 @@ Each person sees only their job on each event (server: `common/event-access.ts`)
 
 **Approval rules.** On a published event, an organiser's or event admin's change to the main details (title, dates, venue, city, poster, about, programme…), a status change (publish, postpone, cancel) or a show added or changed waits for GatePass. Customers see it once an admin approves. Drafts can be edited freely (publishing still needs approval). Ticket types, the team and switches apply at once. Admins' own edits apply at once.
 
+**Server Boost (admins).** Events › Server Boost shows whether the server is boosted and why, the automatic schedule (from 8 PM the night before each event day and each ticket-sale opening), and Boost Now for 6 or 24 hours. Each resize restarts the database once (about a minute), so boost before a rush, not during it. The event form's **Ticket sales › Sales open** sets when tickets go live; customers see the date, a countdown and Notify Me until then.
+
 **Team.** Admins and event admins add people by phone number as Event Admin, Ticket Seller or Gate Scanner, change their job or remove them, any time and without approval. A number new to GatePass gets an account; they sign in with it.
 
 Organisers can only open the gate for their own events. The server enforces this (`api/gate/*` checks `eventFor`); see docs/08 §8.10.

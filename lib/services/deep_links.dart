@@ -109,7 +109,7 @@ class DeepLinks {
     final open = storage.getString(StorageKeys.pendingOpen);
     if (open != null && ready) {
       storage.remove(StorageKeys.pendingOpen);
-      _openTicket(open);
+      openTicket(open);
     }
     final code = storage.getString(StorageKeys.pendingClaim);
     if (code == null || !ready) return;
@@ -117,7 +117,8 @@ class DeepLinks {
     Get.to(() => ClaimScreen(code: code));
   }
 
-  static Future<void> _openTicket(String id) async {
+  /// A ticket, or the claim card for tickets waiting for you (WhatsApp link, push).
+  static Future<void> openTicket(String id) async {
     final r = await sl<TicketRepository>().open(id);
     if (r.isOk) {
       final o = r.data!;

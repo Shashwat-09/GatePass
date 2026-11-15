@@ -203,7 +203,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                       ? null
                       : () async {
                           final ticket = await waiting.claim(t);
-                          if (ticket == null || !context.mounted) return;
+                          if (ticket == null || !mounted) return;
                           await showSuccess(context, title: 'They’re Yours', message: 'Your QR is ready, and it works offline.');
                           Get.to(() => TicketViewScreen(ticket: ticket));
                         },

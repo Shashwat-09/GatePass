@@ -35,6 +35,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
   DateTime? _opens;
   String? _cityId;
   List<CityItem> _cities = const [];
+  /// The city list couldn't load (offline, server busy): offer a retry instead of no City row.
+  String? _citiesError;
   bool _saving = false;
   String? _error;
   late final Map<String, dynamic> _was;
@@ -65,8 +67,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   Future<void> _loadCities() async {
+    setState(() => _citiesError = null);
     final r = await Session.to.api.eventCities(Session.to.me.value!);
-    if (!mounted || !r.isOk) return;
+    if (!mounted) return;
+    if (!r.isOk) return setState(() => _citiesError = r.error);
     setState(() {
       _cities = r.data!;
       // Launch city first (Ahmedabad): the only live one at launch.
@@ -226,6 +230,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
           if (_opens != null && _isNew) GroupRow(title: 'Open When Published Instead', chevron: false, onTap: () => setState(() => _opens = null)),
         ], footer: 'Before this time customers see “Tickets go live …” with a countdown and a Notify Me button. GatePass boosts the server the night before.'),
         _group('Where', [
+          if (_citiesError != null && _cities.isEmpty)
+            GroupRow(key: const Key('f-city-retry'), title: 'City', subtitle: 'Couldn’t load the cities', value: 'Try Again', onTap: _loadCities),
           if (_cities.isNotEmpty)
             GroupRow(
               key: const Key('f-city'),

@@ -620,6 +620,20 @@ void main() {
     await t.pumpAndSettle();
   }
 
+  testWidgets('Tickets not on sale yet: the go-live date, a countdown and Notify Me', (t) async {
+    final opens = DateTime.now().add(const Duration(days: 3));
+    d.backend.json('GET', 'api/event', {
+      ...eventJson(),
+      'badge': {'key': 'opening_soon', 'label': 'Tickets open soon', 'isBookable': false, 'opensAt': opens.toUtc().toIso8601String()},
+      'notifyMe': false,
+    });
+    await openEvent(t);
+    expect(find.byKey(const Key('goes-live')), findsOneWidget);
+    expect(find.text('TICKETS GO LIVE'), findsOneWidget);
+    expect(find.text('Notify Me'), findsOneWidget);
+    expect(find.text('Get Tickets'), findsNothing);
+  });
+
   testWidgets('Event page shows guide, lineup, highlights, FAQs, venue, sponsors and related events', (t) async {
     d.backend.json('GET', 'api/event', {
       ...eventJson(),

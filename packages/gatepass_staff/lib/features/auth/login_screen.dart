@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/utsav_art.dart';
