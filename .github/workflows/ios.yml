@@ -11,11 +11,13 @@ name: iOS
 #      ASC_KEY_P8             the .p8 key file contents
 #      IOS_BASE_URL           https API base URL baked into TestFlight builds
 
+# Mac minutes cost 10× on GitHub, so iOS builds only run when asked: change
+# .github/ios-build.txt and push (or "Run workflow" on the default branch).
 on:
   workflow_dispatch:
-  pull_request:
   push:
     branches: [main, release-readiness]
+    paths: ['.github/ios-build.txt']
 
 concurrency:
   group: ios-${{ github.ref }}
