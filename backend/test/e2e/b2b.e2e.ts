@@ -1,7 +1,7 @@
 import { In } from 'typeorm';
 import { B2bOrder, City, Ticket, Tier, User } from '../../src/db/entities';
 import { B2bService } from '../../src/b2b/b2b.service';
-import { auth, bootApp, Ctx, login } from '../helpers';
+import { auth, bootApp, Ctx, login, approveChanges } from '../helpers';
 
 type Session = Awaited<ReturnType<typeof login>>;
 
@@ -53,6 +53,7 @@ describe('B2B channel, roles and event terms (e2e)', () => {
     const t = (await as(org).post(`organiser/events/${eventId}/tiers`, { name: 'Stalls', pricePaise: 120000, quantity: 20, b2bPricePaise: 75000, b2bQuota: 10 }).expect(200)).body.data;
     tierId = t.id;
     await as(org).post(`organiser/events/${eventId}/status`, { status: 'live' }).expect(200);
+    await approveChanges(ctx, eventId);
     // Not open to B2B yet: the distributor doesn't see it.
     expect((await as(admin).get('distributor/events').expect(200)).body.data.items.map((e: { id: string }) => e.id)).not.toContain(eventId);
     await as(org).put(`organiser/events/${eventId}`, { b2bEnabled: true }).expect(200);

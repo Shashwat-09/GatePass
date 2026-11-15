@@ -3,7 +3,7 @@ import http from 'http';
 import { AddressInfo } from 'net';
 import { resetConfig } from '../../src/config/config';
 import { B2bOrder, City, User } from '../../src/db/entities';
-import { auth, bootApp, Ctx, login } from '../helpers';
+import { auth, bootApp, Ctx, login, approveChanges } from '../helpers';
 
 type Session = Awaited<ReturnType<typeof login>>;
 
@@ -69,6 +69,7 @@ describe('B2B: sellers pay the distributor’s own Razorpay account; no UTR (e2e
     const ev = (await as(org).post('organiser/events', { title: 'Indie Fest', cityId, venueName: 'Amphitheatre', startDate: new Date(Date.now() + 8 * 86400_000).toISOString() }).expect(200)).body.data;
     tierId = (await as(org).post(`organiser/events/${ev.id}/tiers`, { name: 'Pit', pricePaise: 150000, quantity: 30, b2bPricePaise: 100000 }).expect(200)).body.data.id;
     await as(org).post(`organiser/events/${ev.id}/status`, { status: 'live' }).expect(200);
+    await approveChanges(ctx, ev.id);
     await as(org).put(`organiser/events/${ev.id}`, { b2bEnabled: true }).expect(200);
     await as(dist).put('distributor/profile', { upiId: 'owner@okaxis', payeeName: 'Owner' }).expect(200);
     await as(dist).post('distributor/sellers', { phone: seller.phone, name: 'Ravi Tickets' }).expect(200);

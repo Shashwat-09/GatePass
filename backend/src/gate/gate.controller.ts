@@ -4,12 +4,12 @@ import {
   ArrayMaxSize, IsArray, IsDateString, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateNested,
 } from 'class-validator';
 import { createHash } from 'crypto';
-import { DataSource, MoreThanOrEqual, Not } from 'typeorm';
+import { DataSource, In, MoreThanOrEqual, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
-import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 import { verifyTicketQr } from '../common/signing';
-import { eventFor } from '../common/event-access';
+import { eventAs, myEventRoles } from '../common/event-access';
 import { config } from '../config/config';
 import { istDate, istDayRange } from '../common/ist';
 import { CheckIn, EventEntity, EventSession, Ticket } from '../db/entities';
@@ -41,12 +41,12 @@ export const tokenHash = (qr: string) => createHash('sha256').update(qr.trim()).
 
 /**
  * Event check-in, used by the /gate PWA and the GatePass Organiser app.
- * Staff and admins can scan at any live event; organisers only at their own.
+ * Staff and admins can scan at any live event; organisers, event admins and
+ * scanners only at events they have that job on (sellers can't scan).
  * Online: POST scan. Offline: download the manifest before doors open, scan
  * against it on the device, then POST sync when the network returns.
  */
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('staff', 'organiser', 'admin')
+@UseGuards(JwtAuthGuard)
 @Controller('gate')
 export class GateController {
   constructor(private readonly ds: DataSource) {}
@@ -54,7 +54,12 @@ export class GateController {
   @Get('events')
   async upcoming(@Req() req: AuthedRequest) {
     const since = new Date(Date.now() - 24 * 3600_000);
-    const own = req.userRole === 'organiser' ? { organiserId: req.userId! } : {};
+    let own = {};
+    if (!this.anyGate(req)) {
+      const mine = [...(await myEventRoles(this.ds.manager, req.userId!)).entries()].filter(([, r]) => r !== 'seller').map(([id]) => id);
+      if (!mine.length) return { items: [] };
+      own = { id: In(mine) };
+    }
     const list = await this.ds.getRepository(EventEntity).find({
       where: { status: 'live', startDate: MoreThanOrEqual(since), ...own },
       order: { startDate: 'ASC' },
@@ -144,9 +149,14 @@ export class GateController {
     return { results, synced: results.length };
   }
 
-  /** Organisers may only work their own events' gates. */
+  /** Staff and admins work every gate. */
+  private anyGate(req: AuthedRequest) {
+    return !!req.userRoles?.some((r) => r === 'staff' || r === 'admin');
+  }
+
+  /** Everyone else only the gates of events they organise or were given scanning on. */
   private async access(req: AuthedRequest, eventId: string) {
-    if (req.userRole === 'organiser') return eventFor(this.ds.manager, req, eventId);
+    if (!this.anyGate(req)) return (await eventAs(this.ds.manager, req, eventId, 'scan')).event;
     const ev = await this.ds.getRepository(EventEntity).findOneBy({ id: eventId });
     if (!ev) throw new ApiError('NOT_FOUND', 'Event not found');
     return ev;

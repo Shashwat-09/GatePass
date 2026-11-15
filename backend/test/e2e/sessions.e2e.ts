@@ -81,7 +81,8 @@ describe('multi-venue / date / time slots and season passes (e2e)', () => {
     const pass = (await ctx.http.get(`/api/booking/sessions?eventId=${eventId}`)).body.data.seasonPasses[0];
     const t = await buy(s, pass.tierId, 2);
     const friend = await login(ctx);
-    await ctx.http.post('/api/ticket/split').set(auth(s.token)).send({ ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200);
+    const tr = (await ctx.http.post('/api/ticket/split').set(auth(s.token)).send({ ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200)).body.data;
+    await ctx.http.post(`/api/ticket/transfers/${tr.id}/claim`).set(auth(friend.token)).expect(200);
     const got = (await ctx.http.get('/api/ticket/my-tickets').set(auth(friend.token))).body.data.items[0];
     expect(got).toMatchObject({ quantity: 1, entryTotal: 2 });
   });

@@ -31,9 +31,9 @@ describe('gate check-in, invoices, discovery (e2e)', () => {
   const scan = (qrToken: string, extra: object = {}, token = staff.token) =>
     ctx.http.post('/api/gate/scan').set(auth(token)).send({ qrToken, eventId, ...extra });
 
-  it('only staff can scan', async () => {
+  it('only staff (or people given the gate on that event) can scan', async () => {
     await scan(ticket.qrToken, {}, buyer.token).expect(403);
-    await ctx.http.get('/api/gate/events').set(auth(buyer.token)).expect(403);
+    expect((await ctx.http.get('/api/gate/events').set(auth(buyer.token)).expect(200)).body.data.items).toHaveLength(0);
     await ctx.http.get('/api/gate/events').set(auth(staff.token)).expect(200);
   });
 

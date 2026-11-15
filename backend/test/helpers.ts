@@ -69,3 +69,14 @@ export async function loginMany(ctx: Ctx, n: number) {
   for (let i = 0; i < n; i++) out.push(await login(ctx));
   return out;
 }
+
+/** GatePass (an admin) approves everything an organiser asked for on this event. */
+export async function approveChanges(ctx: Ctx, eventId: string) {
+  const a = await login(ctx);
+  await ctx.ds.getRepository(User).update({ phone: a.phone }, { role: 'admin' });
+  const items = (await ctx.http.get(`/api/organiser/events/${eventId}/changes`).set(auth(a.token)).expect(200)).body.data.items as { id: string; status: string }[];
+  for (const c of items.filter((x) => x.status === 'pending')) {
+    await ctx.http.post(`/api/organiser/changes/${c.id}/approve`).set(auth(a.token)).send({}).expect(200);
+  }
+  return a;
+}

@@ -803,6 +803,44 @@ export class CompRequest {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/**
+ * Someone's job on one event, set by an admin or the event's admins:
+ * event_admin (runs the event, assigns roles; main details need GatePass
+ * approval), seller (issues comp / box-office tickets), scanner (gate only).
+ */
+export type EventRole = 'event_admin' | 'seller' | 'scanner';
+
+@Entity('event_members')
+@Unique(['eventId', 'userId'])
+export class EventMember {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') eventId!: string;
+  @Index() @Column('uuid') userId!: string;
+  @Column({ type: 'varchar' }) role!: EventRole;
+  @Column({ type: 'uuid', nullable: true }) addedBy!: string | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
+/** A change to an event's main details waiting for GatePass (admin) approval. */
+export type EventChangeKind = 'details' | 'status' | 'session_add' | 'session_update';
+
+@Entity('event_changes')
+export class EventChange {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') eventId!: string;
+  @Column({ type: 'varchar' }) kind!: EventChangeKind;
+  /** The request body as sent (applied as-is on approval). */
+  @Column({ type: 'jsonb' }) payload!: Record<string, unknown>;
+  /** The show being changed (session_update). */
+  @Column({ type: 'uuid', nullable: true }) targetId!: string | null;
+  @Column('uuid') requestedBy!: string;
+  @Index() @Column({ type: 'varchar', default: 'pending' }) status!: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+  @Column({ type: 'varchar', nullable: true }) note!: string | null;
+  @Column({ type: 'uuid', nullable: true }) decidedBy!: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) decidedAt!: Date | null;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 /** A distributor's payment details shown to their sellers (personal UPI). */
 @Entity('distributor_profiles')
 export class DistributorProfile {
@@ -930,5 +968,5 @@ export const ENTITIES = [
   Booking, Ticket, TicketTransfer, Notification, OutboundMessage, PlatformSetting, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
   VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
-  CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder,
+  CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder, EventMember, EventChange,
 ];

@@ -1,6 +1,6 @@
 import { In } from 'typeorm';
 import { City, Notification, Ticket, User } from '../../src/db/entities';
-import { auth, bootApp, Ctx, eventBySlug, login } from '../helpers';
+import { approveChanges, auth, bootApp, Ctx, eventBySlug, login } from '../helpers';
 
 type Session = Awaited<ReturnType<typeof login>>;
 
@@ -34,8 +34,13 @@ describe('organiser tools (e2e)', () => {
     const ga = (await o.post(`events/${ev.id}/tiers`, { name: 'Lawn', pricePaise: 49900, quantity: 10 }).expect(200)).body.data;
     await o.post(`events/${ev.id}/tiers`, { name: 'Front row', pricePaise: 149900, quantity: 4, maxPerUser: 2 }).expect(200);
     await o.post(`events/${ev.id}/sessions`, { venueName: 'Empress Garden', startsAt: start, label: 'Evening' }).expect(200);
-    await o.put(`events/${ev.id}`, { description: 'Live jazz under the stars.', ageLimit: 12 }).expect(200);
-    await o.post(`events/${ev.id}/status`, { status: 'live' }).expect(200);
+    // Drafts are the organiser's to shape freely.
+    expect((await o.put(`events/${ev.id}`, { description: 'Live jazz under the stars.', ageLimit: 12 }).expect(200)).body.data).toMatchObject({ ageLimit: 12, pendingChange: null });
+    // Publishing waits for GatePass.
+    const asked = (await o.post(`events/${ev.id}/status`, { status: 'live' }).expect(200)).body.data;
+    expect(asked).toMatchObject({ status: 'draft', pendingChange: expect.any(String) });
+    await ctx.http.get(`/api/event?slug=${ev.slug}`).expect(404);
+    await approveChanges(ctx, ev.id);
     const pub = (await ctx.http.get(`/api/event?slug=${ev.slug}`).expect(200)).body.data;
     expect(pub).toMatchObject({ title: 'Jazz on the Lawn', priceFromPaise: 49900 });
 
@@ -65,6 +70,7 @@ describe('organiser tools (e2e)', () => {
     await o.put(`tiers/${ga.id}`, { quantity: 20, pricePaise: 59900 }).expect(200);
     await o.post(`events/${ev.id}/status`, { status: 'draft' }).expect(400);
     await o.post(`events/${ev.id}/status`, { status: 'cancelled', note: 'Rain. Full refunds this week.' }).expect(200);
+    await approveChanges(ctx, ev.id);
     expect(await ctx.ds.getRepository(Notification).findOneBy({ userId: buyer.userId, type: 'event_update' })).toMatchObject({ body: 'Rain. Full refunds this week.' });
 
     // Organisers can open their own reports.
@@ -84,7 +90,8 @@ describe('organiser tools (e2e)', () => {
     await api(org).get(`events/${neon.id}/summary`).expect(403);
     await ctx.http.get('/api/admin/approval-requests').set(auth(org.token)).expect(400); // must pick an event
     const customer = await login(ctx);
-    await api(customer).get('events').expect(403);
+    expect((await api(customer).get('events').expect(200)).body.data.items).toHaveLength(0);
+    await api(customer).post('events', { title: 'Mine', cityId, venueName: 'Hall', startDate: new Date().toISOString() }).expect(403);
   });
 
   it('organisers check in guests at their own events only (gate)', async () => {
@@ -93,6 +100,7 @@ describe('organiser tools (e2e)', () => {
     const ev = (await o.post('events', { title: 'Gate Night', cityId, venueName: 'Hall 2', startDate: start }).expect(200)).body.data;
     const tier = (await o.post(`events/${ev.id}/tiers`, { name: 'Entry', pricePaise: 0, quantity: 20 }).expect(200)).body.data;
     await o.post(`events/${ev.id}/status`, { status: 'live' }).expect(200);
+    await approveChanges(ctx, ev.id);
     const guest = `96${String(Date.now()).slice(-8)}`;
     const comp = (await o.post(`events/${ev.id}/issue`, { tierId: tier.id, quantity: 2, phone: guest, kind: 'comp' }).expect(200)).body.data;
     const t = await ctx.ds.getRepository(Ticket).findOneByOrFail({ bookingId: comp.bookingId });
@@ -120,6 +128,7 @@ describe('organiser tools (e2e)', () => {
 
     // Customers still have no gate access.
     const customer = await login(ctx);
-    await gate(customer).get('events').expect(403);
+    expect((await gate(customer).get('events').expect(200)).body.data.items).toHaveLength(0);
+    await gate(customer).get(`events/${ev.id}/manifest`).expect(403);
   });
 });

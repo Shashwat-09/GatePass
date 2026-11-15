@@ -1,5 +1,5 @@
 import { City, User } from '../../src/db/entities';
-import { auth, bootApp, Ctx, login } from '../helpers';
+import { auth, bootApp, Ctx, login, approveChanges } from '../helpers';
 
 type Session = Awaited<ReturnType<typeof login>>;
 
@@ -38,6 +38,7 @@ describe('Booking fee controls: rate any time, who pays, B2B sellers (e2e)', () 
     eventId = ev.id;
     tierId = (await as(org).post(`organiser/events/${eventId}/tiers`, { name: 'Floor', pricePaise: 100000, quantity: 50, b2bPricePaise: 75000 }).expect(200)).body.data.id;
     await as(org).post(`organiser/events/${eventId}/status`, { status: 'live' }).expect(200);
+    await approveChanges(ctx, eventId);
   });
   afterAll(async () => ctx.app.close());
 
