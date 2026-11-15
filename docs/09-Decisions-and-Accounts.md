@@ -18,6 +18,7 @@ Code can't make these choices or open these accounts. Each line shows the **defa
 | 13 | **Ticket sharing rules** | Sharing on; **unlimited** shares per ticket; received tickets **can** be passed on; claim-back only before the friend accepts | `events.allowTransfers`, `maxTransfersPerTicket`, `allowResplit` per event |
 | 12 | **Invoice seller details** | Placeholder | Backend `INVOICE_SELLER_NAME`, `INVOICE_SELLER_ADDRESS`, `INVOICE_GSTIN` |
 | 15 | **Launch city: Ahmedabad only** | Owner decision (Nov 2026) | Migration `LaunchCities` adds Ahmedabad (live) and other cities switched off. With one live city the app uses it automatically: no city screen, no location prompt (`app-config.cities.single`). To expand, an admin switches a city on (Organiser app › Events › Cities); the app then shows the picker with “Use my current location”. |
+| 16 | **White theme only** | Owner decision (Nov 2026) | All three apps (customer, Organiser, B2B) always use the light theme (`themeMode: ThemeMode.light` in each `app/app.dart`), whatever the phone's setting. The dark palettes stay in the code; switch `themeMode` back to `ThemeMode.system` to bring dark mode back. |
 | 14 | **Scope: events only** | Owner decision (Nov 2026) | GatePass sells live events only. Movies / theatre (cinema screens, show posters, premiere tickets) are **not** being built now — don't add movie-specific fields or screens. Revisit as a separate product decision. |
 
 ## Legacy reverse-engineering archive

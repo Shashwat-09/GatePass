@@ -77,27 +77,11 @@ class HomeScreen extends StatelessWidget {
     final now = DateTime.now();
     final name = (sl<AuthRepository>().currentUser?.name ?? '').trim();
     final first = name.split(RegExp(r'\s+')).first;
-    final initials = name.isEmpty ? '' : name.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
     final thisWeek = c.events.where((e) => e.date != null && e.date!.isAfter(now.subtract(const Duration(hours: 6))) && e.date!.isBefore(now.add(const Duration(days: 7)))).length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md + 4, AppSpacing.sm, AppSpacing.md + 4, AppSpacing.md),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Semantics(
-            label: name.isEmpty ? 'You' : name,
-            excludeSemantics: true,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: GlassPanel(
-                radius: 22,
-                blur: true,
-                shadow: false,
-                child: Center(child: initials.isEmpty ? Icon(CupertinoIcons.person_fill, size: 20, color: context.colors.label) : Text(initials, style: context.text.titleSmall!.copyWith(fontWeight: FontWeight.w700))),
-              ),
-            ),
-          ),
-          const Spacer(),
           _cityButton(context, c),
           const Spacer(),
           GlassIconButton(icon: CupertinoIcons.search, tooltip: 'Search', onPressed: () => Get.to(() => const SearchScreen())),

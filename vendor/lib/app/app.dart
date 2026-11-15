@@ -17,7 +17,7 @@ class OrganiserApp extends StatelessWidget {
         // Same "Utsav" brand as the customer app (packages/gatepass_ui).
         theme: GatePassTheme.light(),
         darkTheme: GatePassTheme.dark(),
-        themeMode: ThemeMode.system,
+        themeMode: ThemeMode.light, // white only (owner decision, Nov 2026)
         home: home ?? const LaunchScreen(),
       );
 }

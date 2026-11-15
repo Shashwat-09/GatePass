@@ -15,7 +15,7 @@ class B2bApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: GatePassTheme.light(),
         darkTheme: GatePassTheme.dark(),
-        themeMode: ThemeMode.system,
+        themeMode: ThemeMode.light, // white only (owner decision, Nov 2026)
         home: home ?? const LaunchScreen(),
       );
 }

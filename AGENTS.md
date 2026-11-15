@@ -50,7 +50,7 @@ Example: add "notifications".
 - **No secrets in the client.** Base URL via `--dart-define=BASE_URL`; payment keys live server-side; auth tokens only in `TokenStore` (flutter_secure_storage); the Hive box is encrypted.
 - **Payments are verified server-side.** The client forwards the gateway result; only the server (signature + gateway API, or signed webhook) confirms a booking.
 - **Phase-2 UI is behind `AppConfig.phase2`** (`--dart-define=PHASE2=true`).
-- **Design tokens only** from `theme.dart`; support light + dark.
+- **Design tokens only** from `theme.dart`. The apps ship **white theme only** (owner decision, docs/09 #16); keep tokens semantic so dark can return.
 - **Every data screen** implements loading / loaded / empty / error-retry.
 - **Money in paise** end-to-end; format with `intl` for display.
 - **Pagination** on all lists (`page`, `limit`, `{items,page,total}`).
