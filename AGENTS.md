@@ -29,6 +29,8 @@ lib/
   widgets/  shared, themed building blocks (common.dart / theme.dart re-export packages/gatepass_ui)
 packages/gatepass_ui/  design system shared by both apps
 vendor/                GatePass Organiser app (own pubspec; analyze/test inside it) — docs/12
+b2b/                   GatePass B2B app (distributor + sellers) — docs/14 §6
+packages/gatepass_staff/ shared staff-app code (sign-in, account, API, models)
 ```
 
 ## 4. How to add a feature (end-to-end recipe)
@@ -79,7 +81,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.14)
+## 9. Current status (v0.15)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Or YouPI (self-hosted UPI, docs/15). Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -122,7 +124,12 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ Tests: backend 186 (unit + e2e on real Postgres, incl. fake YouPI, WhatsApp and Razorpay), organiser app 49 + 60 screenshot renders + live organiser and B2B flows, client 85 (repositories, controller, widgets light/dark) + 40 screenshot renders + live full-flow test; offline gate flow verified in Chromium.
 - ⬜ Owner actions: see `docs/09-Decisions-and-Accounts.md` and `docs/RELEASE.md` (accounts, keys, domain, legal review, final artwork, device testing).
 - ✅ v0.14: **Google Cloud deploy kit** (`deploy/gcp/`): `setup.sh` for Cloud Shell (Cloud SQL, Secret Manager, Artifact Registry, bucket, keyless GitHub deploys via Workload Identity Federation, Scheduler for jobs) and `.github/workflows/deploy-gcp.yml` (build + Cloud Run on every backend push once `deploy/gcp/project.env` exists). `TEST_MODE` + `TEST_PHONES` let invited testers use a real server before the SMS and Razorpay accounts exist; `BOOTSTRAP_ADMINS` grants admin on boot.
-- ⬜ Next: run `deploy/gcp/setup.sh` (owner), email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
+- ✅ v0.15: **Simple + Liquid Glass** customer app (Apple-simple screens, one violet accent, flat poster art; glass tab bar, buttons, bars, sheets); **swipe to pay** and **swipe to send**.
+- ✅ v0.15: **claim-first sharing**: shares wait in Received with a blurred QR until one tap on Claim (app users, new sign-ups and WhatsApp links alike).
+- ✅ v0.15: **event teams** (event admin, ticket seller, gate scanner per event) and **GatePass approval** of main-detail, status and show changes; admins add events in the Organiser app; Approvals tab.
+- ✅ v0.15: **GatePass B2B** split out as its own app (`b2b/`, com.gatepass.b2b).
+- ✅ Hosting: live on Google Cloud (Cloud Run asia-south1, test mode).
+- ⬜ Next: email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).
 - ⬜ iOS: builds in CI (unsigned); still needs an Apple Developer account for TestFlight and a test on a real iPhone.
 

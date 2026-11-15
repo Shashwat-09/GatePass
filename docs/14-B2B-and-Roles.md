@@ -23,12 +23,9 @@ npm run user:role -- 9000000001 organiser
 ```
 Sellers don't need a command. When the distributor adds a seller in the app, that number gets the `reseller` role.
 
-In the Organiser app, each role adds a tab:
-- **Events**: admin, organiser and staff.
-- **Distribute**: distributor.
-- **Sell**: reseller.
-
-An admin + distributor sees both Events and Distribute.
+Apps:
+- **GatePass Organiser** (`vendor/`): admins, organisers, event teams (§7) and gate staff.
+- **GatePass B2B** (`b2b/`, `com.gatepass.b2b`): **Distribute** for the distributor (you), **Sell** for B2B sellers. An admin + distributor opens on Distribute.
 
 ## 2. Event terms (set by GatePass admin, per event)
 
@@ -112,3 +109,14 @@ A distributor can still confirm an expired order if the money arrived late. The 
 - The distributor margin is personal income, outside GatePass's books. Keep it in a separate account. Agree in writing with the GatePass partners that this margin isn't shared.
 - Without YouPI, payments to a personal UPI ID are confirmed by hand (UTR check). With YouPI on your UPI ID (`YOUPI_B2B_*`, docs/15), seller payments confirm themselves: the seller taps **Pay**, pays in any UPI app, and the tickets go out when the money lands. The QR code and UTR stay as a fallback.
 - Email delivery of B2B tickets isn't connected yet; the email is stored on the order. The tickets arrive in the app by phone number, and the customer also gets a WhatsApp message from GatePass with a **View Tickets** button (docs/16).
+
+## 6. The GatePass B2B app
+A separate Android/iOS app (`b2b/`) for the B2B channel, sharing sign-in and data code with the Organiser app (`packages/gatepass_staff`). The owner signs in with the admin + distributor number (`BOOTSTRAP_ADMINS` gives both) and sets seller prices (default and per seller) that sellers see in their app; adds sellers; confirms or auto-confirms payments (Razorpay, YouPI or UTR); keeps Your Books. Sellers sign in with the number the distributor added. No camera permission. Build: `cd b2b && flutter build apk --release --split-per-abi --dart-define=BASE_URL=…`. Demo: `--dart-define=USE_MOCK=true`.
+
+## 7. Event teams and GatePass approval
+Per event, admins and event admins give people a job (`event_members`):
+- **event_admin**: runs the event and its team like the organiser. Main-detail changes need GatePass approval.
+- **seller**: issues comp / box-office tickets (comp allowance applies).
+- **scanner**: the gate only.
+
+Changes to a published event's main details, its status and its shows are stored as `event_changes` and applied when an admin approves (docs/08 §8.26). Ticket types, the team and switches apply at once.

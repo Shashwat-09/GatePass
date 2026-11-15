@@ -1,24 +1,19 @@
-# 12. GatePass Organiser — the vendor app (Android + iOS)
+# 12. GatePass Organiser — the event app (Android + iOS)
 
-A native Flutter app for **organisers**, **gate staff**, **GatePass admins** and the **B2B channel** (distributor and sellers, docs/14), in `vendor/` (package `gatepass_organiser`, app id `com.gatepass.organiser` on both platforms). It replaces the legacy seller app. That app was a WebView of a website plus a QR scanner, so it shared no code with this one (docs/10 rows 54–56). Event *setup* (ticket types, shows, seat maps, forms) stays in the `/organiser` web console. The app is for event days and for keeping an eye on sales.
+A native Flutter app for **GatePass admins**, **organisers** and **event teams** (event admins, ticket sellers, gate scanners), in `vendor/` (package `gatepass_organiser`, app id `com.gatepass.organiser`). B2B selling (distributor and sellers) is a **separate app**, GatePass B2B in `b2b/` (docs/14 §6). Both share sign-in, account and data code through `packages/gatepass_staff`. Seat maps and extra shows still live in the `/organiser` web console.
 
 ## Who sees what
-| | Organiser / admin | Gate staff |
-|---|---|---|
-| Events list | Their own events (admin: all), upcoming / past, with sold / capacity | Live events today and ahead |
-| Event screen | Check-in progress, sales (revenue, tickets, bookings; online / box office / complimentary), ticket types with an on-sale switch, ticket requests, issue tickets, Excel report, event status (publish, unpublish, postpone, cancel with a message to ticket holders) | Check-in progress |
-| Scanner | Tickets | Tickets **and** partner vouchers |
-| Accounts with any other role | "No organiser access" screen | |
+Each person sees only their job on each event (server: `common/event-access.ts`).
 
-**Tabs follow the account's roles** (one account can hold several, docs/14 §1):
-- **Events**: admin, organiser, staff.
-- **Distribute**: distributor. Shows payments waiting for confirmation, B2B events with prices per ticket type (default and per seller), sellers, Your Books (margin, owed to organiser, commission), price history and UPI payment details.
-- **Sell**: B2B seller. Lists ticket types at their price. Ordering takes phone numbers, quantities, optional names and emails, and the price the customer paid. Then the screen shows the distributor's UPI QR, a Pay with a UPI App button, a field for the UTR, and My Orders.
+| | GatePass admin | Organiser / event admin | Ticket seller | Gate scanner (and gate staff) |
+|---|---|---|---|---|
+| Events list | Every event; **+ New Event** | Events they own or were made event admin of; organisers can add drafts | Events they sell for | Events they scan (staff: all live) |
+| Event screen | Everything, applied at once | Sales, check-in, ticket types (+ Add), **Team**, **Edit Details**, status, comps, B2B switch and rates, booking fee, settlement, report | **Issue Tickets** (comp / box office) and tickets left | **Scan Tickets** and check-in count |
+| Approvals tab | Changes waiting: before → after, Approve / Decline with a note | "N changes waiting for GatePass" on the event; withdraw | | |
 
-On the event screen:
-- Organisers also get **B2B Selling** (an on/off switch, and the B2B rate and cap per ticket type), **Complimentary** (allowance used, Request More), and **Settlement**.
-- Admins also get **Event Terms** (commission %, box office %, B2B %, free comps, fee per extra comp).
-- Admins also get **Comp Requests** in the Events tab.
+**Approval rules.** On a published event, an organiser's or event admin's change to the main details (title, dates, venue, city, poster, about, programme…), a status change (publish, postpone, cancel) or a show added or changed waits for GatePass. Customers see it once an admin approves. Drafts can be edited freely (publishing still needs approval). Ticket types, the team and switches apply at once. Admins' own edits apply at once.
+
+**Team.** Admins and event admins add people by phone number as Event Admin, Ticket Seller or Gate Scanner, change their job or remove them, any time and without approval. A number new to GatePass gets an account; they sign in with it.
 
 Organisers can only open the gate for their own events. The server enforces this (`api/gate/*` checks `eventFor`); see docs/08 §8.10.
 
@@ -41,8 +36,8 @@ Partner vouchers are switched off (owner decision); a voucher code scans as not 
 ## Demo mode
 `flutter run --dart-define=USE_MOCK=true` (or the demo APK) runs on built-in data with no server. The demo has:
 - real signed sample tickets, under **Samples** in the scanner;
-- a "Pretend to Be Offline" switch and a demo role picker in Account: Admin + Distributor (default), Organiser, B2B Seller, Gate Staff;
-- B2B sample data: Sunset Sessions with B2B on, two sellers (Meera is trusted), one payment waiting for confirmation;
+- a "Pretend to Be Offline" switch and a demo role picker in Account: GatePass Admin (default), Organiser, Event Admin, Ticket Seller, Gate Scanner, Gate Staff;
+- a change waiting in Approvals, and a team on Sunset Sessions;
 - sign-in with any number and the code 123456.
 
 ## Build & run
@@ -51,24 +46,24 @@ cd vendor
 flutter pub get
 flutter run --dart-define=BASE_URL=http://10.0.2.2:4000/          # Android emulator → local API
 flutter run --dart-define=USE_MOCK=true                            # demo data
-flutter analyze && flutter test                                    # 42 tests (gate rules, sync, API client, screens incl. B2B, light/dark)
+flutter analyze && flutter test                                    # 42 tests (gate rules, sync, API client, screens, roles, approvals, light/dark)
 flutter test test/shots --dart-define=SHOTS=true                   # screenshots → build/shots/
 flutter test test/live --dart-define=LIVE_API=true --dart-define=BASE_URL=http://localhost:4000/   # needs: 9000000071 + 9000000072 organiser, 9000000081 admin distributor
 flutter build apk --release --split-per-abi --dart-define=BASE_URL=https://api.yourdomain.com/
 ```
-Give an account access with `npm run user:role -- <phone> <role> [more roles]` (backend), e.g. `admin distributor`. Sellers are added from the Distribute tab.
+Admins are set by `BOOTSTRAP_ADMINS` (Cloud Run) or `npm run user:role -- <phone> admin`. Everyone else gets in through an event's Team.
 
 ## Layout
 ```
 vendor/lib/
-  core/      config (BASE_URL, USE_MOCK), api_client (ApiResult, refresh-on-401), token_store (secure storage), format
-  data/      models, vendor_api (HTTP), demo_api (in-memory, signs real QRs)
-  gate/      qr (GP2 parse, Ed25519 verify), offline_validator, gate_store (file/memory), gate_controller
-  features/  auth, home (role tabs), events (incl. terms, settlement, comp requests), b2b (distributor, seller), scan, approvals, issue, account
-packages/gatepass_ui/   design system shared with the customer app (tokens + widgets)
+  gate/      offline_validator, gate_controller
+  features/  home (Events + Approvals), events (list, event, new/edit form, team, changes, terms, settlement, fees, cities), scan, approvals (ticket requests), issue
+packages/gatepass_staff/ shared with GatePass B2B: api_client, token_store, config, format, models, vendor_api, demo_api, gate qr/store, sign-in, account, StaffShell
+packages/gatepass_ui/    design system (the staff apps use its Utsav theme)
 ```
 
 ## Not in the app (yet)
 - Push notifications for organisers: needs its own Firebase app.
 - Payouts: the settlement shows who owes whom; the money still moves outside the app.
-- Event creation and editing: these stay in the web console, which the app links to.
+- Seat maps, extra shows and registration forms: the web console.
+- Poster upload: paste an https image link for now.

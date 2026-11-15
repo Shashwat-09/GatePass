@@ -383,3 +383,15 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 
 ## 8.25 As built (v0.14) — booking fee controls, Razorpay for B2B (docs/17)
 Admin fee settings (`api/admin/settings/fees`); per-event `feePct` / `feePaidBy` / `b2bFee` (admin terms; the organiser can set `feePaidBy`); quotes with `feePaidBy`; absorbed fees and B2B seller fees in settlements and distributor books; B2B orders with `feePaise`, `gateway`, `razorpay`; `POST api/reseller/orders/:id/razorpay`; `POST api/payment/razorpay/b2b-webhook`. Full field list in docs/17.
+
+## 8.26 As built (v0.15) — claim-first sharing, event teams, approvals
+
+**Sharing waits for a one-tap claim.** `POST ticket/share` and `ticket/split` to a phone number no longer deliver straight into the recipient's tickets. The transfer stays `pending`; the recipient (app user now, or after signing up with that number) sees it in `GET ticket/transfers?direction=received` with `canClaim: true`, `fromName`, `venueName`, `tierName`, `eventId`, and no QR. The sender can claim back until then.
+- `POST ticket/transfers/:id/claim` → `{ ticket }` (403 for any other number, 409 if taken back; repeat taps return the same ticket).
+- `GET ticket/transfers/waiting` → `{ count }` (badge).
+- `GET ticket/open/:id` (WhatsApp `/r/<id>`) → `{ kind: 'claim', transfer }` while waiting, else `{ kind: 'ticket', ticket }`.
+- Notification / push type `ticket_waiting`, route `open/<transferId>`. Link shares are unchanged (the link carries the code; the app shows the claim card).
+
+**Event teams.** `GET organiser/me` → `{ admin, organiser, staff, events, eventRoles: {organiser, eventAdmin, seller, scanner}, pendingChanges }`. `GET organiser/events` lists events the caller has a job on (admins: all) with `myRole` and `pendingChanges`; `GET organiser/events/:id` adds `myAccess` (`admin | manager | seller | scanner`). `GET|POST organiser/events/:id/members` `{ phone, role: event_admin|seller|scanner, name? }`, `DELETE organiser/events/:id/members/:memberId`. Sellers may `POST events/:id/issue` and `GET events/:id/comps`; scanners use `api/gate/*` for that event; `api/gate/events` lists the caller's events (staff/admin: all live).
+
+**Approvals.** For non-admins on a published event, `PUT organiser/events/:id` applies switches at once and returns `pendingChange` for main details; `POST events/:id/status`, `POST events/:id/sessions`, `PUT sessions/:id` return `pendingChange`. `GET organiser/events/:id/changes`; admins: `GET organiser/changes?status=pending` (with `fields: [{label, from, to}]`), `POST organiser/changes/:id/approve|reject` `{ note? }`; requester or admin: `DELETE organiser/changes/:id` (withdraw). Creating events: admins and organiser accounts (drafts).
