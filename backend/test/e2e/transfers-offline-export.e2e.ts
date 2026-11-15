@@ -33,6 +33,12 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
   }
   const split = (s: Session, body: object) => ctx.http.post('/api/ticket/split').set(auth(s.token)).send(body);
   const mine = async (s: Session) => (await ctx.http.get('/api/ticket/my-tickets').set(auth(s.token)).expect(200)).body.data.items;
+  const waiting = async (s: Session) => (await ctx.http.get('/api/ticket/transfers?direction=received').set(auth(s.token)).expect(200)).body.data.items
+    .filter((x: { canClaim: boolean }) => x.canClaim);
+  /** The recipient taps Claim on everything waiting for them. */
+  async function claimAll(s: Session) {
+    for (const w of await waiting(s)) await ctx.http.post(`/api/ticket/transfers/${w.id}/claim`).set(auth(s.token)).expect(200);
+  }
 
   it('every issued QR is unique and verifiable', async () => {
     const tickets = await ctx.ds.getRepository(Ticket).find();
@@ -41,12 +47,29 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     expect(new Set([...tickets.map((x) => x.qrToken), t.qrToken]).size).toBe(tickets.length + 1);
   });
 
-  it('split to a phone of an existing user: delivered instantly, both QRs change, notifications sent', async () => {
+  it('share to an existing user: waits in their Received (no QR) until one tap on Claim; both QRs change; notifications', async () => {
     const t = await buy(buyer, 4);
     const r = (await split(buyer, { ticketId: t.id, quantity: 2, phone: friend.phone }).expect(200)).body.data;
-    expect(r).toMatchObject({ delivered: true, status: 'claimed', quantity: 2, method: 'phone' });
+    expect(r).toMatchObject({ delivered: true, status: 'pending', quantity: 2, method: 'phone' });
     expect(r.ticket).toMatchObject({ quantity: 2, entryTotal: 2, transferableUnits: 2 });
     expect(r.ticket.qrToken).not.toBe(t.qrToken); // the sender's old QR is dead
+
+    // Waiting: listed with the sender's name, but no ticket (and no QR) yet.
+    const [w] = await waiting(friend);
+    expect(w).toMatchObject({ id: r.id, canClaim: true, quantity: 2, direction: 'received', ticketId: null, eventTitle: expect.any(String) });
+    expect((await mine(friend)).find((x: { receivedFrom: string | null }) => x.receivedFrom)).toBeUndefined();
+    expect((await ctx.http.get('/api/ticket/transfers/waiting').set(auth(friend.token)).expect(200)).body.data.count).toBe(1);
+    const waitNote = (await ctx.http.get('/api/notifications').set(auth(friend.token)).expect(200)).body.data.items[0];
+    expect(waitNote).toMatchObject({ type: 'ticket_waiting' });
+    // Nobody else can claim it, and the sender can't either.
+    await ctx.http.post(`/api/ticket/transfers/${r.id}/claim`).set(auth(staff.token)).expect(403);
+    await ctx.http.post(`/api/ticket/transfers/${r.id}/claim`).set(auth(buyer.token)).expect(400);
+
+    const claimed = (await ctx.http.post(`/api/ticket/transfers/${r.id}/claim`).set(auth(friend.token)).expect(200)).body.data.ticket;
+    expect(claimed.qrToken).toMatch(/^GP2\./);
+    // A second tap is harmless.
+    expect((await ctx.http.post(`/api/ticket/transfers/${r.id}/claim`).set(auth(friend.token)).expect(200)).body.data.ticket.id).toBe(claimed.id);
+    await ctx.http.post('/api/ticket/claim-back').set(auth(buyer.token)).send({ transferId: r.id }).expect(409); // too late now
 
     const got = (await mine(friend)).find((x: { receivedFrom: string | null }) => x.receivedFrom);
     expect(got).toMatchObject({ quantity: 2, entryTotal: 2, invoiceUrl: null });
@@ -54,7 +77,7 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
 
     const inbox = (await ctx.http.get('/api/notifications').set(auth(friend.token)).expect(200)).body.data;
     expect(inbox.unread).toBeGreaterThanOrEqual(1);
-    expect(inbox.items[0]).toMatchObject({ type: 'ticket_received', isRead: false });
+    expect(inbox.items[0]).toMatchObject({ type: 'ticket_waiting', isRead: false });
     await ctx.http.post('/api/notifications/mark-as-read').set(auth(friend.token)).send({}).expect(200);
     expect((await ctx.http.get('/api/notifications/unread-count').set(auth(friend.token))).body.data.unread).toBe(0);
     const sender = (await ctx.http.get('/api/notifications').set(auth(buyer.token))).body.data.items;
@@ -71,12 +94,14 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     for (let i = 0; i < 12; i++) await split(buyer, { ticketId: t.id, quantity: 1 }).expect(200);
     const last = (await split(buyer, { ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200)).body.data;
     expect(last.ticket.quantity).toBe(1);
+    await claimAll(friend);
 
     // friend passes the ticket they received on to a third person
     const received = (await mine(friend)).find((x: { receivedFrom: string | null; transferableUnits: number }) => x.receivedFrom && x.transferableUnits > 0);
     const third = await login(ctx);
     const pass = (await split(friend, { ticketId: received.id, quantity: 1, phone: third.phone }).expect(200)).body.data;
-    expect(pass).toMatchObject({ delivered: true, status: 'claimed' });
+    expect(pass).toMatchObject({ delivered: true, status: 'pending' });
+    await claimAll(third);
     const thirds = await mine(third);
     expect(thirds).toHaveLength(1);
     expect(thirds[0].qrToken).toMatch(/^GP2\./);
@@ -87,6 +112,7 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     const t = await buy(buyer, 3);
     await split(buyer, { ticketId: t.id, quantity: 1, phone: friend.phone }).expect(200);
     await split(buyer, { ticketId: t.id, quantity: 1 }).expect(400); // cap of 1 reached
+    await claimAll(friend);
     const got = (await mine(friend)).filter((x: { receivedFrom: string | null }) => x.receivedFrom).pop();
     expect(got.transferableUnits).toBe(0);
     await split(friend, { ticketId: got.id, quantity: 1 }).expect(400);
@@ -101,6 +127,8 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     const r = (await share({ ticketId: t.id, recipients: [{ phone: a.phone, quantity: 1 }, { phone: b.phone, quantity: 2 }, { phone: newcomer, quantity: 1 }] }).expect(200)).body.data;
     expect(r.transfers).toHaveLength(3);
     expect(r.transfers.map((x: { delivered: boolean }) => x.delivered)).toEqual([true, true, false]);
+    await claimAll(a);
+    await claimAll(b);
     expect(r.ticket).toMatchObject({ quantity: 1, transferableUnits: 1 });
     expect(r.ticket.qrToken).not.toBe(t.qrToken);
     expect((await mine(a))[0]).toMatchObject({ quantity: 1 });
@@ -115,7 +143,7 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     // a link and a number together
     const mixed = (await share({ ticketId: t2.id, recipients: [{ quantity: 1 }, { phone: a.phone, quantity: 1 }] }).expect(200)).body.data;
     expect(mixed.transfers[0].shareUrl).toMatch(/\/t\/[A-Z0-9]{12}$/);
-    expect(mixed.transfers[1]).toMatchObject({ delivered: true, status: 'claimed' });
+    expect(mixed.transfers[1]).toMatchObject({ delivered: true, status: 'pending' });
   });
 
   it('a number not on GatePass yet: the sender can take the tickets back until that person signs up', async () => {
@@ -127,15 +155,19 @@ describe('split/share, notifications, offline gate, Excel exports (e2e)', () => 
     expect(back.status).toBe('cancelled');
     expect((await ctx.ds.getRepository(Ticket).findOneByOrFail({ id: t.id })).quantity).toBe(2); // back in the sender's ticket
     const s = await login(ctx, stranger);
-    expect(await mine(s)).toHaveLength(0); // nothing waiting for them any more
+    expect(await mine(s)).toHaveLength(0);
+    expect(await waiting(s)).toHaveLength(0); // nothing waiting for them any more
   });
 
-  it('split to a phone that has no account yet: held, then delivered when they sign in', async () => {
+  it('share to a number with no account yet: after they sign in it waits in Received, one tap to claim', async () => {
     const t = await buy(buyer, 2);
     const newcomer = `9${String(Date.now()).slice(-9)}`;
     const r = (await split(buyer, { ticketId: t.id, quantity: 1, phone: newcomer }).expect(200)).body.data;
     expect(r).toMatchObject({ delivered: false, status: 'pending' });
     const s = await login(ctx, newcomer);
+    expect(await mine(s)).toHaveLength(0);
+    expect(await waiting(s)).toHaveLength(1);
+    await claimAll(s);
     const items = await mine(s);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ quantity: 1, receivedFrom: expect.any(String) });

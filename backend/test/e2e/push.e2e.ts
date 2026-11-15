@@ -33,7 +33,7 @@ describe('push notifications (e2e)', () => {
     sender.sent.length = 0;
     const t0 = Date.now();
     await ctx.http.post('/api/ticket/split').set(auth(a.token)).send({ ticketId: t.id, quantity: 1, phone: b.phone }).expect(200);
-    await waitFor(() => sender.sent.some((x) => x.token === token('friend') && x.msg.data?.type === 'ticket_received'));
+    await waitFor(() => sender.sent.some((x) => x.token === token('friend') && x.msg.data?.type === 'ticket_waiting'));
     expect(Date.now() - t0).toBeLessThan(1000); // the worker's interval alone would be 5 s
   });
 

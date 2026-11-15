@@ -103,8 +103,6 @@ export class TicketsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    // Tickets sent to this user's phone number arrive here.
-    await this.transfers.autoClaimForUser(req.userId!);
     const q = parsePage(page, limit);
     const history = scope === 'history';
     const qb = this.tickets.createQueryBuilder('t')
@@ -157,6 +155,24 @@ export class TicketsController {
     return { ticket };
   }
 
+  /** One tap: claim tickets someone sent to your number (they wait, QR hidden, until you do). */
+  @UseGuards(JwtAuthGuard)
+  @Post('transfers/:id/claim')
+  @HttpCode(200)
+  @RateLimit({ bucket: 'claim', limit: 20, windowSec: 600 })
+  async claimOne(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    const { ticketId } = await this.transfers.claimById(req.userId!, id);
+    const [ticket] = await this.views([await this.tickets.findOneByOrFail({ id: ticketId })]);
+    return { ticket };
+  }
+
+  /** Shares waiting for you to claim (badge). */
+  @UseGuards(JwtAuthGuard)
+  @Get('transfers/waiting')
+  async waiting(@Req() req: AuthedRequest) {
+    return { count: await this.transfers.waitingCount(req.userId!) };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('claim-back')
   @HttpCode(200)
@@ -174,8 +190,10 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard)
   @Get('open/:id')
   async open(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
-    const t = await this.transfers.openFor(req.userId!, id);
-    return (await this.views([t]))[0];
+    const r = await this.transfers.openFor(req.userId!, id);
+    // Either the ticket itself, or tickets waiting for a one-tap claim.
+    if ('transfer' in r) return { kind: 'claim', transfer: r.transfer };
+    return { kind: 'ticket', ticket: (await this.views([r.ticket]))[0] };
   }
 
   /** Public, for the /r/<id> page: what was sent (no names beyond a first name, no numbers). */

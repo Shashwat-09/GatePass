@@ -10,7 +10,9 @@ export function routeFor(type: string, data: Record<string, unknown>): string {
   if (type === 'approval') return 'requests';
   if (type === 'voucher') return data.voucherId ? `voucher/${data.voucherId}` : 'vouchers';
   if (type === 'event_on_sale' && data.eventSlug) return `event/${data.eventSlug}`;
-  if (['booking', 'ticket_received', 'transfer_claimed', 'transfer_returned'].includes(type)) return 'tickets';
+  // Tickets waiting to be claimed open straight on the claim card.
+  if (type === 'ticket_waiting' && data.transferId) return `open/${data.transferId}`;
+  if (['booking', 'ticket_received', 'ticket_waiting', 'transfer_claimed', 'transfer_returned'].includes(type)) return 'tickets';
   return 'notifications';
 }
 

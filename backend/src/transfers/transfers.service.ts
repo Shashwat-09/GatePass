@@ -47,9 +47,10 @@ function ended(e: EventEntity) {
  * - Sender picks N transferable units of a ticket. Those units leave the
  *   sender's ticket immediately and the sender's QR is re-issued (old
  *   screenshots stop working).
- * - To a phone number: delivered at once if that person has an account,
- *   otherwise held and auto-claimed when they sign up/sign in.
- * - As a link: anyone with the one-time code can claim it.
+ * - To a phone number: waits in that person's Received list (QR hidden) until
+ *   they tap Claim. Works the same whether they already have the app or sign
+ *   up later with that number (the WhatsApp button opens it in the app).
+ * - As a link: anyone who opens the link can claim it with one tap.
  * - Unclaimed transfers can be claimed back by the sender. Claimed tickets
  *   belong to the recipient (no claw-back), each with its own QR.
  */
@@ -67,8 +68,9 @@ export class TransfersService {
   /**
    * Share units of one ticket with several people in one go (one lock, one
    * transaction): each recipient gets their own ticket and QR, and the
-   * sender's QR is re-issued once. Recipients with an account get the tickets
-   * at once; pushes go out the moment the transaction commits.
+   * sender's QR is re-issued once. Recipients see the tickets waiting (QR
+   * hidden) and claim them with one tap; pushes go out the moment the
+   * transaction commits.
    */
   async shareMany(userId: string, ticketId: string, recipients: Array<{ quantity: number; phone?: string | null }>) {
     if (!recipients.length) throw new ApiError('VALIDATION_ERROR', 'Add someone to share with');
@@ -121,7 +123,12 @@ export class TransfersService {
         });
         await m.save(tr);
         const to = r.phone ? users.find((u) => u.phone === r.phone) ?? null : null;
-        if (to) await this.claimInTx(m, tr, to.id, { src: t, sender, receiver: to, eventSlug: event.slug });
+        const n = `${r.quantity} ticket${r.quantity === 1 ? '' : 's'}`;
+        if (to) {
+          await notify(m, to.id, 'ticket_waiting', 'Tickets for you',
+            `${sender.name ?? 'A friend'} sent you ${n} for ${event.title}. Tap to claim.`,
+            { transferId: tr.id, eventId: t.eventId, eventSlug: event.slug });
+        }
         // WhatsApp too: "<sender> sent you 2 tickets…" with a button that opens them in the app.
         if (r.phone) {
           await queueTicketWhatsApp(m, {
@@ -162,36 +169,43 @@ export class TransfersService {
     return { ticketId };
   }
 
-  /** Delivers pending phone transfers addressed to this user's number. */
-  async autoClaimForUser(userId: string) {
-    const user = await this.ds.getRepository(User).findOneBy({ id: userId, deletedAt: IsNull() });
-    if (!user) return 0;
-    const pending = await this.ds.getRepository(TicketTransfer).find({
-      where: { toPhone: user.phone, status: 'pending', codeHash: IsNull() },
-      select: ['id'],
+  /**
+   * One tap: claim tickets sent to this user's number (or, with the link's
+   * code, a link share). The tickets and their QR appear right after.
+   */
+  async claimById(userId: string, transferId: string) {
+    const ticketId = await this.ds.transaction(async (m) => {
+      const tr = await m.createQueryBuilder(TicketTransfer, 'x').setLock('pessimistic_write')
+        .where('x.id = :id', { id: transferId }).getOne();
+      if (!tr) throw new ApiError('NOT_FOUND', 'These tickets aren’t available');
+      if (tr.status === 'cancelled') throw new ApiError('CONFLICT', 'The sender took these tickets back');
+      if (tr.status === 'claimed') {
+        if (tr.toUserId === userId && tr.createdTicketId) return tr.createdTicketId;
+        throw new ApiError('CONFLICT', 'Someone already claimed these tickets');
+      }
+      const user = await m.findOneByOrFail(User, { id: userId });
+      if (tr.fromUserId === userId) throw new ApiError('VALIDATION_ERROR', 'You sent these. Use “Claim back” to take them back.');
+      if (tr.codeHash || tr.toPhone !== user.phone) {
+        const masked = maskPhone(tr.toPhone);
+        throw new ApiError('FORBIDDEN', masked ? `These tickets were sent to ${masked}. Sign in with that number to claim them.` : 'Open the share link to claim these tickets');
+      }
+      return this.claimInTx(m, tr, userId);
     });
-    let n = 0;
-    for (const p of pending) {
-      await this.ds.transaction(async (m) => {
-        const tr = await m.createQueryBuilder(TicketTransfer, 'x').setLock('pessimistic_write')
-          .where('x.id = :id AND x.status = :s', { id: p.id, s: 'pending' }).getOne();
-        if (tr && tr.fromUserId !== userId) {
-          await this.claimInTx(m, tr, userId);
-          n++;
-        }
-      });
-    }
-    return n;
+    return { ticketId };
   }
 
-  private async claimInTx(
-    m: EntityManager, tr: TicketTransfer, userId: string,
-    pre?: { src: Ticket; sender: User | null; receiver: User | null; eventSlug?: string },
-  ) {
-    const src = pre?.src ?? await m.findOneByOrFail(Ticket, { id: tr.fromTicketId });
-    const sender = pre ? pre.sender : await m.findOneBy(User, { id: tr.fromUserId });
-    const receiver = pre ? pre.receiver : await m.findOneBy(User, { id: userId });
-    const slug = pre?.eventSlug ? { eventSlug: pre.eventSlug } : {};
+  /** How many shares are waiting for this user to claim (badge on Tickets). */
+  async waitingCount(userId: string) {
+    const user = await this.ds.getRepository(User).findOneBy({ id: userId, deletedAt: IsNull() });
+    if (!user) return 0;
+    return this.ds.getRepository(TicketTransfer).countBy({ toPhone: user.phone, status: 'pending', codeHash: IsNull() });
+  }
+
+  private async claimInTx(m: EntityManager, tr: TicketTransfer, userId: string) {
+    const src = await m.findOneByOrFail(Ticket, { id: tr.fromTicketId });
+    const receiver = await m.findOneBy(User, { id: userId });
+    const event = await m.findOneBy(EventEntity, { id: src.eventId });
+    const slug = event?.slug ? { eventSlug: event.slug } : {};
     const id = randomUUID();
     await m.insert(Ticket, {
       id, bookingId: src.bookingId, ownerUserId: userId, eventId: src.eventId, tierId: src.tierId,
@@ -208,8 +222,6 @@ export class TransfersService {
     tr.claimedAt = new Date();
     await m.save(tr);
     const n = `${tr.quantity} ticket${tr.quantity === 1 ? '' : 's'}`;
-    await notify(m, userId, 'ticket_received', 'You received tickets',
-      `${sender?.name ?? 'A friend'} sent you ${n} for ${src.eventTitle}.`, { ticketId: id, eventId: src.eventId, ...slug });
     await notify(m, tr.fromUserId, 'transfer_claimed', 'Tickets delivered',
       `${receiver?.name ?? maskPhone(receiver?.phone ?? null) ?? 'Your friend'} now has the ${n} for ${src.eventTitle}.`,
       { transferId: tr.id, eventId: src.eventId, ...slug });
@@ -237,7 +249,12 @@ export class TransfersService {
   }
 
   async list(userId: string, direction: 'sent' | 'received', q: PageQuery) {
-    const where = direction === 'sent' ? { fromUserId: userId } : { toUserId: userId };
+    let where: object | object[] = { fromUserId: userId };
+    if (direction === 'received') {
+      // Claimed by me, plus anything waiting for my number (QR hidden until I claim).
+      const me = await this.ds.getRepository(User).findOneBy({ id: userId });
+      where = [{ toUserId: userId }, ...(me ? [{ toPhone: me.phone, status: 'pending' as const, codeHash: IsNull() }] : [])];
+    }
     const [rows, total] = await this.ds.getRepository(TicketTransfer).findAndCount({
       where, order: { createdAt: 'DESC' }, skip: q.skip, take: q.limit,
     });
@@ -245,16 +262,20 @@ export class TransfersService {
   }
 
   /**
-   * The ticket a WhatsApp link points at (/r/<id>: a share or a booking made
-   * for this person), once they're signed in with the number it was sent to.
+   * What a WhatsApp link points at (/r/<id>: a share or a booking made for
+   * this person), once they're signed in with the number it was sent to:
+   * the ticket, or tickets waiting for them to claim.
    */
-  async openFor(userId: string, id: string): Promise<Ticket> {
-    await this.autoClaimForUser(userId);
+  async openFor(userId: string, id: string): Promise<{ ticket: Ticket } | { transfer: ReturnType<TransfersService['viewOf']> }> {
     const tr = await this.ds.getRepository(TicketTransfer).findOneBy({ id });
     if (tr) {
+      const me = await this.ds.getRepository(User).findOneBy({ id: userId });
+      if (tr.status === 'pending' && !tr.codeHash && me && tr.toPhone === me.phone) {
+        return { transfer: await this.transferView(tr.id, userId) };
+      }
       if (tr.toUserId === userId && tr.createdTicketId) {
         const t = await this.ds.getRepository(Ticket).findOneBy({ id: tr.createdTicketId });
-        if (t && t.ownerUserId === userId && t.status !== 'transferred') return t;
+        if (t && t.ownerUserId === userId && t.status !== 'transferred') return { ticket: t };
         throw new ApiError('NOT_FOUND', 'You’ve passed these tickets on');
       }
       if (tr.status === 'cancelled') throw new ApiError('NOT_FOUND', 'The sender took these tickets back');
@@ -264,7 +285,7 @@ export class TransfersService {
     const t = await this.ds.getRepository(Ticket).findOne({
       where: { bookingId: id, ownerUserId: userId, status: Not('transferred') }, order: { createdAt: 'ASC' },
     });
-    if (t) return t;
+    if (t) return { ticket: t };
     const b = await this.ds.getRepository(Booking).findOneBy({ id });
     if (!b) throw new ApiError('NOT_FOUND', 'This link is invalid');
     const u = await this.ds.getRepository(User).findOneBy({ id: b.userId });
@@ -346,6 +367,13 @@ export class TransfersService {
       counterpart: other?.name ?? maskPhone(other?.phone ?? r.toPhone) ?? (isLink ? 'Anyone with the link' : null),
       // The sender can re-share a pending link at any time.
       shareUrl: sent && isLink && r.status === 'pending' ? shareUrl(claimCode(r.id)) : null,
+      venueName: src?.venueName ?? '',
+      /** The sender's first name (received) — "Asha sent you 2 tickets". */
+      fromName: sent ? null : (other?.name?.split(' ')[0] ?? 'A friend'),
+      /** Received and waiting: QR hidden, one tap to claim. */
+      canClaim: !sent && r.status === 'pending',
+      /** The ticket made on claim (receiver only). */
+      ticketId: !sent && r.toUserId === userId ? r.createdTicketId : null,
       createdAt: (r.createdAt ?? new Date()).toISOString(),
       claimedAt: r.claimedAt ? new Date(r.claimedAt).toISOString() : null,
     };

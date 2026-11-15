@@ -41,7 +41,7 @@ describe('WhatsApp ticket messages and /r/<id> links (e2e)', () => {
     expect(whenText(null)).toBe('Date to be announced');
   });
 
-  it('a friend on GatePass: tickets in their app, an in-app notice and a WhatsApp with a button that opens them', async () => {
+  it('a friend on GatePass: an in-app notice and a WhatsApp whose button opens the tickets to claim in the app', async () => {
     const me = await login(ctx);
     await ctx.http.put('/api/user').set(auth(me.token)).send({ name: 'Asha Rao' }).expect(200);
     const friend = await login(ctx);
@@ -53,10 +53,13 @@ describe('WhatsApp ticket messages and /r/<id> links (e2e)', () => {
     expect(msg.params).toEqual(['Asha Rao', '2 tickets', expect.stringContaining('Neon Nights'), expect.stringMatching(/ · /), expect.any(String)]);
     expect(msg.buttonParam).toBe(r.transfers[0].id);
     const inbox = (await ctx.http.get('/api/notifications').set(auth(friend.token)).expect(200)).body.data.items;
-    expect(inbox[0].type).toBe('ticket_received');
-    // The button lands on /r/<id>, which opens this exact ticket in the app.
+    expect(inbox[0].type).toBe('ticket_waiting');
+    // The button lands on /r/<id>, which opens these tickets in the app, ready to claim (QR hidden).
     const opened = (await ctx.http.get(`/api/ticket/open/${msg.buttonParam}`).set(auth(friend.token)).expect(200)).body.data;
-    expect(opened).toMatchObject({ quantity: 2, receivedFrom: 'Asha Rao' });
+    expect(opened).toMatchObject({ kind: 'claim', transfer: { id: r.transfers[0].id, canClaim: true, quantity: 2, fromName: 'Asha', counterpart: 'Asha Rao' } });
+    await ctx.http.post(`/api/ticket/transfers/${r.transfers[0].id}/claim`).set(auth(friend.token)).expect(200);
+    const after = (await ctx.http.get(`/api/ticket/open/${msg.buttonParam}`).set(auth(friend.token)).expect(200)).body.data;
+    expect(after).toMatchObject({ kind: 'ticket', ticket: { quantity: 2, receivedFrom: 'Asha Rao' } });
     const page = await ctx.http.get(`/r/${msg.buttonParam}`).expect(200);
     expect(page.text).toContain('/s/open.js');
     const pv = (await ctx.http.get(`/api/ticket/open/${msg.buttonParam}/preview`).expect(200)).body.data;
@@ -64,7 +67,7 @@ describe('WhatsApp ticket messages and /r/<id> links (e2e)', () => {
     expect(JSON.stringify(pv)).not.toContain(friend.phone);
   });
 
-  it('a number not on GatePass: WhatsApp says install and sign in; after sign-in the link opens the ticket', async () => {
+  it('a number not on GatePass: WhatsApp says install and sign in; after sign-in the link opens the tickets to claim', async () => {
     const me = await login(ctx);
     const newcomer = newPhone();
     const t = await buy(me, 2);
@@ -80,7 +83,9 @@ describe('WhatsApp ticket messages and /r/<id> links (e2e)', () => {
 
     const s = await login(ctx, newcomer);
     const opened = (await ctx.http.get(`/api/ticket/open/${msg.buttonParam}`).set(auth(s.token)).expect(200)).body.data;
-    expect(opened).toMatchObject({ quantity: 1, status: 'active' });
+    expect(opened).toMatchObject({ kind: 'claim', transfer: { canClaim: true, quantity: 1 } });
+    const { ticket } = (await ctx.http.post(`/api/ticket/transfers/${opened.transfer.id}/claim`).set(auth(s.token)).expect(200)).body.data;
+    expect(ticket).toMatchObject({ quantity: 1, status: 'active' });
   });
 
   it('taken back before they signed up: the link says so', async () => {
@@ -114,7 +119,7 @@ describe('WhatsApp ticket messages and /r/<id> links (e2e)', () => {
     const msg = await sentTo(guest);
     expect(msg).toMatchObject({ template: 'ticket_waiting', buttonParam: out.bookingId, params: ['Sunburn Events', '2 tickets', 'Garden Gig', expect.any(String), 'Lawn'] });
     const g = await login(ctx, guest);
-    expect((await ctx.http.get(`/api/ticket/open/${out.bookingId}`).set(auth(g.token)).expect(200)).body.data).toMatchObject({ quantity: 2, eventTitle: 'Garden Gig' });
+    expect((await ctx.http.get(`/api/ticket/open/${out.bookingId}`).set(auth(g.token)).expect(200)).body.data).toMatchObject({ kind: 'ticket', ticket: { quantity: 2, eventTitle: 'Garden Gig' } });
   });
 
   it('a failed send is retried, then given up after five tries', async () => {
