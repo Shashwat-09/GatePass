@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateNested, IsObject } from 'class-validator';
 import { DataSource, In } from 'typeorm';
 import { ApiError } from '../common/api-error';
-import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { BookingService, currentPrice } from '../booking/booking.service';
 import { ApprovalRequest, ApprovalStatus, EventEntity, Tier, User } from '../db/entities';
@@ -109,8 +109,7 @@ export class ApprovalsController {
 
   // ── organiser ──
 
-  @UseGuards(RolesGuard)
-  @Roles('organiser', 'admin')
+  // Admins, organisers and event admins: checked per event (eventFor).
   @Get('admin/approval-requests')
   async list(@Req() req: AuthedRequest, @Query('eventId') eventId?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
     const q = parsePage(page, limit);
@@ -128,8 +127,7 @@ export class ApprovalsController {
   }
 
   /** Approves a request; a free ticket is issued straight away. */
-  @UseGuards(RolesGuard)
-  @Roles('organiser', 'admin')
+  // Admins, organisers and event admins: checked per event (eventFor).
   @Post('admin/approval-requests/:id/approve')
   @HttpCode(200)
   async approve(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
@@ -147,8 +145,7 @@ export class ApprovalsController {
     return { ...(await this.views([fresh]))[0], issueError };
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('organiser', 'admin')
+  // Admins, organisers and event admins: checked per event (eventFor).
   @Post('admin/approval-requests/:id/reject')
   @HttpCode(200)
   async reject(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: RejectDto) {

@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { eventFor } from '../common/event-access';
 import { Response } from 'express';
 import { ApiError } from '../common/api-error';
-import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { verifyPathSignature } from '../common/signing';
 import { ExportsService } from './exports.service';
 
@@ -32,8 +32,7 @@ export class ExportsController {
 
   /** Event report (contains attendee phone numbers — the event's organiser or an admin). */
   @Get('admin/events/:id/export.xlsx')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('organiser', 'admin')
+  @UseGuards(JwtAuthGuard)
   async event(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) id: string, @Res() res: Response) {
     await eventFor(this.ds.manager, req, id);
     send(res, await this.exports.event(id), `gatepass-event-${id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.xlsx`);

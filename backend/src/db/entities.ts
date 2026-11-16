@@ -841,6 +841,16 @@ export class EventChange {
   @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
 }
 
+/** A picture uploaded from the Organiser app (posters, banners): public at /api/media/:id. */
+@Entity('media_files')
+export class MediaFile {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index() @Column('uuid') userId!: string;
+  @Column() mime!: string;
+  @Column() size!: number;
+  @CreateDateColumn({ type: 'timestamptz' }) createdAt!: Date;
+}
+
 /** A distributor's payment details shown to their sellers (personal UPI). */
 @Entity('distributor_profiles')
 export class DistributorProfile {
@@ -968,5 +978,5 @@ export const ENTITIES = [
   Booking, Ticket, TicketTransfer, Notification, OutboundMessage, PlatformSetting, CheckIn, PaymentEvent, PromoCode, PromoRedemption, WalletEntry,
   RegistrationForm, FormResponse, FormUpload, ApprovalRequest, EventSurvey, SurveyResponse,
   VoucherCampaign, Voucher, VoucherShare, VoucherRedemption, DeviceToken, AttributionClick,
-  CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder, EventMember, EventChange,
+  CompRequest, DistributorProfile, Reseller, DistributorPrice, DistributorPriceChange, B2bOrder, EventMember, EventChange, MediaFile,
 ];

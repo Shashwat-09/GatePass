@@ -3,7 +3,7 @@ import { IsOptional, IsString, Length, Matches } from 'class-validator';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
 import { eventFor } from '../common/event-access';
-import { AuthedRequest, JwtAuthGuard, optionalUserId, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard, optionalUserId } from '../common/jwt-auth.guard';
 import { AttributionClick, EventEntity } from '../db/entities';
 import { RateLimit, SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 
@@ -60,8 +60,7 @@ export class AttributionController {
   }
 
   /** Clicks and confirmed sales per source / medium / campaign / affiliate. */
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('organiser', 'admin')
+  @UseGuards(JwtAuthGuard)
   @Get('admin/events/:id/attribution')
   async report(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string) {
     await eventFor(this.ds.manager, req, eventId);

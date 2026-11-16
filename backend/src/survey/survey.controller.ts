@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, IsUUID, Length, Max, Min } from 'class-validator';
 import { DataSource, In, Not } from 'typeorm';
 import { ApiError } from '../common/api-error';
-import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
+import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { paged, parsePage } from '../common/pagination';
 import { EventEntity, EventSurvey, FormField, SurveyResponse, Ticket } from '../db/entities';
 import { checkFieldDefs, validateAnswers } from '../forms/form-fields';
@@ -75,8 +75,7 @@ export class SurveyController {
 
   // ── organiser ──
 
-  @UseGuards(RolesGuard)
-  @Roles('organiser', 'admin')
+  // Admins, organisers and event admins: checked per event (eventFor).
   @Put('admin/events/:id/survey')
   async upsert(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string, @Body() dto: SurveyDto) {
     await eventFor(this.ds.manager, req, eventId);
@@ -97,8 +96,7 @@ export class SurveyController {
     return { id: s.id, eventId, mode: s.mode, fields: s.fields, postSubmit: postSubmit(s), isActive: s.isActive };
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('organiser', 'admin')
+  // Admins, organisers and event admins: checked per event (eventFor).
   @Get('admin/events/:id/survey-responses')
   async responses(@Req() req: AuthedRequest, @Param('id', new ParseUUIDPipe()) eventId: string, @Query('page') page?: string, @Query('limit') limit?: string) {
     await eventFor(this.ds.manager, req, eventId);
