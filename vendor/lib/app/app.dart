@@ -15,8 +15,8 @@ class OrganiserApp extends StatelessWidget {
         title: StaffShell.appName,
         debugShowCheckedModeBanner: false,
         // Same "Utsav" brand as the customer app (packages/gatepass_ui).
-        theme: GatePassTheme.light(),
-        darkTheme: GatePassTheme.dark(),
+        theme: GlassTheme.light(),
+        darkTheme: GlassTheme.dark(),
         themeMode: ThemeMode.light, // white only (owner decision, Nov 2026)
         home: home ?? const LaunchScreen(),
       );

@@ -70,7 +70,7 @@ void main() {
     addTearDown(t.view.reset);
     await t.pumpWidget(RepaintBoundary(
       key: key,
-      child: GetMaterialApp(debugShowCheckedModeBanner: false, theme: GatePassTheme.light(), darkTheme: GatePassTheme.dark(), themeMode: mode, home: build()),
+      child: GetMaterialApp(debugShowCheckedModeBanner: false, theme: GlassTheme.light(), darkTheme: GlassTheme.dark(), themeMode: mode, home: build()),
     ));
     settle ? await t.pumpAndSettle() : await t.pump(const Duration(seconds: 1));
     if (before != null) {

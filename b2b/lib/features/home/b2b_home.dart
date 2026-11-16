@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_ui/theme.dart';
 
@@ -27,16 +26,13 @@ class _B2bHomeState extends State<B2bHome> {
     ];
     if (tabs.length == 1) return tabs.first.$4;
     final i = _i.clamp(0, tabs.length - 1);
-    return Scaffold(
+    return GlassScaffold(
+      extendBody: true,
       body: IndexedStack(index: i, children: [for (final t in tabs) t.$4]),
-      bottomNavigationBar: CupertinoTabBar(
-        currentIndex: i,
+      bottomNavigationBar: GlassTabBar(
+        index: i,
         onTap: (v) => setState(() => _i = v),
-        activeColor: context.colors.tint,
-        inactiveColor: context.colors.secondaryLabel,
-        backgroundColor: context.colors.canvas,
-        border: Border(top: BorderSide(color: context.colors.separator, width: 0.0)),
-        items: [for (final t in tabs) BottomNavigationBarItem(icon: Icon(t.$1), activeIcon: Icon(t.$2), label: t.$3)],
+        items: [for (final t in tabs) GlassTab(icon: t.$1, activeIcon: t.$2, label: t.$3)],
       ),
     );
   }

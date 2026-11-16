@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
@@ -14,7 +13,7 @@ class NoAccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final me = Session.to.me.value;
-    return Scaffold(
+    return GlassScaffold(
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),

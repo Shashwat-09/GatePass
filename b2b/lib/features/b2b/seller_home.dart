@@ -96,7 +96,7 @@ class _SellerHomeState extends State<SellerHome> {
         const SizedBox(height: AppSpacing.xl),
       ]);
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Sell', background: c.groupedCanvas, actions: [
@@ -209,7 +209,7 @@ class _BuyScreenState extends State<BuyScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = widget.tier;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: Text(t.name)),
       body: ListView(padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xl), children: [
@@ -443,7 +443,7 @@ class _PayScreenState extends State<PayScreen> {
     final c = context.colors;
     final o = _o;
     final waiting = o.status == OrderStatus.awaitingPayment;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: Text(waiting ? 'Pay Your Distributor' : 'Order ${o.code}')),
       body: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xl), children: [
@@ -611,6 +611,6 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
         ]),
       );
     }
-    return Scaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('My Orders')), body: body);
+    return GlassScaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('My Orders')), body: body);
   }
 }

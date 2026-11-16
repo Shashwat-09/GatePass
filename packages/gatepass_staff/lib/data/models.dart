@@ -147,8 +147,10 @@ class TierInfo {
     this.b2bPricePaise,
     this.b2bQuota,
     this.b2bSold = 0,
+    this.raw = const {},
   });
   factory TierInfo.fromJson(Map j) => TierInfo(
+        raw: Map<String, dynamic>.from(j),
         id: _str(j['id']),
         name: _str(j['name']),
         pricePaise: _int(j['currentPricePaise'] ?? j['pricePaise']),
@@ -177,18 +179,21 @@ class TierInfo {
   final int? b2bPricePaise;
   final int? b2bQuota;
   final int b2bSold;
+  /// Everything the server sent (prefills the ticket type editor).
+  final Map<String, dynamic> raw;
 }
 
 class EventDetail {
   const EventDetail({
     required this.event, required this.tiers, this.statusNote, this.b2bEnabled = false, this.terms = const EventTerms(), this.fee = const FeeRule(),
-    this.access = 'manager', this.pendingChanges = 0, this.fields = const {},
+    this.access = 'manager', this.pendingChanges = 0, this.fields = const {}, this.shows = const [],
   });
   factory EventDetail.fromJson(Map j) => EventDetail(
         event: OrgEvent.fromJson(j),
         access: _str(j['myAccess']).isEmpty ? 'manager' : _str(j['myAccess']),
         pendingChanges: j['pendingChanges'] == null ? 0 : _int(j['pendingChanges']),
         fields: {for (final k in EventForm.keys) if (j[k] != null) k: j[k]},
+        shows: [for (final x in (j['sessions'] as List? ?? const [])) ShowInfo.fromJson(x as Map)],
         statusNote: j['statusNote']?.toString(),
         tiers: [for (final t in (j['tiers'] as List? ?? const [])) TierInfo.fromJson(t as Map)],
         b2bEnabled: j['b2bEnabled'] == true,
@@ -219,6 +224,8 @@ class EventDetail {
   final String? statusNote;
   final bool b2bEnabled;
   final EventTerms terms;
+  /// Extra shows (other dates, times or venues); empty for a one-show event.
+  final List<ShowInfo> shows;
 }
 
 /// The booking fee that applies to an event: rate, who pays it, and whether B2B sellers pay it.
@@ -862,7 +869,11 @@ class SyncResult {
 
 /// The event details form (create and edit). Keys match api/organiser/events.
 class EventForm {
-  static const keys = ['title', 'cityId', 'genre', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'opensAt', 'description', 'cardImageUrl', 'ageLimit', 'maxPerUser', 'ticketNotes'];
+  static const keys = [
+    'title', 'cityId', 'genre', 'language', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'opensAt', 'closesAt',
+    'description', 'cardImageUrl', 'bannerUrl', 'ageLimit', 'maxPerUser', 'ticketNotes', 'terms', 'schedule', 'allowTransfers',
+    'isWebOnly', 'externalUrl',
+  ];
 }
 
 /// What happened to a save: done, or waiting for GatePass approval.
@@ -1005,4 +1016,186 @@ class BoostStatus {
   final String smallTier;
   final int warmCopies;
   bool get boosted => size == 'big';
+}
+
+
+/// One show of an event (another date, time or venue).
+class ShowInfo {
+  const ShowInfo({required this.id, required this.venueName, required this.startsAt, this.label = '', this.venueAddress = '', this.mapLink, this.endsAt, this.isActive = true});
+  factory ShowInfo.fromJson(Map j) => ShowInfo(
+        id: _str(j['id']), label: _str(j['label']), venueName: _str(j['venueName']), venueAddress: _str(j['venueAddress']),
+        mapLink: j['mapLink']?.toString(), startsAt: _date(j['startsAt']) ?? DateTime.now(), endsAt: _date(j['endsAt']), isActive: j['isActive'] != false,
+      );
+  final String id;
+  final String label;
+  final String venueName;
+  final String venueAddress;
+  final String? mapLink;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  final bool isActive;
+}
+
+/// A question on a registration form or survey (keys match the server's FormField).
+class FormQuestion {
+  const FormQuestion({required this.key, required this.label, this.type = 'text', this.required = false, this.options = const []});
+  factory FormQuestion.fromJson(Map j) => FormQuestion(
+        key: _str(j['key']), label: _str(j['label']), type: _str(j['type']).isEmpty ? 'text' : _str(j['type']), required: j['required'] == true,
+        options: [for (final o in (j['options'] as List? ?? const [])) _str((o as Map)['label'])],
+      );
+  final String key;
+  final String label;
+  /// text | textarea | number | email | phone | select | radio | checkbox | date | time | file
+  final String type;
+  final bool required;
+  final List<String> options;
+  bool get hasOptions => type == 'select' || type == 'radio' || type == 'checkbox';
+  Map<String, dynamic> toJson() => {
+        'key': key, 'label': label, 'type': type, 'required': required,
+        if (hasOptions) 'options': [for (final o in options) {'label': o, 'value': o}],
+      };
+  static const types = {
+    'text': 'Short answer', 'textarea': 'Long answer', 'number': 'Number', 'email': 'Email', 'phone': 'Phone number',
+    'select': 'Pick one (list)', 'radio': 'Pick one (buttons)', 'checkbox': 'Tick boxes', 'date': 'Date', 'file': 'File upload',
+  };
+  /// A stable key from the label ("T-shirt size" → t_shirt_size).
+  static String keyFor(String label, Iterable<String> taken) {
+    var k = label.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+    if (k.isEmpty || !RegExp(r'^[a-z]').hasMatch(k)) k = 'q_$k';
+    if (k.length > 40) k = k.substring(0, 40);
+    var out = k;
+    for (var i = 2; taken.contains(out); i++) {
+      out = '${k}_$i';
+    }
+    return out;
+  }
+}
+
+/// A registration form customers fill in at checkout (per booking or per attendee).
+class RegForm {
+  const RegForm({required this.id, required this.title, this.description = '', this.scope = 'booking', this.questions = const [], this.isActive = true, this.version = 1});
+  factory RegForm.fromJson(Map j) => RegForm(
+        id: _str(j['id']), title: _str(j['title']), description: _str(j['description']), scope: _str(j['scope']).isEmpty ? 'booking' : _str(j['scope']),
+        questions: [for (final f in (j['fields'] as List? ?? const [])) FormQuestion.fromJson(f as Map)],
+        isActive: j['isActive'] != false, version: j['version'] == null ? 1 : _int(j['version']),
+      );
+  final String id;
+  final String title;
+  final String description;
+  /// booking (once per order) | attendee (once per ticket)
+  final String scope;
+  final List<FormQuestion> questions;
+  final bool isActive;
+  final int version;
+}
+
+/// One filled-in registration form or survey.
+class FormAnswer {
+  const FormAnswer({required this.id, this.title = '', this.answers = const {}, this.labels = const {}, this.createdAt, this.attendee});
+  factory FormAnswer.fromJson(Map j) => FormAnswer(
+        id: _str(j['id']), title: _str(j['formTitle']), attendee: j['attendee'] == null ? null : _int(j['attendee']),
+        answers: Map<String, dynamic>.from(j['answers'] as Map? ?? const {}),
+        labels: {for (final e in (j['labels'] as Map? ?? const {}).entries) '${e.key}': '${e.value}'},
+        createdAt: _date(j['createdAt']),
+      );
+  final String id;
+  final String title;
+  final int? attendee;
+  final Map<String, dynamic> answers;
+  final Map<String, String> labels;
+  final DateTime? createdAt;
+  /// "Label: answer" lines; file answers are download links.
+  List<(String, String)> get lines => [
+        for (final e in answers.entries)
+          (labels[e.key] ?? e.key, e.value is List ? (e.value as List).join(', ') : '${e.value ?? ''}'),
+      ];
+}
+
+/// The post-event survey as set up (null form: none yet).
+class SurveySetup {
+  const SurveySetup({this.exists = false, this.title = 'How was the event?', this.mode = 'form', this.questions = const [], this.redirectUrl, this.isActive = true, this.answered = 0});
+  factory SurveySetup.fromJson(Map j) {
+    final s = j['survey'] as Map?;
+    return SurveySetup(
+      exists: s != null, answered: _int(j['answered']),
+      title: s == null ? 'How was the event?' : _str(s['title']), mode: s == null ? 'form' : _str(s['mode']),
+      questions: [for (final f in (s?['fields'] as List? ?? const [])) FormQuestion.fromJson(f as Map)],
+      redirectUrl: s?['redirectUrl']?.toString(), isActive: s == null || s['isActive'] != false,
+    );
+  }
+  final bool exists;
+  final String title;
+  /// form (questions in the app) | redirect (a link, e.g. Google Forms)
+  final String mode;
+  final List<FormQuestion> questions;
+  final String? redirectUrl;
+  final bool isActive;
+  final int answered;
+}
+
+/// A promo code for one event.
+class PromoItem {
+  const PromoItem({
+    required this.id, required this.code, required this.type, required this.value, this.used = 0, this.usageLimit, this.usageLimitPerUser,
+    this.maxDiscountPaise, this.minTickets, this.endsAt, this.isActive = true, this.isPublic = false, this.description = '',
+  });
+  factory PromoItem.fromJson(Map j) => PromoItem(
+        id: _str(j['id']), code: _str(j['code']), type: _str(j['type']), value: _int(j['value']), used: _int(j['used']),
+        usageLimit: j['usageLimit'] == null ? null : _int(j['usageLimit']),
+        usageLimitPerUser: j['usageLimitPerUser'] == null ? null : _int(j['usageLimitPerUser']),
+        maxDiscountPaise: j['maxDiscountPaise'] == null ? null : _int(j['maxDiscountPaise']),
+        minTickets: j['minTickets'] == null ? null : _int(j['minTickets']),
+        endsAt: _date(j['endsAt']), isActive: j['isActive'] != false, isPublic: j['isPublic'] == true, description: _str(j['description']),
+      );
+  final String id;
+  final String code;
+  /// percentage | fixed (value in paise)
+  final String type;
+  final int value;
+  final int used;
+  final int? usageLimit;
+  final int? usageLimitPerUser;
+  final int? maxDiscountPaise;
+  final int? minTickets;
+  final DateTime? endsAt;
+  final bool isActive;
+  final bool isPublic;
+  final String description;
+  bool get expired => endsAt != null && endsAt!.isBefore(DateTime.now());
+  PromoItem copyWith({bool? isActive}) => PromoItem(
+        id: id, code: code, type: type, value: value, used: used, usageLimit: usageLimit, usageLimitPerUser: usageLimitPerUser,
+        maxDiscountPaise: maxDiscountPaise, minTickets: minTickets, endsAt: endsAt, isActive: isActive ?? this.isActive, isPublic: isPublic, description: description,
+      );
+}
+
+/// Where buyers came from: clicks and confirmed sales per link source.
+class TrafficRow {
+  const TrafficRow({required this.source, this.medium = '', this.campaign = '', this.ref = '', this.clicks = 0, this.bookings = 0, this.tickets = 0, this.revenuePaise = 0});
+  factory TrafficRow.fromJson(Map j) => TrafficRow(
+        source: _str(j['source']), medium: _str(j['medium']), campaign: _str(j['campaign']), ref: _str(j['ref']),
+        clicks: _int(j['clicks']), bookings: _int(j['bookings']), tickets: _int(j['tickets']), revenuePaise: _int(j['revenuePaise']),
+      );
+  final String source;
+  final String medium;
+  final String campaign;
+  final String ref;
+  final int clicks;
+  final int bookings;
+  final int tickets;
+  final int revenuePaise;
+  String get title => source == '(direct)' ? 'Direct (no link)' : source;
+  String get detail => [medium, campaign, if (ref.isNotEmpty) 'ref $ref'].where((x) => x.isNotEmpty).join(' · ');
+}
+
+/// One item in the inbox (sales, approvals, changes, B2B orders).
+class StaffNotification {
+  const StaffNotification({required this.id, required this.title, this.body = '', this.type = '', this.isRead = false, this.createdAt});
+  factory StaffNotification.fromJson(Map j) => StaffNotification(
+        id: _str(j['id']), title: _str(j['title']), body: _str(j['body']), type: _str(j['type']), isRead: j['isRead'] == true, createdAt: _date(j['createdAt']));
+  final String id;
+  final String title;
+  final String body;
+  final String type;
+  final bool isRead;
+  final DateTime? createdAt;
 }

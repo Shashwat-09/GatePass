@@ -14,6 +14,8 @@ dependencies:
     path: ../gatepass_ui
   get: ^4.6.6
   http: ^1.2.2
+  http_parser: ^4.1.2
+  file_picker: ^13.3.2
   flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4

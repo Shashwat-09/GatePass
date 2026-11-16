@@ -78,7 +78,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final me = Session.to.me.value!;
     final demo = Session.to.api is DemoVendorApi ? Session.to.api as DemoVendorApi : null;
     final initials = me.displayName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty && !w.startsWith('+')).take(2).map((w) => w[0].toUpperCase()).join();
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Account')),
       body: ListView(padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xl), children: [
@@ -116,12 +116,6 @@ class _AccountScreenState extends State<AccountScreen> {
           _toggle(CupertinoIcons.waveform, 'Vibration', Delight.haptics, (v) => Delight.haptics = v, 'pref_haptics'),
         ]),
         InsetGroup(children: [
-          if (me.canManage)
-            GroupRow(
-              icon: CupertinoIcons.globe,
-              title: 'Web Console',
-              onTap: () => launchUrl(Uri.parse(VendorConfig.consoleUrl), mode: LaunchMode.externalApplication),
-            ),
           GroupRow(
             icon: CupertinoIcons.envelope,
             title: 'Contact Support',

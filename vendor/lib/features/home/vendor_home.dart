@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_ui/theme.dart';
 
@@ -23,22 +22,15 @@ class _VendorHomeState extends State<VendorHome> {
     final me = Session.to.me.value!;
     if (!me.isAdmin) return const EventsScreen();
     final waiting = me.team.pendingChanges;
-    return Scaffold(
+    return GlassScaffold(
+      extendBody: true,
       body: IndexedStack(index: _i, children: const [EventsScreen(), ChangesScreen()]),
-      bottomNavigationBar: CupertinoTabBar(
-        currentIndex: _i,
+      bottomNavigationBar: GlassTabBar(
+        index: _i,
         onTap: (v) => setState(() => _i = v),
-        activeColor: context.colors.tint,
-        inactiveColor: context.colors.secondaryLabel,
-        backgroundColor: context.colors.canvas,
-        border: Border(top: BorderSide(color: context.colors.separator, width: 0.0)),
         items: [
-          const BottomNavigationBarItem(icon: Icon(CupertinoIcons.calendar), activeIcon: Icon(CupertinoIcons.calendar_today), label: 'Events'),
-          BottomNavigationBarItem(
-            icon: Badge(isLabelVisible: waiting > 0, label: Text('$waiting'), child: const Icon(CupertinoIcons.checkmark_seal)),
-            activeIcon: const Icon(CupertinoIcons.checkmark_seal_fill),
-            label: 'Approvals',
-          ),
+          const GlassTab(icon: CupertinoIcons.calendar, activeIcon: CupertinoIcons.calendar_today, label: 'Events'),
+          GlassTab(icon: CupertinoIcons.checkmark_seal, activeIcon: CupertinoIcons.checkmark_seal_fill, label: 'Approvals', badge: waiting),
         ],
       ),
     );

@@ -35,6 +35,10 @@ class _Event {
   String? note;
   final Map<String, dynamic> fields;
   final team = <TeamMember>[];
+  final shows = <ShowInfo>[];
+  final forms = <RegForm>[];
+  final promos = <PromoItem>[];
+  SurveySetup survey = const SurveySetup();
 }
 
 /// In-memory backend for `USE_MOCK=true` builds and widget tests. It signs
@@ -207,7 +211,7 @@ class DemoVendorApi implements VendorApi {
     return ApiResult.ok(EventDetail(
         access: _access, pendingChanges: _changes.where((c) => c.eventId == id && c.pending).length,
         fields: {'title': x.e.title, 'venueName': x.e.venueName, 'startDate': x.e.startDate?.toIso8601String(), ...x.fields},
-        event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, b2bEnabled: _b2bOn[id] ?? false,
+        event: x.e, tiers: x.tiers.map(_withB2b).toList(), statusNote: x.note, shows: List.of(x.shows), b2bEnabled: _b2bOn[id] ?? false,
         terms: (_terms[id] ?? const EventTerms()).copyWith(fee: _fee(id)), fee: _fee(id)));
   }
 
@@ -326,11 +330,11 @@ class DemoVendorApi implements VendorApi {
   }
 
   @override
-  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity}) async {
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity, Map<String, dynamic> extra = const {}}) async {
     await _wait();
     final x = _events[eventId];
     if (x == null) return _missing();
-    x.tiers.add(TierInfo(id: 't-${_uuid().substring(0, 6)}', name: name, pricePaise: pricePaise, quantity: quantity, sold: 0, remaining: quantity));
+    x.tiers.add(TierInfo.fromJson({...extra, 'id': 't-${_uuid().substring(0, 6)}', 'name': name, 'pricePaise': pricePaise, 'quantity': quantity, 'sold': 0, 'remaining': quantity}));
     return const ApiResult.ok(null);
   }
 
@@ -462,6 +466,187 @@ class DemoVendorApi implements VendorApi {
       return const ApiResult.ok(null);
     }
     return const ApiResult.fail('Ticket type not found', statusCode: 404);
+  }
+
+  // ── event tools ──
+
+  @override
+  Future<ApiResult<String>> uploadImage(Uint8List bytes, {required String filename, required String mime}) async {
+    await _wait();
+    if (bytes.isEmpty) return const ApiResult.fail('Choose a picture', statusCode: 400);
+    return ApiResult.ok('https://picsum.photos/seed/${bytes.length}/800/1000');
+  }
+
+  @override
+  Future<ApiResult<void>> saveTier(String tierId, Map<String, dynamic> body) async {
+    await _wait();
+    for (final x in _events.values) {
+      final i = x.tiers.indexWhere((t) => t.id == tierId);
+      if (i < 0) continue;
+      final t = x.tiers[i];
+      final raw = {...t.raw, 'id': t.id, 'name': t.name, 'pricePaise': t.pricePaise, 'quantity': t.quantity, 'sold': t.sold, 'isActive': t.isActive,
+        'category': t.category, 'requiresApproval': t.requiresApproval, ...body};
+      final qty = (raw['quantity'] as num).toInt();
+      if (qty < t.sold) return ApiResult.fail('${t.sold} are already sold. The quantity can’t be lower.', statusCode: 400);
+      x.tiers[i] = TierInfo.fromJson({...raw, 'remaining': qty - t.sold, 'currentPricePaise': raw['pricePaise']});
+      return const ApiResult.ok(null);
+    }
+    return const ApiResult.fail('Ticket type not found', statusCode: 404);
+  }
+
+  @override
+  Future<ApiResult<SaveResult>> saveShow(String eventId, String? showId, Map<String, dynamic> body) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    if (_access != 'admin' && x.e.status != 'draft') {
+      final id = 'c-${_uuid().substring(0, 8)}';
+      _changes.add(EventChangeItem(id: id, eventId: eventId, eventTitle: x.e.title, kind: showId == null ? 'session_add' : 'session_update',
+          title: showId == null ? 'New show' : 'Show change', status: 'pending', requestedByName: 'You', createdAt: DateTime.now(),
+          fields: [for (final e in body.entries) ChangeField(e.key, null, '${e.value}')]));
+      return ApiResult.ok(SaveResult(id: showId ?? '', pendingChange: id));
+    }
+    final i = showId == null ? -1 : x.shows.indexWhere((v) => v.id == showId);
+    final was = i < 0 ? null : x.shows[i];
+    final show = ShowInfo.fromJson({
+      'id': showId ?? 's-${_uuid().substring(0, 6)}',
+      'label': body['label'] ?? was?.label, 'venueName': body['venueName'] ?? was?.venueName, 'venueAddress': body['venueAddress'] ?? was?.venueAddress,
+      'startsAt': body['startsAt'] ?? was?.startsAt.toIso8601String(), 'endsAt': body['endsAt'] ?? was?.endsAt?.toIso8601String(),
+      'isActive': body['isActive'] ?? was?.isActive ?? true,
+    });
+    if (i < 0) {
+      x.shows.add(show);
+    } else {
+      x.shows[i] = show;
+    }
+    return ApiResult.ok(SaveResult(id: show.id));
+  }
+
+  @override
+  Future<ApiResult<List<RegForm>>> forms(String eventId) async {
+    await _wait();
+    return ApiResult.ok(List.of(_events[eventId]?.forms ?? const []));
+  }
+
+  @override
+  Future<ApiResult<RegForm>> saveForm(String eventId, String? formId, Map<String, dynamic> body) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    final i = formId == null ? -1 : x.forms.indexWhere((f) => f.id == formId);
+    final f = RegForm.fromJson({...body, 'id': formId ?? 'f-${_uuid().substring(0, 6)}', 'version': i < 0 ? 1 : x.forms[i].version + 1});
+    if (i < 0) {
+      x.forms.add(f);
+    } else {
+      x.forms[i] = f;
+    }
+    return ApiResult.ok(f);
+  }
+
+  @override
+  Future<ApiResult<Paged<FormAnswer>>> formAnswers(String eventId, {int page = 1}) async {
+    await _wait();
+    final f = _events[eventId]?.forms.firstOrNull;
+    if (f == null) return const ApiResult.ok(Paged([]));
+    final items = [
+      for (final (i, n) in ['Aarav Shah', 'Diya Patel', 'Kabir Mehta'].indexed)
+        FormAnswer(id: 'a$i', title: f.title, attendee: f.scope == 'attendee' ? 1 : null, createdAt: DateTime.now().subtract(Duration(hours: i * 5 + 1)),
+            labels: {for (final q in f.questions) q.key: q.label},
+            answers: {for (final q in f.questions) q.key: q.hasOptions && q.options.isNotEmpty ? q.options[i % q.options.length] : (q.type == 'text' ? n : '—')}),
+    ];
+    return ApiResult.ok(Paged(items, total: items.length));
+  }
+
+  @override
+  Future<ApiResult<SurveySetup>> survey(String eventId) async {
+    await _wait();
+    return ApiResult.ok(_events[eventId]?.survey ?? const SurveySetup());
+  }
+
+  @override
+  Future<ApiResult<void>> saveSurvey(String eventId, Map<String, dynamic> body) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    x.survey = SurveySetup.fromJson({'survey': body, 'answered': x.survey.answered});
+    return const ApiResult.ok(null);
+  }
+
+  @override
+  Future<ApiResult<Paged<FormAnswer>>> surveyAnswers(String eventId, {int page = 1}) async {
+    await _wait();
+    return const ApiResult.ok(Paged([]));
+  }
+
+  @override
+  Future<ApiResult<List<PromoItem>>> promos(String eventId) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    if (x.promos.isEmpty && eventId == e1) {
+      x.promos.add(const PromoItem(id: 'p1', code: 'EARLY20', type: 'percentage', value: 20, used: 37, usageLimit: 100, maxDiscountPaise: 30000, isPublic: true));
+    }
+    return ApiResult.ok(List.of(x.promos));
+  }
+
+  @override
+  Future<ApiResult<PromoItem>> createPromo(String eventId, Map<String, dynamic> body) async {
+    await _wait();
+    final x = _events[eventId];
+    if (x == null) return _missing();
+    final code = '${body['code']}'.toUpperCase();
+    if (_events.values.any((e) => e.promos.any((p) => p.code == code))) return const ApiResult.fail('That code is taken', statusCode: 409);
+    final p = PromoItem.fromJson({...body, 'code': code, 'id': 'p-${_uuid().substring(0, 6)}', 'used': 0, 'isActive': true});
+    x.promos.add(p);
+    return ApiResult.ok(p);
+  }
+
+  @override
+  Future<ApiResult<PromoItem>> setPromoActive(String promoId, bool active) async {
+    await _wait();
+    for (final x in _events.values) {
+      final i = x.promos.indexWhere((p) => p.id == promoId);
+      if (i < 0) continue;
+      x.promos[i] = x.promos[i].copyWith(isActive: active);
+      return ApiResult.ok(x.promos[i]);
+    }
+    return const ApiResult.fail('Promo code not found', statusCode: 404);
+  }
+
+  @override
+  Future<ApiResult<List<TrafficRow>>> traffic(String eventId) async {
+    await _wait();
+    if (eventId != e1) return const ApiResult.ok([]);
+    return const ApiResult.ok([
+      TrafficRow(source: 'instagram', medium: 'social', campaign: 'launch', clicks: 1840, bookings: 96, tickets: 171, revenuePaise: 13662900),
+      TrafficRow(source: '(direct)', clicks: 0, bookings: 74, tickets: 112, revenuePaise: 9548800),
+      TrafficRow(source: 'whatsapp', medium: 'share', clicks: 620, bookings: 31, tickets: 52, revenuePaise: 4154800),
+    ]);
+  }
+
+  final _inbox = <StaffNotification>[];
+
+  @override
+  Future<ApiResult<Paged<StaffNotification>>> notifications({int page = 1}) async {
+    await _wait();
+    if (_inbox.isEmpty) {
+      final now = DateTime.now();
+      _inbox.addAll([
+        StaffNotification(id: 'n1', type: 'event_change', title: 'Change approved', body: 'GatePass approved the new date for Sunburn Arena Night.', createdAt: now.subtract(const Duration(minutes: 12))),
+        StaffNotification(id: 'n2', type: 'approval', title: '3 ticket requests', body: 'People asked for Community Pass tickets.', createdAt: now.subtract(const Duration(hours: 3))),
+        StaffNotification(id: 'n3', type: 'generic', title: 'Sales are open', body: 'Tickets for Open Air Cinema are on sale.', isRead: true, createdAt: now.subtract(const Duration(days: 1))),
+      ]);
+    }
+    return ApiResult.ok(Paged(List.of(_inbox), total: _inbox.length));
+  }
+
+  @override
+  Future<ApiResult<void>> markNotificationsRead() async {
+    for (var i = 0; i < _inbox.length; i++) {
+      final n = _inbox[i];
+      _inbox[i] = StaffNotification(id: n.id, title: n.title, body: n.body, type: n.type, isRead: true, createdAt: n.createdAt);
+    }
+    return const ApiResult.ok(null);
   }
 
   @override

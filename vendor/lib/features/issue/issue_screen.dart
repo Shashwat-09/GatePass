@@ -122,7 +122,7 @@ class _IssueScreenState extends State<IssueScreen> {
   Widget build(BuildContext context) {
     final t = _tier;
     final maxQty = t == null ? 1 : t.remaining.clamp(1, 50);
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Issue Tickets')),
       body: _tiers.isEmpty

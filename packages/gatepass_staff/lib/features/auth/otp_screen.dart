@@ -76,7 +76,7 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GlassScaffold(
         appBar: AppBar(),
         body: SafeArea(
           child: Padding(

@@ -93,7 +93,7 @@ class _TermsScreenState extends State<TermsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Event Terms')),
       body: ListView(padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xl), children: [
@@ -260,7 +260,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
         ]),
       ]);
     }
-    return Scaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Settlement')), body: body);
+    return GlassScaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Settlement')), body: body);
   }
 }
 
@@ -329,7 +329,7 @@ class _CompRequestsScreenState extends State<CompRequestsScreen> {
           ]),
       ]);
     }
-    return Scaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Comp Requests')), body: body);
+    return GlassScaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Comp Requests')), body: body);
   }
 }
 

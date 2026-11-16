@@ -102,7 +102,7 @@ class _ScanScreenState extends State<ScanScreen> {
     final demo = Session.to.api is DemoVendorApi ? Session.to.api as DemoVendorApi : null;
     // The camera screen is always dark, like the system camera.
     return Theme(
-      data: GatePassTheme.dark(),
+      data: GlassTheme.dark(),
       child: Builder(builder: (context) {
         return Scaffold(
           backgroundColor: Colors.black,

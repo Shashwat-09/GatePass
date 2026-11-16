@@ -108,7 +108,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         ]),
       );
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Ticket Requests')),
       body: Column(children: [

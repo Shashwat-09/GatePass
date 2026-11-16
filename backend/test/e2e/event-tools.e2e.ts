@@ -47,7 +47,7 @@ describe('Event tools in the Organiser app: pictures, forms, promo codes, survey
     await up(await login(ctx)).attach('file', PNG, { filename: 'p.png', contentType: 'image/png' }).expect(403);
     await ctx.http.get('/api/media/00000000-0000-4000-8000-000000000000').expect(404);
     // The picture can go on the event.
-    await as(boss).put(`organiser/events/${eventId}`, { posterUrl: r.url }).expect(200);
+    await as(boss).put(`organiser/events/${eventId}`, { cardImageUrl: r.url }).expect(200);
   });
 
   it('builds registration forms (versioned on edit) and lists them per event', async () => {

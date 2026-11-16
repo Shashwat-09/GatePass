@@ -69,7 +69,7 @@ class _BoostScreenState extends State<BoostScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final s = _s;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Server Boost')),
       body: s == null

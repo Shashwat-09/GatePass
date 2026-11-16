@@ -81,7 +81,7 @@ class _FeeSettingsScreenState extends State<FeeSettingsScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final s = _s;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Booking Fees')),
       body: s == null

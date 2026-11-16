@@ -109,7 +109,7 @@ class _DistributorHomeState extends State<DistributorHome> {
         const SizedBox(height: AppSpacing.xl),
       ]);
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Distribute', background: c.groupedCanvas, actions: [
@@ -192,7 +192,7 @@ class _B2bEventScreenState extends State<B2bEventScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Seller Prices')),
       body: RefreshIndicator.adaptive(
@@ -414,7 +414,7 @@ class _SellersScreenState extends State<SellersScreen> {
         ),
       ]);
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Sellers'), actions: [
         IconButton(tooltip: 'Add Seller', icon: const Icon(CupertinoIcons.person_add), onPressed: _add),
@@ -505,7 +505,7 @@ class _DistributorOrdersScreenState extends State<DistributorOrdersScreen> {
     } else {
       body = RefreshIndicator.adaptive(onRefresh: _load, child: ListView(padding: const EdgeInsets.only(bottom: AppSpacing.xl), children: [for (final o in _items!) _card(o)]));
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Orders')),
       body: Column(children: [
@@ -654,7 +654,7 @@ class _DistributorReportScreenState extends State<DistributorReportScreen> {
         ],
       ]);
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Your Books')),
       body: body,
@@ -712,7 +712,7 @@ class _PriceHistoryScreenState extends State<PriceHistoryScreen> {
         ]),
       ]);
     }
-    return Scaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Price History')), body: body);
+    return GlassScaffold(backgroundColor: c.groupedCanvas, appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Price History')), body: body);
   }
 }
 
@@ -770,7 +770,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final preview = _upi.text.contains('@') ? 'upi://pay?pa=${Uri.encodeComponent(_upi.text.trim())}&pn=${Uri.encodeComponent(_name.text.trim())}&cu=INR' : null;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Payment Details')),
       body: _loading

@@ -50,7 +50,7 @@ class _CitiesScreenState extends State<CitiesScreen> {
     final c = context.colors;
     final items = _items;
     final live = items?.where((x) => x.isActive).length ?? 0;
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: c.groupedCanvas,
       appBar: AppBar(backgroundColor: c.groupedCanvas, title: const Text('Cities')),
       body: items == null

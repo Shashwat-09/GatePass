@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
-import 'package:gatepass_ui/utsav_art.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
@@ -49,31 +48,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GlassScaffold(
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SizedBox(height: AppSpacing.md),
-              // Utsav hero: the jaali panel, as on the customer app's tickets.
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: JaaliPanel(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(StaffShell.eyebrow,
-                            style: context.text.labelSmall!.copyWith(color: UtsavArt.marigold, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                        const SizedBox(height: 8),
-                        Text(StaffShell.appName.replaceFirst(' ', '\n'), style: context.serif(30, color: Colors.white, height: 1.05)),
-                      ]),
-                    ),
-                    Icon(StaffShell.icon, color: UtsavArt.marigold, size: 44),
-                  ]),
-                ),
-              ),
+              const SizedBox(height: AppSpacing.xl),
+              Icon(StaffShell.icon, size: 48, color: context.colors.tint),
               const SizedBox(height: AppSpacing.lg),
+              Text(StaffShell.eyebrow.toUpperCase(),
+                  style: context.text.labelSmall!.copyWith(color: context.colors.secondaryLabel, fontWeight: FontWeight.w600, letterSpacing: 1.1)),
+              const SizedBox(height: 6),
+              Text(StaffShell.appName, style: context.text.headlineMedium),
+              const SizedBox(height: AppSpacing.sm),
               Text('${StaffShell.tagline} Sign in with the number on your account.',
                   style: context.text.bodyLarge!.copyWith(color: context.colors.secondaryLabel)),
               const SizedBox(height: AppSpacing.lg),

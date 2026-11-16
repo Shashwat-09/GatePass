@@ -26,7 +26,7 @@ abstract class VendorApi {
   Future<ApiResult<List<CityItem>>> eventCities(Me me);
   /// Create (id null) or edit an event. Edits to a published event's main details wait for approval.
   Future<ApiResult<SaveResult>> saveEvent(String? id, Map<String, dynamic> body);
-  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity});
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity, Map<String, dynamic> extra = const {}});
   Future<ApiResult<TeamInfo>> team(String eventId);
   Future<ApiResult<void>> addMember(String eventId, {required String phone, required String role, String? name});
   Future<ApiResult<void>> removeMember(String eventId, String memberId);
@@ -41,6 +41,26 @@ abstract class VendorApi {
   /// mode: on (boost now) | off (hold small) for [hours], or auto.
   Future<ApiResult<BoostStatus>> setBoost(String mode, {int? hours});
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale);
+
+  // ── event tools (everything the web console did) ──
+  /// A poster or banner from the phone; returns its public https link.
+  Future<ApiResult<String>> uploadImage(Uint8List bytes, {required String filename, required String mime});
+  /// Edit any field of a ticket type (price, limits, pass type, approval…).
+  Future<ApiResult<void>> saveTier(String tierId, Map<String, dynamic> body);
+  /// Add (showId null) or edit a show. On a published event, organisers' changes wait for GatePass.
+  Future<ApiResult<SaveResult>> saveShow(String eventId, String? showId, Map<String, dynamic> body);
+  Future<ApiResult<List<RegForm>>> forms(String eventId);
+  Future<ApiResult<RegForm>> saveForm(String eventId, String? formId, Map<String, dynamic> body);
+  Future<ApiResult<Paged<FormAnswer>>> formAnswers(String eventId, {int page = 1});
+  Future<ApiResult<SurveySetup>> survey(String eventId);
+  Future<ApiResult<void>> saveSurvey(String eventId, Map<String, dynamic> body);
+  Future<ApiResult<Paged<FormAnswer>>> surveyAnswers(String eventId, {int page = 1});
+  Future<ApiResult<List<PromoItem>>> promos(String eventId);
+  Future<ApiResult<PromoItem>> createPromo(String eventId, Map<String, dynamic> body);
+  Future<ApiResult<PromoItem>> setPromoActive(String promoId, bool active);
+  Future<ApiResult<List<TrafficRow>>> traffic(String eventId);
+  Future<ApiResult<Paged<StaffNotification>>> notifications({int page = 1});
+  Future<ApiResult<void>> markNotificationsRead();
 
   Future<ApiResult<GateStats>> gateStats(String eventId);
   /// Raw offline list (see OfflineGate).
@@ -194,8 +214,8 @@ class HttpVendorApi implements VendorApi {
   }
 
   @override
-  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity}) async =>
-      (await _api.request('api/organiser/events/$eventId/tiers', method: Method.post, body: {'name': name, 'pricePaise': pricePaise, 'quantity': quantity})).map((_) {});
+  Future<ApiResult<void>> addTier(String eventId, {required String name, required int pricePaise, required int quantity, Map<String, dynamic> extra = const {}}) async =>
+      (await _api.request('api/organiser/events/$eventId/tiers', method: Method.post, body: {...extra, 'name': name, 'pricePaise': pricePaise, 'quantity': quantity})).map((_) {});
 
   @override
   Future<ApiResult<TeamInfo>> team(String eventId) async =>
@@ -239,6 +259,77 @@ class HttpVendorApi implements VendorApi {
   @override
   Future<ApiResult<void>> setTierOnSale(String tierId, bool onSale) async =>
       (await _api.request('api/organiser/tiers/$tierId', method: Method.put, body: {'isActive': onSale})).map((_) {});
+
+  @override
+  Future<ApiResult<String>> uploadImage(Uint8List bytes, {required String filename, required String mime}) async =>
+      (await _api.upload('api/organiser/media', bytes, filename: filename, mime: mime)).map((d) => '${(d as Map)['url']}');
+
+  @override
+  Future<ApiResult<void>> saveTier(String tierId, Map<String, dynamic> body) => _void('api/organiser/tiers/$tierId', Method.put, body);
+
+  @override
+  Future<ApiResult<SaveResult>> saveShow(String eventId, String? showId, Map<String, dynamic> body) async {
+    final r = showId == null
+        ? await _api.request('api/organiser/events/$eventId/sessions', method: Method.post, body: body)
+        : await _api.request('api/organiser/sessions/$showId', method: Method.put, body: body);
+    return r.map((d) => SaveResult(id: '${(d as Map)['id'] ?? ''}', pendingChange: d['pendingChange']?.toString()));
+  }
+
+  @override
+  Future<ApiResult<List<RegForm>>> forms(String eventId) async => (await _api.request('api/organiser/events/$eventId/forms'))
+      .map((d) => [for (final f in ((d as Map)['items'] as List? ?? const [])) RegForm.fromJson(f as Map)]);
+
+  @override
+  Future<ApiResult<RegForm>> saveForm(String eventId, String? formId, Map<String, dynamic> body) async => (formId == null
+          ? await _api.request('api/organiser/events/$eventId/forms', method: Method.post, body: body)
+          : await _api.request('api/organiser/forms/$formId', method: Method.put, body: body))
+      .map((d) => RegForm.fromJson(d as Map));
+
+  Paged<FormAnswer> _answers(dynamic d) {
+    final m = d as Map;
+    return Paged([for (final x in (m['items'] as List? ?? const [])) FormAnswer.fromJson(x as Map)], page: (m['page'] as num?)?.toInt() ?? 1, total: (m['total'] as num?)?.toInt() ?? 0);
+  }
+
+  @override
+  Future<ApiResult<Paged<FormAnswer>>> formAnswers(String eventId, {int page = 1}) async =>
+      (await _api.request('api/organiser/events/$eventId/form-responses', query: {'page': '$page', 'limit': '30'})).map(_answers);
+
+  @override
+  Future<ApiResult<SurveySetup>> survey(String eventId) async => (await _api.request('api/organiser/events/$eventId/survey')).map((d) => SurveySetup.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<void>> saveSurvey(String eventId, Map<String, dynamic> body) => _void('api/admin/events/$eventId/survey', Method.put, body);
+
+  @override
+  Future<ApiResult<Paged<FormAnswer>>> surveyAnswers(String eventId, {int page = 1}) async =>
+      (await _api.request('api/admin/events/$eventId/survey-responses', query: {'page': '$page', 'limit': '30'})).map(_answers);
+
+  @override
+  Future<ApiResult<List<PromoItem>>> promos(String eventId) async => (await _api.request('api/organiser/events/$eventId/promos'))
+      .map((d) => [for (final p in ((d as Map)['items'] as List? ?? const [])) PromoItem.fromJson(p as Map)]);
+
+  @override
+  Future<ApiResult<PromoItem>> createPromo(String eventId, Map<String, dynamic> body) async =>
+      (await _api.request('api/organiser/events/$eventId/promos', method: Method.post, body: body)).map((d) => PromoItem.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<PromoItem>> setPromoActive(String promoId, bool active) async =>
+      (await _api.request('api/organiser/promos/$promoId', method: Method.put, body: {'isActive': active})).map((d) => PromoItem.fromJson(d as Map));
+
+  @override
+  Future<ApiResult<List<TrafficRow>>> traffic(String eventId) async => (await _api.request('api/admin/events/$eventId/attribution'))
+      .map((d) => [for (final r in ((d as Map)['rows'] as List? ?? const [])) TrafficRow.fromJson(r as Map)]);
+
+  @override
+  Future<ApiResult<Paged<StaffNotification>>> notifications({int page = 1}) async =>
+      (await _api.request('api/notifications', query: {'page': '$page', 'limit': '30'})).map((d) {
+        final m = d as Map;
+        return Paged([for (final n in (m['items'] as List? ?? const [])) StaffNotification.fromJson(n as Map)],
+            page: (m['page'] as num?)?.toInt() ?? 1, total: (m['total'] as num?)?.toInt() ?? 0);
+      });
+
+  @override
+  Future<ApiResult<void>> markNotificationsRead() => _void('api/notifications/mark-as-read', Method.post, {});
 
   @override
   Future<ApiResult<GateStats>> gateStats(String eventId) async =>

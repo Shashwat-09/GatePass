@@ -17,7 +17,13 @@ import '../scan/scan_screen.dart';
 import 'changes_screen.dart';
 import 'event_form_screen.dart';
 import 'events_screen.dart';
+import 'forms_screen.dart';
+import 'promos_screen.dart';
+import 'shows_screen.dart';
+import 'survey_screen.dart';
 import 'team_screen.dart';
+import 'tier_editor_screen.dart';
+import 'traffic_screen.dart';
 import 'terms_screen.dart';
 
 /// One event, shaped by the person's job on it:
@@ -198,7 +204,7 @@ class _EventScreenState extends State<EventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Event')),
       body: _loading
@@ -309,6 +315,34 @@ class _EventScreenState extends State<EventScreen> {
           ),
           GroupRow(key: const Key('add-tier'), icon: CupertinoIcons.ticket, title: 'Add Ticket Type', onTap: _addTier),
           GroupRow(
+            key: const Key('shows'),
+            icon: CupertinoIcons.calendar_badge_plus,
+            title: 'Shows',
+            subtitle: 'More dates, times or venues',
+            value: d.shows.isEmpty ? null : '${d.shows.length}',
+            onTap: () => _open(ShowsScreen(detail: d)),
+          ),
+          GroupRow(
+            key: const Key('forms'),
+            icon: CupertinoIcons.doc_text,
+            title: 'Registration Forms',
+            subtitle: 'Questions buyers answer when they book',
+            onTap: () => _open(FormsScreen(event: _event)),
+          ),
+          GroupRow(
+            key: const Key('promos'),
+            icon: CupertinoIcons.tag,
+            title: 'Promo Codes',
+            onTap: () => _open(PromosScreen(event: _event, tiers: d.tiers)),
+          ),
+          GroupRow(
+            key: const Key('survey'),
+            icon: CupertinoIcons.star,
+            title: 'Survey',
+            subtitle: 'Feedback after the event',
+            onTap: () => _open(SurveyScreen(event: _event)),
+          ),
+          GroupRow(
             key: const Key('team'),
             icon: CupertinoIcons.person_2,
             title: 'Team',
@@ -318,35 +352,15 @@ class _EventScreenState extends State<EventScreen> {
         ],
       );
 
-  Future<void> _addTier() async {
-    final name = TextEditingController();
-    final price = TextEditingController();
-    final qty = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New Ticket Type'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(key: const Key('tier-name'), controller: name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(hintText: 'Name (e.g. Early Bird)')),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(key: const Key('tier-price'), controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(prefixText: '₹ ', hintText: 'Price (0 = free)')),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(key: const Key('tier-qty'), controller: qty, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'How many')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(key: const Key('tier-save'), onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final p = price.text.trim().isEmpty ? 0 : parseRupees(price.text);
-    final q = int.tryParse(qty.text.trim());
-    if (name.text.trim().isEmpty || p == null || q == null || q < 1) return _toast('Add a name, a price and how many');
-    final r = await Session.to.api.addTier(_event.id, name: name.text.trim(), pricePaise: p, quantity: q);
-    if (!mounted) return;
-    r.isOk ? Delight.success() : Delight.error();
-    _toast(r.isOk ? '${name.text.trim()} added' : r.error!);
+  Future<void> _addTier() => _editTier(null);
+
+  Future<void> _editTier(TierInfo? t) async {
+    final saved = await Get.to<bool>(() => TierEditorScreen(eventId: _event.id, tier: t, shows: _detail?.shows ?? const []), fullscreenDialog: true);
+    if (saved == true) _load();
+  }
+
+  void _open(Widget screen) async {
+    await Get.to(() => screen);
     _load();
   }
 
@@ -400,10 +414,13 @@ class _EventScreenState extends State<EventScreen> {
     if (tiers.isEmpty) return const SizedBox.shrink();
     return InsetGroup(
       header: 'Ticket Types',
-      footer: 'Switch a ticket type off to stop selling it. Tickets already sold stay valid.',
+      footer: 'Tap a ticket type to change its price, limits and more. Switch it off to stop selling it; tickets already sold stay valid.',
       children: [
         for (final t in tiers)
-          Padding(
+          InkWell(
+            key: Key('tier-row-${t.id}'),
+            onTap: () => _editTier(t),
+            child: Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.md, 10, AppSpacing.sm, 10),
             child: Row(children: [
               Expanded(
@@ -421,6 +438,7 @@ class _EventScreenState extends State<EventScreen> {
                       onChanged: (v) => _toggleTier(t, v),
                     ),
             ]),
+          ),
           ),
       ],
     );
@@ -605,6 +623,13 @@ class _EventScreenState extends State<EventScreen> {
           trailing: _exporting ? const CupertinoActivityIndicator() : null,
           chevron: !_exporting,
           onTap: _exporting ? null : _export,
+        ),
+        GroupRow(
+          key: const Key('traffic'),
+          icon: CupertinoIcons.chart_bar_alt_fill,
+          title: 'Where Buyers Came From',
+          subtitle: 'Clicks and sales per link (Instagram, WhatsApp, ref links)',
+          onTap: () => Get.to(() => TrafficScreen(event: _event)),
         ),
         GroupRow(icon: CupertinoIcons.flag, title: 'Event Status', value: statusLabel(_event.status), onTap: _changeStatus),
         if (_comps != null)

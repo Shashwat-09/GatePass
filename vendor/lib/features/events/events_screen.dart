@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gatepass_staff/app/session.dart';
-import 'package:gatepass_staff/core/config.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_staff/features/account/account_screen.dart';
+import 'package:gatepass_staff/features/notifications/notifications_screen.dart';
 import 'event_form_screen.dart';
 import 'event_screen.dart';
 import 'terms_screen.dart';
@@ -101,7 +100,7 @@ class _EventsScreenState extends State<EventsScreen> {
           Center(child: TextButton(onPressed: () => _load(next: true), child: const Text('Load More'))),
       ]);
     }
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Events', background: context.colors.groupedCanvas, actions: [
@@ -112,6 +111,12 @@ class _EventsScreenState extends State<EventsScreen> {
               icon: Icon(CupertinoIcons.add_circled, color: context.colors.tint),
               onPressed: _newEvent,
             ),
+          IconButton(
+            key: const Key('inbox'),
+            tooltip: 'Inbox',
+            icon: Icon(CupertinoIcons.bell, color: context.colors.tint),
+            onPressed: () => Get.to(() => const NotificationsScreen()),
+          ),
           IconButton(
             tooltip: 'Account',
             icon: Icon(CupertinoIcons.person_crop_circle, color: context.colors.tint),
@@ -124,32 +129,16 @@ class _EventsScreenState extends State<EventsScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
-              child: CupertinoSlidingSegmentedControl<int>(
-                groupValue: _segment,
-                onValueChanged: (v) => setState(() => _segment = v ?? 0),
-                children: const {
-                  0: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Upcoming')),
-                  1: Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Past')),
-                },
+              child: GlassSegments(
+                labels: const ['Upcoming', 'Past'],
+                index: _segment,
+                onChanged: (v) => setState(() => _segment = v),
               ),
             ),
           )
         else
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
         body,
-        if (canAdd && !_loading)
-          SliverToBoxAdapter(
-            child: InsetGroup(
-              footer: 'Seat maps, extra shows and the rest live in the web console.',
-              children: [
-                GroupRow(
-                  icon: CupertinoIcons.globe,
-                  title: 'Open Web Console',
-                  onTap: () => launchUrl(Uri.parse(VendorConfig.consoleUrl), mode: LaunchMode.externalApplication),
-                ),
-              ],
-            ),
-          ),
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
       ]),
     );

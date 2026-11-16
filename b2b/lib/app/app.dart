@@ -13,8 +13,8 @@ class B2bApp extends StatelessWidget {
   Widget build(BuildContext context) => GetMaterialApp(
         title: StaffShell.appName,
         debugShowCheckedModeBanner: false,
-        theme: GatePassTheme.light(),
-        darkTheme: GatePassTheme.dark(),
+        theme: GlassTheme.light(),
+        darkTheme: GlassTheme.dark(),
         themeMode: ThemeMode.light, // white only (owner decision, Nov 2026)
         home: home ?? const LaunchScreen(),
       );

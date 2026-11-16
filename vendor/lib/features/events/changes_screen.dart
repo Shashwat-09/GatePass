@@ -140,7 +140,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
       body,
       const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
     ]);
-    return Scaffold(
+    return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: _inbox ? null : AppBar(backgroundColor: context.colors.groupedCanvas, title: Text(title)),
       body: scroll,

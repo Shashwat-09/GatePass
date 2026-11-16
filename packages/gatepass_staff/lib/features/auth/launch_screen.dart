@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
@@ -44,7 +43,7 @@ class _LaunchScreenState extends State<LaunchScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GlassScaffold(
         body: _error == null
             ? Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [

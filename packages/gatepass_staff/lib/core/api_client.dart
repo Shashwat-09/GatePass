@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'config.dart';
 import 'token_store.dart';
@@ -87,6 +88,28 @@ class ApiClient {
       return const ApiResult.fail('No internet connection.');
     } catch (_) {
       return const ApiResult.fail('No internet connection.');
+    }
+  }
+
+  /// One file as multipart/form-data (field "file"). Same auth and refresh rules.
+  Future<ApiResult<dynamic>> upload(String path, Uint8List bytes, {required String filename, required String mime, bool retryOnAuth = true}) async {
+    final uri = Uri.parse('${VendorConfig.baseUrl}$path');
+    final hadToken = _tokens.accessToken != null;
+    try {
+      final req = http.MultipartRequest('POST', uri)
+        ..headers.addAll(_headers()..remove('Content-Type'))
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: MediaType.parse(mime)));
+      final res = await http.Response.fromStream(await _client.send(req).timeout(const Duration(seconds: 90)));
+      if (res.statusCode == 401 && hadToken && retryOnAuth) {
+        if (await _refresh()) return await upload(path, bytes, filename: filename, mime: mime, retryOnAuth: false);
+        return const ApiResult.fail('Your session has ended. Please sign in again.', statusCode: 401, code: 'UNAUTHENTICATED');
+      }
+      if (res.statusCode == 413) return const ApiResult.fail('That picture is too big. Pictures can be up to 5 MB.', statusCode: 413);
+      return _parse(res.statusCode, res.bodyBytes);
+    } on TimeoutException {
+      return const ApiResult.fail('The upload took too long. Check your connection.');
+    } catch (_) {
+      return const ApiResult.fail('Could not upload. Check your connection.');
     }
   }
 
