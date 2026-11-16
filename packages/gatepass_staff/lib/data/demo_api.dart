@@ -642,6 +642,14 @@ class DemoVendorApi implements VendorApi {
   }
 
   @override
+  Future<ApiResult<TestCode>> testCode(String phone) async {
+    await _wait();
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) return const ApiResult.fail('Enter a valid 10-digit mobile number', statusCode: 400);
+    final personal = phone == '9000000001';
+    return ApiResult.ok(TestCode(phone: phone, code: personal ? '480215' : '123456', personal: personal));
+  }
+
+  @override
   Future<ApiResult<void>> markNotificationsRead() async {
     for (var i = 0; i < _inbox.length; i++) {
       final n = _inbox[i];

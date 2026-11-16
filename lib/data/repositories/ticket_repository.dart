@@ -96,6 +96,7 @@ class TicketRepository {
           x['code']?.toString(),
           x['delivered'] == true,
           whatsapp: x['whatsapp'] == true,
+          openUrl: x['openUrl']?.toString(),
         )).toList();
     unawaited(_rememberRecipients(to));
     unawaited(syncOffline()); // the sender's QR changed — refresh the offline copy

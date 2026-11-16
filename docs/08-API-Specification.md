@@ -418,3 +418,7 @@ Everything the web console did, for GatePass admins, organisers and **event admi
 - Also open to event admins now: `admin/events/:id/attribution` (where buyers came from), `admin/events/:id/export.xlsx`, `admin/approval-requests?eventId=` (+ approve / reject).
 
 **No per-person ticket limit (v0.17, docs/09 #17).** Booking, quotes, seat holds, ticket requests, shares, box-office/comp issuing and B2B orders accept up to 10,000 per order line (`MAX_ORDER_QTY`); stock is the real limit. `GET api/event` returns `maxPerUser: 10000` and `maxSeatsPerBooking: 10000`, and `maxPerUser: null` on ticket types. The organiser fields are accepted but ignored.
+
+**Test server sign-in (docs/09 #18).** `TEST_PHONES=*` opens sign-in to any number with the shared `DEV_OTP`; accounts with the admin, organiser or distributor role get a personal code instead. `GET api/admin/test-code?phone=` (admins) → `{ phone, code, personal, canSignIn }`. `BOOTSTRAP_ROLES` adds roles on boot (`seller` = B2B seller of the first `BOOTSTRAP_ADMINS` number).
+
+**Link pages.** `/t/<code>` (share link) and `/r/<id>` (tickets sent to a number) show the event with a blurred QR and one button that opens the app to claim (`gatepass://claim?code=…`, `gatepass://open/<id>`); no code to type. `POST api/ticket/share` adds `openUrl` (`<base>/r/<id>`) for each number, used by the app's "Tell Them" message.

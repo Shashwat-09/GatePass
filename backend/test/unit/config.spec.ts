@@ -77,7 +77,16 @@ describe('config validation', () => {
     expect(() => loadConfig()).toThrow(/TEST_PHONES/);
     process.env.TEST_PHONES = '9876543210, +91 98765 00001, junk';
     const c = loadConfig();
-    expect(c.testMode).toEqual({ on: true, phones: ['9876543210', '9876500001'] });
+    expect(c.testMode).toEqual({ on: true, phones: ['9876543210', '9876500001'], open: false });
     expect(c.devOtp).toBe('123456');
+    // * opens sign-in to any number (admins, organisers and distributors still need their own code).
+    process.env.TEST_PHONES = '*';
+    expect(loadConfig().testMode).toEqual({ on: true, phones: [], open: true });
+  });
+
+  it('BOOTSTRAP_ROLES: organiser, staff, seller and distributor numbers; junk is ignored', () => {
+    prodEnv();
+    process.env.BOOTSTRAP_ROLES = '8733031815:organiser, +91 87349 31815:seller, 9000000001:admin, junk';
+    expect(loadConfig().bootstrapRoles).toEqual([{ phone: '8733031815', role: 'organiser' }, { phone: '8734931815', role: 'seller' }]);
   });
 });

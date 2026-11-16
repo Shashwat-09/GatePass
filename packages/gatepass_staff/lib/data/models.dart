@@ -1199,3 +1199,15 @@ class StaffNotification {
   final bool isRead;
   final DateTime? createdAt;
 }
+
+
+/// Test servers: the code a number signs in with.
+class TestCode {
+  const TestCode({required this.phone, required this.code, this.personal = false, this.canSignIn = true});
+  factory TestCode.fromJson(Map j) => TestCode(phone: _str(j['phone']), code: _str(j['code']), personal: j['personal'] == true, canSignIn: j['canSignIn'] != false);
+  final String phone;
+  final String code;
+  /// Admins, organisers and distributors have their own code.
+  final bool personal;
+  final bool canSignIn;
+}

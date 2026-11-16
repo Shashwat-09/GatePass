@@ -6,6 +6,7 @@ import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeE
 import { IsNull, Repository } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { config } from '../config/config';
+import { isPrivileged, personalTestCode } from './test-codes';
 import { RefreshToken, User } from '../db/entities';
 import { KvStore } from '../infra/kv.service';
 import { SmsService } from './sms.service';
@@ -54,7 +55,7 @@ export class AuthService {
   async sendOtp(phone: string, ip: string, countryCode = '+91') {
     // Closed testing (TEST_MODE): only invited testers can sign in.
     const t = config().testMode;
-    if (config().isProd && t.on && !t.phones.includes(phone)) {
+    if (config().isProd && t.on && !t.open && !t.phones.includes(phone)) {
       throw new ApiError('FORBIDDEN', 'GatePass is in private testing. Ask the team to add your number.');
     }
     const cooldown = await this.kv.ttl(`otp:cooldown:${phone}`);
@@ -72,7 +73,7 @@ export class AuthService {
       throw new ApiError('RATE_LIMITED', 'Too many code requests. Try again in a few minutes.');
     }
 
-    const code = config().devOtp ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const code = await this.codeFor(phone);
     await this.kv.set(`otp:${phone}`, this.otpHash(phone, code), OTP_TTL_SEC);
     await this.kv.del(`otp:attempts:${phone}`);
     await this.kv.set(`otp:cooldown:${phone}`, '1', RESEND_AFTER_SEC);
@@ -83,6 +84,25 @@ export class AuthService {
       throw new ApiError('SERVER_ERROR', 'Could not send the code. Please try again.');
     }
     return { otpSent: true, resendAfterSec: RESEND_AFTER_SEC, channel: 'sms' };
+  }
+
+  /** Random code; dev: DEV_OTP; test server: DEV_OTP, or a personal code for admins, organisers and distributors. */
+  private async codeFor(phone: string) {
+    const dev = config().devOtp;
+    if (!dev) return String(randomInt(0, 1_000_000)).padStart(6, '0');
+    if (!config().testMode.on) return dev;
+    const u = await this.users.findOne({ where: { phone, deletedAt: IsNull() }, select: ['id', 'role', 'extraRoles'] });
+    return isPrivileged(u) ? personalTestCode(dev, phone) : dev;
+  }
+
+  /** Test servers: the code a number signs in with (admins only; Organiser app › Test Codes). */
+  async testCodeFor(phone: string) {
+    const dev = config().devOtp;
+    if (!config().testMode.on || !dev) throw new ApiError('VALIDATION_ERROR', 'Sign-in codes come by SMS on this server');
+    const u = await this.users.findOne({ where: { phone, deletedAt: IsNull() }, select: ['id', 'role', 'extraRoles'] });
+    const personal = isPrivileged(u);
+    const t = config().testMode;
+    return { phone, code: personal ? personalTestCode(dev, phone) : dev, personal, canSignIn: t.open || t.phones.includes(phone) };
   }
 
   async login(phone: string, otp: string, deviceToken?: string) {

@@ -817,7 +817,9 @@ class TicketShareResult {
   final bool delivered;
   /// GatePass also sent them a WhatsApp message (so no need to tell them yourself).
   final bool whatsapp;
-  TicketShareResult(this.transfer, this.ticket, this.shareUrl, this.code, this.delivered, {this.whatsapp = false});
+  /// Sent to a number: a page that shows the tickets and opens the app (for "Tell Them").
+  final String? openUrl;
+  TicketShareResult(this.transfer, this.ticket, this.shareUrl, this.code, this.delivered, {this.whatsapp = false, this.openUrl});
 }
 
 /// Someone to share with: a phone number, or a link when [phone] is null.

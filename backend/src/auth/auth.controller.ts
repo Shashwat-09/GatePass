@@ -1,6 +1,7 @@
-import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthedRequest, JwtAuthGuard } from '../common/jwt-auth.guard';
+import { ApiError } from '../common/api-error';
+import { AuthedRequest, JwtAuthGuard, Roles, RolesGuard } from '../common/jwt-auth.guard';
 import { clientIp, RateLimit } from '../infra/rate-limit.guard';
 import { AuthService } from './auth.service';
 import { LoginDto, LogoutDto, RefreshDto, SendOtpDto } from './dto';
@@ -36,5 +37,15 @@ export class AuthController {
   @HttpCode(200)
   logout(@Req() req: AuthedRequest, @Body() dto: LogoutDto) {
     return this.auth.logout(req.userId!, dto?.refreshToken);
+  }
+
+  /** Test servers: the sign-in code for a number (GatePass admins; Organiser app › Test Codes). */
+  @Get('admin/test-code')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  testCode(@Query('phone') phone?: string) {
+    const p = (phone ?? '').replace(/\D/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(p)) throw new ApiError('VALIDATION_ERROR', 'Enter a valid 10-digit mobile number');
+    return this.auth.testCodeFor(p);
   }
 }

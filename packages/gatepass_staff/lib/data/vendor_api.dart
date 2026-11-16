@@ -61,6 +61,8 @@ abstract class VendorApi {
   Future<ApiResult<List<TrafficRow>>> traffic(String eventId);
   Future<ApiResult<Paged<StaffNotification>>> notifications({int page = 1});
   Future<ApiResult<void>> markNotificationsRead();
+  /// Test servers (admins): the sign-in code for a number.
+  Future<ApiResult<TestCode>> testCode(String phone);
 
   Future<ApiResult<GateStats>> gateStats(String eventId);
   /// Raw offline list (see OfflineGate).
@@ -327,6 +329,10 @@ class HttpVendorApi implements VendorApi {
         return Paged([for (final n in (m['items'] as List? ?? const [])) StaffNotification.fromJson(n as Map)],
             page: (m['page'] as num?)?.toInt() ?? 1, total: (m['total'] as num?)?.toInt() ?? 0);
       });
+
+  @override
+  Future<ApiResult<TestCode>> testCode(String phone) async =>
+      (await _api.request('api/admin/test-code', query: {'phone': phone})).map((d) => TestCode.fromJson(d as Map));
 
   @override
   Future<ApiResult<void>> markNotificationsRead() => _void('api/notifications/mark-as-read', Method.post, {});

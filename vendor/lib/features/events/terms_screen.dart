@@ -10,6 +10,7 @@ import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
 import 'boost_screen.dart';
+import 'test_codes_screen.dart';
 import 'cities_screen.dart';
 import 'fee_settings_screen.dart';
 
@@ -377,6 +378,13 @@ class _CompRequestsRowState extends State<CompRequestsRow> {
           title: 'Server Boost',
           subtitle: 'Automatic the night before events and sales',
           onTap: () => Get.to(() => const BoostScreen()),
+        ),
+        GroupRow(
+          key: const Key('test-codes'),
+          icon: CupertinoIcons.lock_shield,
+          title: 'Test Sign-in Codes',
+          subtitle: 'The code each number signs in with while testing',
+          onTap: () => Get.to(() => const TestCodesScreen()),
         ),
         GroupRow(
           key: const Key('cities'),

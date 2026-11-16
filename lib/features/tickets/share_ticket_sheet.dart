@@ -144,7 +144,16 @@ class _ShareSheetState extends State<ShareSheet> {
     final who = names.length == 1 ? names.first : '${names.first} and ${names.length - 1} more';
     final waiting = [for (var i = 0; i < to.length; i++) if (!res.shares[i].delivered) to[i]];
     // GatePass already WhatsApps everyone it can; only offer "Tell Them" for the rest.
-    final untold = [for (var i = 0; i < to.length; i++) if (!res.shares[i].delivered && !res.shares[i].whatsapp) to[i]];
+    final untoldIx = [for (var i = 0; i < to.length; i++) if (!res.shares[i].delivered && !res.shares[i].whatsapp) i];
+    final untold = [for (final i in untoldIx) to[i]];
+    // Their own link: a page with the tickets (blurred) that opens the app to claim them.
+    final links = [for (final i in untoldIx) if (res.shares[i].openUrl != null) (to[i].label, res.shares[i].openUrl!)];
+    final tellText = links.isEmpty
+        ? 'I sent you tickets for $event on GatePass 🎟️ Get the GatePass app and sign in with this number to see them.'
+        : links.length == 1
+            ? 'I sent you tickets for $event on GatePass 🎟️ Open this, get the app, sign in with this number and tap Claim: ${links.first.$2}'
+            : 'I sent you tickets for $event on GatePass 🎟️ Open your link, get the app, sign in with your number and tap Claim:\n'
+                '${links.map((l) => '${l.$1}: ${l.$2}').join('\n')}';
     if (overlay != null && overlay.mounted) {
       await showSuccess(
         overlay,
@@ -166,9 +175,7 @@ class _ShareSheetState extends State<ShareSheet> {
         '${untold.map((p) => p.label).join(', ')} ${untold.length == 1 ? 'isn’t' : 'aren’t'} on GatePass yet.',
         duration: const Duration(seconds: 6),
         mainButton: TextButton(
-          onPressed: () => SharePlus.instance.share(ShareParams(
-            text: 'I sent you tickets for $event on GatePass 🎟️ Get the GatePass app and sign in with this number to see them.',
-          )),
+          onPressed: () => SharePlus.instance.share(ShareParams(text: tellText)),
           child: const Text('Tell Them'),
         ),
       );

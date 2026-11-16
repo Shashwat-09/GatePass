@@ -1,16 +1,28 @@
-*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:#FAF6ED;color:#1D1A15}
-main{max-width:440px;margin:0 auto;padding:24px 18px}
-.brand{font:600 24px/1 Georgia,"Times New Roman",serif;color:#0B4E56;margin-bottom:16px;letter-spacing:-.2px}
-.card{background:#fff;border-radius:18px;padding:20px;box-shadow:0 4px 18px #1d1a1510}
-.card h1{font:600 22px/1.2 Georgia,"Times New Roman",serif;margin:.1em 0 .4em}
-.hero{background:#0B4E56;color:#fff;border-radius:18px 18px 0 0;margin:-20px -20px 16px;padding:18px 20px;
-  background-image:repeating-linear-gradient(45deg,#ffffff14 0 1px,transparent 1px 22px),repeating-linear-gradient(-45deg,#ffffff14 0 1px,transparent 1px 22px)}
-.hero .eyebrow{color:#F1C36D;font-weight:700;font-size:12px;letter-spacing:1.4px;text-transform:uppercase}
-.hero h1{color:#fff;margin:.3em 0 0}
-.muted{color:#696258}.small{font-size:14px}
-.btn{display:block;text-align:center;margin:18px 0 10px;padding:15px;border-radius:14px;background:#0B4E56;color:#fff;font-weight:700;text-decoration:none}
-.btn.secondary{background:#DDEBE9;color:#0B4E56;margin-top:0}
-.code{text-align:center;font:600 20px/1 ui-monospace,monospace;letter-spacing:3px;background:#fff;border:1px dashed #0B4E56;border-radius:10px;padding:12px}
-.pill{display:inline-block;padding:3px 10px;border-radius:99px;background:#FBE9CF;color:#965404;font-weight:700;font-size:13px}
-@media (prefers-color-scheme:dark){body{background:#0E1513;color:#F6F0E4}.card,.code{background:#18211F}.muted{color:#B9B0A2}
-  .brand{color:#6CC6C0}.btn{background:#0F6670}.btn.secondary{background:#173A3B;color:#6CC6C0}}
+/* GatePass link pages: same white Liquid Glass look as the apps (one violet accent). */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;font:16px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0B0B0F;
+  background:#F2F2F7 radial-gradient(1200px 600px at 80% -10%,#5B3DF51A,transparent 60%)}
+main{max-width:430px;margin:0 auto;padding:28px 18px 40px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;letter-spacing:-.2px;margin-bottom:18px}
+.brand i{width:28px;height:28px;border-radius:9px;background:#5B3DF5;display:inline-grid;place-items:center;color:#fff;font-style:normal;font-size:15px}
+.card{background:rgba(255,255,255,.78);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.9);
+  border-radius:26px;padding:22px;box-shadow:0 10px 30px rgba(20,20,40,.08)}
+.eyebrow{color:#5B3DF5;font-weight:600;font-size:13px;letter-spacing:.2px}
+h1{font-size:24px;line-height:1.2;letter-spacing:-.4px;margin:.25em 0 .35em}
+.muted{color:#6C6C76}.small{font-size:14px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #0B0B0F12}
+.row b{font-weight:600}
+.qr{position:relative;margin:18px auto 6px;width:200px;height:200px;border-radius:18px;background:#fff;overflow:hidden;box-shadow:inset 0 0 0 1px #0B0B0F10}
+.qr .grid{position:absolute;inset:14px;display:grid;grid-template-columns:repeat(21,1fr);filter:blur(7px);opacity:.9}
+.qr .grid span{aspect-ratio:1}
+.qr .grid span.on{background:#0B0B0F}
+.qr .lock{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-weight:600;font-size:14px;color:#0B0B0F}
+.qr .lock div{background:rgba(255,255,255,.85);padding:8px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(20,20,40,.12)}
+.btn{display:block;text-align:center;margin:18px 0 10px;padding:16px;border-radius:99px;background:#5B3DF5;color:#fff;font-weight:600;
+  text-decoration:none;box-shadow:0 8px 20px #5B3DF540}
+.btn.secondary{background:rgba(255,255,255,.85);color:#5B3DF5;box-shadow:inset 0 0 0 1px #5B3DF533;margin-top:0}
+.pill{display:inline-block;padding:4px 12px;border-radius:99px;background:#FFF1DE;color:#9A5B00;font-weight:600;font-size:13px}
+.steps{margin:16px 4px 0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;position:relative;padding-left:32px;margin:10px 0;color:#3A3A44;font-size:15px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:50%;background:#5B3DF51A;color:#5B3DF5;font-weight:700;font-size:13px;display:grid;place-items:center}

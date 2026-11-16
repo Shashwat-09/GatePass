@@ -7,6 +7,7 @@ import 'package:gatepass_organiser/app/app.dart';
 import 'package:gatepass_organiser/features/events/event_form_screen.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
 import 'package:gatepass_organiser/features/events/events_screen.dart';
+import 'package:gatepass_organiser/features/events/test_codes_screen.dart';
 import 'package:gatepass_organiser/main.dart' show configureOrganiserShell;
 import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_staff/data/demo_api.dart';
@@ -250,5 +251,18 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
     expect(find.text('Change approved'), findsOneWidget);
     expect(find.text('3 ticket requests'), findsOneWidget);
+  });
+
+  testWidgets('admin looks up a test sign-in code', (t) async {
+    await boot(t, const TestCodesScreen(), role: Role.admin);
+    await t.enterText(find.byKey(const Key('tc-phone')), '9000000001');
+    await t.tap(find.byKey(const Key('tc-look')));
+    await t.pumpAndSettle();
+    expect(find.text('480215'), findsOneWidget);
+    expect(find.text('Their own code (admin, organiser or distributor)'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('tc-phone')), '9876543210');
+    await t.tap(find.byKey(const Key('tc-look')));
+    await t.pumpAndSettle();
+    expect(find.text('The shared test code'), findsOneWidget);
   });
 }

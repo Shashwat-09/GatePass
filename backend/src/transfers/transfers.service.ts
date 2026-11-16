@@ -147,6 +147,8 @@ export class TransfersService {
         ...this.viewOf(tr, out.t, to, userId),
         code,
         shareUrl: code ? shareUrl(code) : null,
+        /** Sent to a number: the page that shows them blurred and opens the app (for "Tell Them"). */
+        openUrl: tr.toPhone ? `${config().publicBaseUrl}r/${tr.id}` : null,
         delivered: !!to,
         /** A WhatsApp message is on its way to them. */
         whatsapp: !!tr.toPhone && config().whatsapp.driver !== 'none',

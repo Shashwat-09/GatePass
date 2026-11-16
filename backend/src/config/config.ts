@@ -2,6 +2,10 @@ import 'dotenv/config';
 import { createPrivateKey, createPublicKey, generateKeyPairSync, KeyObject, randomBytes } from 'crypto';
 import { Logger } from '@nestjs/common';
 
+/** Roles BOOTSTRAP_ROLES can give. `seller` = a B2B seller under the first BOOTSTRAP_ADMINS number (the distributor). */
+export const BOOTSTRAP_ROLES = ['organiser', 'staff', 'seller', 'distributor'] as const;
+export type BootstrapRole = (typeof BOOTSTRAP_ROLES)[number];
+
 /**
  * Typed, validated configuration. Loaded once from process.env.
  *
@@ -43,12 +47,16 @@ export interface AppConfig {
   devOtp: string | null;
   /**
    * Closed testing on a real server before SMS and payment accounts exist
-   * (TEST_MODE=true): only TEST_PHONES can sign in, with DEV_OTP; payments are
-   * the mock gateway (no money moves). Never for the public launch.
+   * (TEST_MODE=true): only TEST_PHONES can sign in (`*` = any number), with
+   * DEV_OTP; admins, organisers and distributors get their own code instead
+   * (auth/test-codes.ts). Payments are the mock gateway (no money moves).
+   * Never for the public launch.
    */
-  testMode: { on: boolean; phones: string[] };
+  testMode: { on: boolean; phones: string[]; open: boolean };
   /** Numbers made admin + distributor on boot (BOOTSTRAP_ADMINS). */
   bootstrapAdmins: string[];
+  /** BOOTSTRAP_ROLES=phone:organiser,phone:seller… — roles given on boot (only ever added). */
+  bootstrapRoles: { phone: string; role: BootstrapRole }[];
   sms: {
     provider: SmsProvider;
     msg91AuthKey?: string;
@@ -263,10 +271,15 @@ export function loadConfig(): AppConfig {
     accessTtlSec: num('JWT_ACCESS_TTL', 900),
     refreshTtlSec: num('JWT_REFRESH_TTL', 2_592_000),
     devOtp: null,
+    bootstrapRoles: (str('BOOTSTRAP_ROLES', '') ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => {
+      const [p, r] = x.split(':');
+      return { phone: (p ?? '').replace(/\D/g, '').slice(-10), role: (r ?? '').trim().toLowerCase() as BootstrapRole };
+    }).filter((x) => /^[6-9]\d{9}$/.test(x.phone) && BOOTSTRAP_ROLES.includes(x.role)),
     bootstrapAdmins: (str('BOOTSTRAP_ADMINS', '') ?? '').split(',').map((x) => x.replace(/\D/g, '').slice(-10)).filter((x) => /^[6-9]\d{9}$/.test(x)),
     testMode: {
       on: bool('TEST_MODE', false),
       phones: (str('TEST_PHONES', '') ?? '').split(',').map((x) => x.replace(/\D/g, '').slice(-10)).filter((x) => /^[6-9]\d{9}$/.test(x)),
+      open: (str('TEST_PHONES', '') ?? '').split(',').some((x) => x.trim() === '*'),
     },
     sms: {
       provider: smsProvider,
@@ -362,7 +375,7 @@ export function loadConfig(): AppConfig {
     errors.push('SMS_PROVIDER must be one of console|msg91|twilio');
   }
   const testing = isProd && cfg.testMode.on;
-  if (testing && !cfg.testMode.phones.length) errors.push('TEST_MODE needs TEST_PHONES (the invited testers’ numbers)');
+  if (testing && !cfg.testMode.phones.length && !cfg.testMode.open) errors.push('TEST_MODE needs TEST_PHONES (the invited testers’ numbers, or * for anyone)');
   if (isProd && !testing && cfg.sms.provider === 'console') errors.push('SMS_PROVIDER=console is not allowed in production');
   if (cfg.sms.provider === 'msg91' && (!cfg.sms.msg91AuthKey || !cfg.sms.msg91TemplateId)) {
     errors.push('MSG91_AUTH_KEY and MSG91_TEMPLATE_ID are required for SMS_PROVIDER=msg91');
