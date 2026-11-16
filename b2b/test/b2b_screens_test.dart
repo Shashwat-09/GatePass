@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass_b2b/app/app.dart';
 import 'package:gatepass_staff/app/session.dart';
@@ -190,4 +191,25 @@ void main() {
     expect(find.byKey(const Key('utr')), findsOneWidget);
   });
 
+
+  testWidgets('the owner adds a Sell tab for themselves, and has an inbox', (t) async {
+    await boot(t, const B2bHome());
+    expect(find.text('Distribute'), findsWidgets);
+    expect(find.byIcon(CupertinoIcons.cart), findsNothing);
+    await t.scrollUntilVisible(find.byKey(const Key('sell-yourself')), 200, scrollable: find.byType(Scrollable).first);
+    await t.tap(find.byKey(const Key('sell-yourself')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('sell-yourself-ok')));
+    await t.pumpAndSettle();
+    expect(find.text('Sell Tab Added'), findsOneWidget);
+    await t.pump(const Duration(seconds: 3));
+    await t.pumpAndSettle();
+    expect(find.byIcon(CupertinoIcons.cart), findsOneWidget); // the tab bar now has Sell
+    expect(find.byKey(const Key('sell-yourself')), findsNothing);
+    expect((await api.sellers()).data!.where((s) => s.phone == '9000000001' && s.trusted), hasLength(1));
+    await t.scrollUntilVisible(find.byKey(const Key('inbox')), -200, scrollable: find.byType(Scrollable).first);
+    await t.tap(find.byKey(const Key('inbox')).first);
+    await t.pumpAndSettle();
+    expect(find.text('Inbox'), findsOneWidget);
+  });
 }

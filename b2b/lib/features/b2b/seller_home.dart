@@ -13,6 +13,7 @@ import '../../core/razorpay_checkout.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_staff/features/account/account_screen.dart';
+import 'package:gatepass_staff/features/notifications/notifications_screen.dart';
 
 /// B2B seller: events they can sell at their price, and their orders.
 class SellerHome extends StatefulWidget {
@@ -100,6 +101,7 @@ class _SellerHomeState extends State<SellerHome> {
       backgroundColor: c.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Sell', background: c.groupedCanvas, actions: [
+          IconButton(key: const Key('inbox'), tooltip: 'Inbox', icon: Icon(CupertinoIcons.bell, color: c.tint), onPressed: () => Get.to(() => const NotificationsScreen())),
           IconButton(tooltip: 'Account', icon: Icon(CupertinoIcons.person_crop_circle, color: c.tint), onPressed: () => Get.to(() => const AccountScreen())),
         ]),
         CupertinoSliverRefreshControl(onRefresh: _load),

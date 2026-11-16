@@ -177,7 +177,8 @@ class DemoVendorApi implements VendorApi {
       ? Me(id: 'demo-team', name: 'Demo ${TeamMember.roleLabel(job!)}', phone: phone, role: Role.customer,
           team: TeamRoles(events: 1, eventAdmin: job == 'event_admin' ? 1 : 0, seller: job == 'seller' ? 1 : 0, scanner: job == 'scanner' ? 1 : 0))
       : switch (role) {
-        Role.admin => Me(id: 'demo', name: 'Demo Admin', phone: phone, role: Role.admin, roles: const [Role.admin, Role.distributor]),
+        Role.admin => Me(id: 'demo', name: 'Demo Admin', phone: phone, role: Role.admin,
+            roles: [Role.admin, Role.distributor, if (_sellers.any((x) => x.phone == phone)) Role.reseller]),
         Role.reseller => const Me(id: _s1, name: 'Ravi Tickets', phone: '9811100001', role: Role.reseller),
         Role.staff => Me(id: 'demo', name: 'Demo Gate Staff', phone: phone, role: Role.staff),
         _ => Me(id: 'demo', name: 'Demo Organiser', phone: phone, role: role),

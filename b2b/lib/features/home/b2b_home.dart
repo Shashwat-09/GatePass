@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:gatepass_staff/app/session.dart';
+import 'package:gatepass_staff/data/models.dart';
+import 'package:get/get.dart';
 import 'package:gatepass_ui/theme.dart';
 
 import '../b2b/distributor_home.dart';
@@ -18,8 +20,9 @@ class _B2bHomeState extends State<B2bHome> {
   late int _i = widget.initial;
 
   @override
-  Widget build(BuildContext context) {
-    final me = Session.to.me.value!;
+  Widget build(BuildContext context) => Obx(() => _build(context, Session.to.me.value!));
+
+  Widget _build(BuildContext context, Me me) {
     final tabs = <(IconData, IconData, String, Widget)>[
       if (me.isDistributor) (CupertinoIcons.arrow_branch, CupertinoIcons.arrow_branch, 'Distribute', const DistributorHome()),
       if (me.isSeller) (CupertinoIcons.cart, CupertinoIcons.cart_fill, 'Sell', const SellerHome()),

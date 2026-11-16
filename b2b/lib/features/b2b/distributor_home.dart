@@ -13,6 +13,7 @@ import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
 import 'package:gatepass_staff/features/account/account_screen.dart';
+import 'package:gatepass_staff/features/notifications/notifications_screen.dart';
 
 /// The distributor's desk: orders waiting for a confirm, B2B events and
 /// prices, sellers, the books. Only the distributor sees margins.
@@ -59,6 +60,38 @@ class _DistributorHomeState extends State<DistributorHome> {
     _load();
   }
 
+  /// The distributor sells too: adds their own number as a trusted seller,
+  /// which brings the Sell tab (buy at their own seller price, send tickets).
+  Future<void> _sellYourself() async {
+    final me = Session.to.me.value!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sell Tickets Yourself?'),
+        content: const Text('Your number becomes one of your sellers, so you get a Sell tab to send tickets to customers. '
+            'You pay your own seller price (set it to the organiser rate to keep no margin), and orders show in Your Books.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(key: const Key('sell-yourself-ok'), onPressed: () => Navigator.pop(ctx, true), child: const Text('Add Sell Tab')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final api = Session.to.api;
+    final r = await api.addSeller(me.phone, me.name, true);
+    if (!mounted) return;
+    if (!r.isOk) {
+      Delight.error();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.error!)));
+      return;
+    }
+    final fresh = await api.me();
+    if (!mounted) return;
+    await showSuccess(context, title: 'Sell Tab Added', message: 'Switch to Sell at the bottom to send tickets.');
+    if (fresh.isOk) Session.to.me.value = fresh.data;
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -89,7 +122,10 @@ class _DistributorHomeState extends State<DistributorHome> {
         ]),
         InsetGroup(
           header: 'B2B events',
-          footer: _events.isEmpty ? 'Events appear here when their organiser allows B2B selling.' : 'Set what your sellers pay. Changes apply to new orders.',
+          footer: _events.isEmpty
+              ? 'Events appear here when B2B selling is switched on for them, with a trade rate per ticket type '
+                  '(GatePass Organiser app › the event › B2B selling).'
+              : 'Set what your sellers pay. Changes apply to new orders.',
           children: [
             for (final e in _events)
               GroupRow(
@@ -106,6 +142,16 @@ class _DistributorHomeState extends State<DistributorHome> {
           GroupRow(icon: CupertinoIcons.clock, title: 'Price History', onTap: () => _open(const PriceHistoryScreen())),
           GroupRow(icon: CupertinoIcons.qrcode, title: 'Payment Details', value: _profile?.upiId ?? 'Not set', onTap: () => _open(const PaymentDetailsScreen())),
         ]),
+        if (!(Session.to.me.value?.isSeller ?? true))
+          InsetGroup(children: [
+            GroupRow(
+              key: const Key('sell-yourself'),
+              icon: CupertinoIcons.cart_badge_plus,
+              title: 'Sell Tickets Yourself',
+              subtitle: 'Adds a Sell tab for you',
+              onTap: _sellYourself,
+            ),
+          ]),
         const SizedBox(height: AppSpacing.xl),
       ]);
     }
@@ -113,6 +159,7 @@ class _DistributorHomeState extends State<DistributorHome> {
       backgroundColor: c.groupedCanvas,
       body: CustomScrollView(slivers: [
         largeTitleBar(context, 'Distribute', background: c.groupedCanvas, actions: [
+          IconButton(key: const Key('inbox'), tooltip: 'Inbox', icon: Icon(CupertinoIcons.bell, color: c.tint), onPressed: () => Get.to(() => const NotificationsScreen())),
           IconButton(tooltip: 'Account', icon: Icon(CupertinoIcons.person_crop_circle, color: c.tint), onPressed: () => Get.to(() => const AccountScreen())),
         ]),
         CupertinoSliverRefreshControl(onRefresh: _load),
