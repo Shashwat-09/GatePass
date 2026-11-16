@@ -406,3 +406,13 @@ Admin fee settings (`api/admin/settings/fees`); per-event `feePct` / `feePaidBy`
 **Load-test kit** (`loadtest/README.md`). Test mode only (`TEST_MODE` or not production) and only with the `x-jobs-secret` header: `POST internal/loadtest/seed {users, scanners, rush}` (test event `loadtest-arena`, accounts 60000xxxxx / 60001xxxxx with tokens), `POST internal/loadtest/tickets {from, count}`, `POST internal/loadtest/boost {mode, hours}`, `POST internal/loadtest/boost-status`, `POST internal/loadtest/cleanup`.
 
 **Push route** `open/<id>`: the app opens the ticket or, while waiting, the claim card.
+
+## 8.28 As built (v0.17) — event tools for the Organiser app
+
+Everything the web console did, for GatePass admins, organisers and **event admins** (checked per event with `eventAs(…, 'manage')`; sellers and scanners get 403):
+- `POST organiser/media` (multipart `file`, JPEG/PNG/WebP ≤ 5 MB, bytes checked against the type, 60 an hour) → `{ id, url }`; `url` is public: `GET media/:id` (cached for a year). Put it in `cardImageUrl` / `bannerUrl`.
+- `GET|POST organiser/events/:id/forms`, `PUT organiser/forms/:formId` (edits bump `version`) — registration forms `{ title, description, scope: booking|attendee, ticketIds?, fields: FormField[], isActive }`.
+- `GET organiser/events/:id/form-responses?page&limit` → paged `{ id, formTitle, attendee, answers, labels, createdAt }` (file answers are signed links).
+- `GET organiser/events/:id/survey` → `{ survey: {title, mode, fields, redirectUrl, isActive, …} | null, answered }`; set it up with `PUT admin/events/:id/survey`, answers at `GET admin/events/:id/survey-responses`.
+- `GET|POST organiser/events/:id/promos`, `PUT organiser/promos/:promoId {isActive?, usageLimit?, endsAt?}` — `{ code (3–20 letters/numbers, unique), type: percentage|fixed, value, tierIds?, maxDiscountPaise?, minTickets?, usageLimit?, usageLimitPerUser?, startsAt?, endsAt?, isPublic? }`; the list adds `used`.
+- Also open to event admins now: `admin/events/:id/attribution` (where buyers came from), `admin/events/:id/export.xlsx`, `admin/approval-requests?eventId=` (+ approve / reject).

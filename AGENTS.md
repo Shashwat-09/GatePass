@@ -81,7 +81,7 @@ One module per domain under `backend/src/` (auth, users, cities, events, booking
 ## 8. Definition of done (per task)
 Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/tests pass, 4 UI states present, no trusted client price, no hardcoded secret, light+dark render.
 
-## 9. Current status (v0.16)
+## 9. Current status (v0.17)
 - ✅ Builds: `flutter analyze` clean; debug + release APKs build (release arm64 21.5 MB, R8 on); `android/` and `ios/` committed (app id `com.gatepass.app`).
 - ✅ Payments: Razorpay order → client SDK → server verifies signature + fetches payment (amount/order/status) → tickets. Signed webhook as source of truth. Or YouPI (self-hosted UPI, docs/15). Mock gateway is dev-only (refused in production).
 - ✅ Stock: tier rows locked `FOR UPDATE`, `reserved` stock for pending bookings with expiry sweeper; seats are unique rows (`seat_reservations`) — no overselling or double-booked seats (concurrency-tested).
@@ -130,7 +130,8 @@ Matches `docs/07-MVP.md §7.4` acceptance criteria + §7.5 cross-cutting: lint/t
 - ✅ v0.15: **GatePass B2B** split out as its own app (`b2b/`, com.gatepass.b2b).
 - ✅ Hosting: live on Google Cloud (Cloud Run asia-south1, test mode).
 - ✅ v0.16: **event boost**: bigger database + warm app copies from 8 PM the night before event days and ticket-sale openings, admin Boost Now (Organiser app › Events › Server Boost); **"Tickets go live"** date + Notify Me in the customer app; **load-test kit** (`loadtest/`, k6 on GitHub Actions). iOS builds now run only on request (`.github/ios-build.txt`).
-- ⬜ Next: email delivery for B2B tickets, payouts, seat-map editor in the console, iOS build (see docs/10 for what remains).
+- ✅ v0.17: **Organiser + B2B apps match the customer app** (white Liquid Glass) and **everything is in the app** (no web console): poster/banner upload from the phone (`api/organiser/media`), full event details (language, programme, terms, sales close, sharing, web-only), ticket type editor, shows, registration forms + answers, survey, promo codes, where-buyers-came-from report, inbox; event admins can use them (docs/12). B2B: Sell Tickets Yourself, inbox.
+- ⬜ Next: email delivery for B2B tickets, payouts, seat-map editor in the app, iOS build (see docs/10 for what remains).
 - 🚫 Out of scope (owner decision): movies / theatre ticketing — GatePass is events only (`docs/09` #14).
 - ⬜ iOS: builds in CI (unsigned); still needs an Apple Developer account for TestFlight and a test on a real iPhone.
 

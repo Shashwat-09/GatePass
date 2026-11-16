@@ -1,6 +1,6 @@
 # 12. GatePass Organiser — the event app (Android + iOS)
 
-A native Flutter app for **GatePass admins**, **organisers** and **event teams** (event admins, ticket sellers, gate scanners), in `vendor/` (package `gatepass_organiser`, app id `com.gatepass.organiser`). B2B selling (distributor and sellers) is a **separate app**, GatePass B2B in `b2b/` (docs/14 §6). Both share sign-in, account and data code through `packages/gatepass_staff`. Seat maps and extra shows still live in the `/organiser` web console.
+A native Flutter app for **GatePass admins**, **organisers** and **event teams** (event admins, ticket sellers, gate scanners), in `vendor/` (package `gatepass_organiser`, app id `com.gatepass.organiser`). B2B selling (distributor and sellers) is a **separate app**, GatePass B2B in `b2b/` (docs/14 §6). Both share sign-in, account and data code through `packages/gatepass_staff`, and both use the customer app's look: white **Liquid Glass** (`GlassTheme`, glass tab bar, one violet accent). Everything an event needs is in the app; nobody has to open the `/organiser` web console (it still works, for seat maps).
 
 ## Who sees what
 Each person sees only their job on each event (server: `common/event-access.ts`).
@@ -8,12 +8,22 @@ Each person sees only their job on each event (server: `common/event-access.ts`)
 | | GatePass admin | Organiser / event admin | Ticket seller | Gate scanner (and gate staff) |
 |---|---|---|---|---|
 | Events list | Every event; **+ New Event** | Events they own or were made event admin of; organisers can add drafts | Events they sell for | Events they scan (staff: all live) |
-| Event screen | Everything, applied at once | Sales, check-in, ticket types (+ Add), **Team**, **Edit Details**, status, comps, B2B switch and rates, booking fee, settlement, report | **Issue Tickets** (comp / box office) and tickets left | **Scan Tickets** and check-in count |
+| Event screen | Everything, applied at once | Sales, check-in, ticket types (add and edit), **Shows**, **Registration Forms**, **Promo Codes**, **Survey**, **Team**, **Edit Details**, status, comps, B2B switch and rates, booking fee, settlement, where buyers came from, report | **Issue Tickets** (comp / box office) and tickets left | **Scan Tickets** and check-in count |
 | Approvals tab | Changes waiting: before → after, Approve / Decline with a note | "N changes waiting for GatePass" on the event; withdraw | | |
 
 **Approval rules.** On a published event, an organiser's or event admin's change to the main details (title, dates, venue, city, poster, about, programme…), a status change (publish, postpone, cancel) or a show added or changed waits for GatePass. Customers see it once an admin approves. Drafts can be edited freely (publishing still needs approval). Ticket types, the team and switches apply at once. Admins' own edits apply at once.
 
 **Server Boost (admins).** Events › Server Boost shows whether the server is boosted and why, the automatic schedule (from 8 PM the night before each event day and each ticket-sale opening), and Boost Now for 6 or 24 hours. Each resize restarts the database once (about a minute), so boost before a rush, not during it. The event form's **Ticket sales › Sales open** sets when tickets go live; customers see the date, a countdown and Notify Me until then.
+
+**Event tools (v0.17).** All in the app, for admins, organisers and event admins (sellers and scanners don't see them):
+- **Edit Details**: title, genre, language, dates, sales open and close, city, venue, map link, poster and banner **uploaded from the phone** (JPEG/PNG/WebP ≤ 5 MB → `POST api/organiser/media`, served from `api/media/:id`), about, ticket notes, terms, programme (time · title · details), age limit, tickets per person, ticket sharing on/off, and web-only events with an outside booking link.
+- **Ticket types**: tap one to edit price, quantity (not below sold), section, what's included, least per order, most per person, entries per ticket, which show, single / season pass / bundle (dates, nights), request-to-book (with most requests per person), list position, on sale.
+- **Shows**: more dates, times or venues; on a published event they go to GatePass for approval.
+- **Registration forms**: question builder (short/long answer, number, email, phone, pick one, tick boxes, date, file), asked once per order or per ticket; **Answers** with file links.
+- **Promo codes**: % or ₹ off, cap, total and per-person uses, least tickets, end date, ticket types, public or private; switch off any time.
+- **Survey**: questions in the app or a link (e.g. Google Forms); answers.
+- **Where buyers came from**: clicks, orders, tickets and revenue per source (`utm_*`, `ref`).
+- **Inbox** (bell on Events): approvals, change decisions, requests.
 
 **Team.** Admins and event admins add people by phone number as Event Admin, Ticket Seller or Gate Scanner, change their job or remove them, any time and without approval. A number new to GatePass gets an account; they sign in with it.
 
@@ -48,7 +58,7 @@ cd vendor
 flutter pub get
 flutter run --dart-define=BASE_URL=http://10.0.2.2:4000/          # Android emulator → local API
 flutter run --dart-define=USE_MOCK=true                            # demo data
-flutter analyze && flutter test                                    # 42 tests (gate rules, sync, API client, screens, roles, approvals, light/dark)
+flutter analyze && flutter test                                    # 53 tests (gate rules, sync, API client, screens, roles, approvals, event tools)
 flutter test test/shots --dart-define=SHOTS=true                   # screenshots → build/shots/
 flutter test test/live --dart-define=LIVE_API=true --dart-define=BASE_URL=http://localhost:4000/   # needs: 9000000071 + 9000000072 organiser, 9000000081 admin distributor
 flutter build apk --release --split-per-abi --dart-define=BASE_URL=https://api.yourdomain.com/
@@ -59,13 +69,12 @@ Admins are set by `BOOTSTRAP_ADMINS` (Cloud Run) or `npm run user:role -- <phone
 ```
 vendor/lib/
   gate/      offline_validator, gate_controller
-  features/  home (Events + Approvals), events (list, event, new/edit form, team, changes, terms, settlement, fees, cities), scan, approvals (ticket requests), issue
-packages/gatepass_staff/ shared with GatePass B2B: api_client, token_store, config, format, models, vendor_api, demo_api, gate qr/store, sign-in, account, StaffShell
-packages/gatepass_ui/    design system (the staff apps use its Utsav theme)
+  features/  home (Events + Approvals), events (list, event, new/edit form, ticket type editor, shows, forms, survey, promos, traffic, team, changes, terms, settlement, fees, cities, boost), scan, approvals (ticket requests), issue
+packages/gatepass_staff/ shared with GatePass B2B: api_client (incl. uploads), token_store, config, format, pick_image, models, vendor_api, demo_api, gate qr/store, sign-in, account, inbox, StaffShell
+packages/gatepass_ui/    design system (all three apps use its Liquid Glass theme)
 ```
 
 ## Not in the app (yet)
 - Push notifications for organisers: needs its own Firebase app.
 - Payouts: the settlement shows who owes whom; the money still moves outside the app.
-- Seat maps, extra shows and registration forms: the web console.
-- Poster upload: paste an https image link for now.
+- Drawing seat maps: the web console (existing seat maps work in the app and at the gate).
