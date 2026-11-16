@@ -303,6 +303,11 @@ class _BuyScreenState extends State<BuyScreen> {
               plusKey: Key('r$i-inc'),
               onMinus: r.qty > 1 ? () => setState(() => r.qty--) : null,
               onPlus: _qty < widget.tier.available ? () => setState(() => r.qty++) : null,
+              valueKey: Key('r$i-qty'),
+              onValueTap: () async {
+                final n = await askQuantity(context, title: 'Tickets for this number', max: widget.tier.available - (_qty - r.qty), current: r.qty);
+                if (n != null) setState(() => r.qty = n);
+              },
             ),
           ]),
         ),

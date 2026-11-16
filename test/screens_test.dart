@@ -305,7 +305,7 @@ void main() {
     });
     await t.pumpWidget(app(SelectTicketScreen(event: ev)));
     await t.pumpAndSettle();
-    for (final text in ['STANDING', 'VIP LOUNGE', 'Early bird', '₹999', 'Buy 3 get 1 free', 'Lounge access', 'Only 3 left', 'Max 2 per person']) {
+    for (final text in ['STANDING', 'VIP LOUNGE', 'Early bird', '₹999', 'Buy 3 get 1 free', 'Lounge access', 'Only 3 left', 'Tap a number to type how many you need.']) {
       expect(find.text(text), findsWidgets, reason: text);
     }
     final c = Get.find<BookingController>();
@@ -313,7 +313,15 @@ void main() {
     c.inc(vip);
     c.inc(vip);
     c.inc(vip);
-    expect(c.qtyFor(vip.id), 2); // per-person cap
+    expect(c.qtyFor(vip.id), 3); // no per-person cap: all 3 that are left
+    // Big orders: tap the number and type it.
+    await t.tap(find.byKey(const Key('qty-a')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('qty-input')), '25');
+    await t.tap(find.byKey(const Key('qty-done')));
+    await t.pumpAndSettle();
+    expect(c.qtyFor('a'), 25);
+    expect(find.text('25'), findsOneWidget);
   });
 
   testWidgets('Multi-show event: venue → date → time, then only that show\'s ticket types; season passes', (t) async {

@@ -134,7 +134,7 @@ Request (MVP, GA):
 ```json
 { "eventId": "uuid", "eventDateId": "uuid|null", "items": [ { "tierId": "uuid", "qty": 2 } ] }
 ```
-Server MUST: validate event live; re-read tier price + remaining; enforce `minQty`, `maxPerUser` (count user's existing tickets for event), `maxSeatsPerBooking`; compute `base = Σ pricePaise*qty`, `fee`, `tax`, `total`; create `pending` booking; create gateway order.
+Server MUST: validate event live; re-read tier price + remaining; enforce `minQty` and stock (no per-person limit since v0.17, docs/09 #17); compute `base = Σ pricePaise*qty`, `fee`, `tax`, `total`; create `pending` booking; create gateway order.
 Response 200:
 ```json
 { "success": true, "data": {
@@ -144,7 +144,7 @@ Response 200:
   "expiresAt": "2025-07-01T12:20:00Z"
 } }
 ```
-Errors: `SOLD_OUT` 409; `maxPerUser` exceeded → 422 `VALIDATION_ERROR` `{ "fields": { "qty": "Limit 6 per user" } }`.
+Errors: `SOLD_OUT` 409 ("Only N left"). There is no per-person limit (v0.17).
 **Never** read price/fee/total from the request.
 
 ### POST `api/payment/process-order`
@@ -200,7 +200,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - `PUT api/user`: `name` 2–80 chars, valid `email`, `dob` real date with age ≥ 13, `gender ∈ female|male|other|prefer_not`, `cityId` must exist.
 
 **Booking + payment**
-- `POST api/payment/book-ticket`: GA events take `{tierId, qty}` items; seated events take `{sectionId,row,col}` / standing `{sectionId,qty}` items (see §8.16). Stock is reserved for `BOOKING_HOLD_SECONDS` (default 600) and returned automatically when the hold lapses. `promoCode` → `400` (not offered yet). `Idempotency-Key` replays the same pending quote. Per-user limit counts owned tickets **and** live pending bookings. ≤20 checkouts/min per user. Response adds `currency`; `gateway` is `razorpay` or `mock` (dev); `gatewayToken` is the public Razorpay key id. Booking codes look like `GP-7KQ2M9XA`.
+- `POST api/payment/book-ticket`: GA events take `{tierId, qty}` items; seated events take `{sectionId,row,col}` / standing `{sectionId,qty}` items (see §8.16). Stock is reserved for `BOOKING_HOLD_SECONDS` (default 600) and returned automatically when the hold lapses. `promoCode` → `400` (not offered yet). `Idempotency-Key` replays the same pending quote. No per-person limit (v0.17); stock is the only cap. ≤20 checkouts/min per user. Response adds `currency`; `gateway` is `razorpay` or `mock` (dev); `gatewayToken` is the public Razorpay key id. Booking codes look like `GP-7KQ2M9XA`.
 - `POST api/payment/process-order` `gatewayPayload` for Razorpay = the SDK success object `{razorpay_payment_id, razorpay_order_id, razorpay_signature}`. The server checks the signature, then fetches the payment and requires `captured` (captures `authorized` payments), the exact amount, INR and the same order. Failure → `422 PAYMENT_FAILED` and the booking is failed/stock released. If the hold had lapsed and the stock is gone the payment is refunded (`422`, booking `refunded`). Response tickets add `tierName, seatLabel, quantity, eventTitle, venueName, startDate, status`; `invoiceUrl` is a signed link.
 - `POST api/payment/cancel` `{bookingId}` → releases a pending booking (user left checkout).
 - `POST api/payment/webhook` (Razorpay → server): `X-Razorpay-Signature` HMAC over the raw body; `payment.captured` / `order.paid` confirm the booking; deduplicated by `X-Razorpay-Event-Id`. Configure this URL in the Razorpay dashboard.
@@ -257,7 +257,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 ## 8.13 As built (v0.5) — pricing parity (legacy B2)
 - **Tiers** (`GET api/event`) add `category, description, pricePaise` (live phase price), `strikePricePaise, phaseName, phaseEndsAt, nextPhase, offer{type,label,…}, maxPerUser`; inactive tiers are hidden.
 - **Offers**: `bxgy` (buy N get M free) and `bulk_discount` (percentage / fixed per ticket / fixed total from a minimum quantity), with optional windows.
-- **Limits**: per-event (`maxPerUser`) and per-ticket (`tier.maxPerUser`) counting owned tickets + live pending bookings; messages match the legacy app ("You can book only N more …").
+- **Limits**: none per person since v0.17 (docs/09 #17). `maxPerUser` / `maxSeatsPerBooking` are sent as 10000 for events and null for ticket types so older apps don't cap.
 - `POST api/payment/quote` (auth) — same body as `book-ticket` plus `promoCode?, useCoins?, billingState?` → price preview, nothing held: `basePaise, offerDiscountPaise, promoDiscountPaise, discountPaise, feePaise, gst{type: cgst_sgst|igst, ratePct, cgstPaise, sgstPaise, igstPaise, included}, taxPaise, totalPaise, coinsPaise, payablePaise, promoCode, coinBalancePaise, lines[]`.
 - `POST api/payment/book-ticket` accepts the same options and returns the same breakdown + `bookingStatus`. The gateway is charged `payablePaise` (total − coins). When `payablePaise` is 0 (free tickets or fully paid with coins) the booking is confirmed immediately (`gateway: "none"`, `bookingStatus: "confirmed"`); `process-order` then just returns the tickets.
 - **Fees & GST**: per-event `feeType` (`percentage` | `fixed_per_ticket`) and `feeValue`, else global `FEE_TYPE`/`FEE_PCT`. GST (`GST_PCT`) is charged on the booking fee (`GST_ON=fee`, legacy behaviour) or on tickets + fee (`fee_and_tickets`); `GST_INCLUDED` treats the fee as GST-inclusive. Billing state (request `billingState`, else profile `state`) equal to the organiser's state (`events.organizerState`, else `ORGANIZER_STATE`) → CGST + SGST, otherwise IGST. Invoices show the split and place of supply.
@@ -283,7 +283,7 @@ Implemented in `backend/`; Swagger at `/docs` (dev). Everything above still appl
 - Seated booking is on by default (no longer behind `PHASE2`).
 - `GET api/booking/seat-map?eventId=` → `{stage: top|bottom|none, sections:[{id, name, kind: seats|standing, pricePaise, color, description, gate, rows, cols, rowLabels[], gaps[] (aisle cells 'row-col'), accessible[], booked[], capacity, remaining}]}` in display order. Standing areas have `rows = cols = 0` and are sold by quantity up to `capacity`.
 - Items: a seat is `{sectionId, row, col}`; a standing area is `{sectionId, qty}`. Aisle cells are rejected. Seat numbers skip aisles; ticket `seatLabel` is e.g. `Silver · Row G Seat 6 · Gate 2` or `Standing (back) · Standing · Gate 2` (one ticket per standing line, `quantity = qty`).
-- `POST api/booking/seat-reserve {eventId, items}` (auth) → `{reservationToken, expiresAt, items[{sectionId, sectionName, standing, row, col, qty, seatKeys, label, unitPricePaise}], subtotalPaise}`. Holds for `SEAT_HOLD_SECONDS` (default 600) and replaces the caller's previous hold for the event. Taken seat / not enough standing places → `409 SOLD_OUT` (e.g. "Only 1 place left in Standing (back)"). ≤30 holds/min per user; per-event ticket limit applies.
+- `POST api/booking/seat-reserve {eventId, items}` (auth) → `{reservationToken, expiresAt, items[{sectionId, sectionName, standing, row, col, qty, seatKeys, label, unitPricePaise}], subtotalPaise}`. Holds for `SEAT_HOLD_SECONDS` (default 600) and replaces the caller's previous hold for the event. Taken seat / not enough standing places → `409 SOLD_OUT` (e.g. "Only 1 place left in Standing (back)"). ≤30 holds/min per user.
 - `GET api/booking/seat-reserve/active?eventId=` → `{reservation: <same shape> | null}` (resume). `DELETE api/booking/seat-reserve/:token` → `{released}`.
 - `POST api/payment/book-ticket {eventId, reservationToken}` (items optional) books exactly the held seats; the hold becomes the booking's (payment window `BOOKING_HOLD_SECONDS`). Expired, used or someone else's token → `409 HOLD_EXPIRED`. Booking without a token still works (seats claimed directly).
 - Concurrency: seats are unique rows; standing places are numbered rows (`ga-N`) claimed under a lock on the area, so neither can oversell. Expired holds are swept with unpaid bookings.
@@ -416,3 +416,5 @@ Everything the web console did, for GatePass admins, organisers and **event admi
 - `GET organiser/events/:id/survey` → `{ survey: {title, mode, fields, redirectUrl, isActive, …} | null, answered }`; set it up with `PUT admin/events/:id/survey`, answers at `GET admin/events/:id/survey-responses`.
 - `GET|POST organiser/events/:id/promos`, `PUT organiser/promos/:promoId {isActive?, usageLimit?, endsAt?}` — `{ code (3–20 letters/numbers, unique), type: percentage|fixed, value, tierIds?, maxDiscountPaise?, minTickets?, usageLimit?, usageLimitPerUser?, startsAt?, endsAt?, isPublic? }`; the list adds `used`.
 - Also open to event admins now: `admin/events/:id/attribution` (where buyers came from), `admin/events/:id/export.xlsx`, `admin/approval-requests?eventId=` (+ approve / reject).
+
+**No per-person ticket limit (v0.17, docs/09 #17).** Booking, quotes, seat holds, ticket requests, shares, box-office/comp issuing and B2B orders accept up to 10,000 per order line (`MAX_ORDER_QTY`); stock is the real limit. `GET api/event` returns `maxPerUser: 10000` and `maxSeatsPerBooking: 10000`, and `maxPerUser: null` on ticket types. The organiser fields are accepted but ignored.

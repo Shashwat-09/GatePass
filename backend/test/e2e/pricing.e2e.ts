@@ -39,7 +39,7 @@ describe('pricing parity: phases, offers, limits, promo codes, GST split, coins 
     expect(vip.offerDiscountPaise).toBe(Math.round(4 * 249900 * 0.1));
     const detail = (await ctx.http.get('/api/event?slug=neon-nights')).body.data;
     expect(detail.tiers.find((t: { name: string }) => t.name === 'General').offer.label).toBe('Buy 3 get 1 free');
-    expect(detail.tiers.find((t: { name: string }) => t.name === 'VIP')).toMatchObject({ category: 'VIP Lounge', maxPerUser: 4 });
+    expect(detail.tiers.find((t: { name: string }) => t.name === 'VIP')).toMatchObject({ category: 'VIP Lounge', maxPerUser: null });
   });
 
   it('price phases: the live phase price is charged and the next phase shows as strike price', async () => {
@@ -51,13 +51,12 @@ describe('pricing parity: phases, offers, limits, promo codes, GST split, coins 
     expect(pv.basePaise).toBe(129900);
   });
 
-  it('per-ticket purchase limit with the legacy message', async () => {
+  it('a ticket type’s old per-person limit no longer applies', async () => {
     const s = await login(ctx);
-    const vip = await tid('neon-nights', 'VIP');
+    const vip = await tid('neon-nights', 'VIP'); // seeded with maxPerUser 4
     const q = (await book(s, { eventId: neon, items: [{ tierId: vip, qty: 3 }] }).expect(200)).body.data;
     await pay(s, q).expect(200);
-    const r = await book(s, { eventId: neon, items: [{ tierId: vip, qty: 2 }] }).expect(400);
-    expect(r.body.error.message).toBe('You can book only 1 more VIP ticket.');
+    await book(s, { eventId: neon, items: [{ tierId: vip, qty: 5 }] }).expect(200);
   });
 
   it('promo codes: public list, private code, min order, one use per user, released when payment fails', async () => {

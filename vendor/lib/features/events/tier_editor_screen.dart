@@ -29,7 +29,6 @@ class _TierEditorScreenState extends State<TierEditorScreen> {
   final _category = TextEditingController();
   final _about = TextEditingController();
   final _min = TextEditingController();
-  final _max = TextEditingController();
   final _entries = TextEditingController();
   final _nights = TextEditingController();
   final _requests = TextEditingController();
@@ -65,7 +64,6 @@ class _TierEditorScreenState extends State<TierEditorScreen> {
     _category.text = t?.category ?? '';
     _about.text = n(r['description']);
     _min.text = n(r['minQty']);
-    _max.text = n(r['maxPerUser']);
     _entries.text = n(r['entryPerTicket']);
     _nights.text = n(r['bundleNights']);
     _requests.text = n(r['maxRequestsPerUser']);
@@ -93,7 +91,6 @@ class _TierEditorScreenState extends State<TierEditorScreen> {
       'category': _category.text.trim(),
       'description': _about.text.trim(),
       if (i(_min) != null) 'minQty': i(_min),
-      if (i(_max) != null) 'maxPerUser': i(_max),
       if (i(_entries) != null) 'entryPerTicket': i(_entries),
       if (_showId != null) 'sessionId': _showId,
       'passType': _pass,
@@ -113,10 +110,7 @@ class _TierEditorScreenState extends State<TierEditorScreen> {
     final q = b['quantity'] as int?;
     if (q == null || q < 1) return 'Enter how many tickets there are.';
     if (widget.tier != null && q < widget.tier!.sold) return '${widget.tier!.sold} are already sold, so there must be at least that many.';
-    final min = b['minQty'] as int?;
-    final max = b['maxPerUser'] as int?;
-    if (min != null && max != null && min > max) return 'The least per order can’t be more than the most per person.';
-    for (final k in ['minQty', 'maxPerUser', 'entryPerTicket']) {
+    for (final k in ['minQty', 'entryPerTicket']) {
       final v = b[k] as int?;
       if (v != null && (v < 1 || v > 50)) return 'Limits are between 1 and 50.';
     }
@@ -230,9 +224,8 @@ class _TierEditorScreenState extends State<TierEditorScreen> {
           _field(_category, 'Section (e.g. Fan Pit, Balcony)', caps: TextCapitalization.words),
           _field(_about, 'What’s included (optional)', lines: 2),
         ]),
-        InsetGroup(header: 'Limits', footer: 'Empty uses the event’s limits. Entries: how many people one ticket lets in (e.g. 2 for a couple pass).', children: [
+        InsetGroup(header: 'Per order', footer: 'No limit on how many one person buys. Entries: how many people one ticket lets in (e.g. 2 for a couple pass).', children: [
           _field(_min, 'Least per order (e.g. 2 for a pair)', keyboard: TextInputType.number),
-          _field(_max, 'Most per person', keyboard: TextInputType.number),
           _field(_entries, 'Entries per ticket (empty = 1)', keyboard: TextInputType.number),
         ]),
         if (widget.shows.isNotEmpty)

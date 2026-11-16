@@ -47,7 +47,7 @@ class SelectTicketScreen extends StatelessWidget {
           ..._grouped(context, c),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Text('Up to ${event.maxPerUser} tickets per person.', style: context.text.bodySmall),
+            child: Text('Tap a number to type how many you need.', style: context.text.bodySmall),
           ),
         ],
       ),
@@ -74,6 +74,11 @@ class SelectTicketScreen extends StatelessWidget {
     ];
   }
 
+  Future<void> _typeQty(BuildContext context, BookingController c, TierModel t) async {
+    final n = await askQuantity(context, title: t.name, max: t.remaining, current: c.qtyFor(t.id));
+    if (n != null) c.setQty(t, n);
+  }
+
   Widget _tierRow(BuildContext context, BookingController c, TierModel t) {
     final col = context.colors;
     final notes = <Widget>[
@@ -82,7 +87,6 @@ class SelectTicketScreen extends StatelessWidget {
         Text('Sold out', style: context.text.bodySmall!.copyWith(color: col.danger, fontWeight: FontWeight.w600))
       else if (t.remaining <= 10)
         Text('Only ${t.remaining} left', style: context.text.bodySmall!.copyWith(color: col.warning, fontWeight: FontWeight.w600)),
-      if (t.maxPerUser != null) Text('Max ${t.maxPerUser} per person', style: context.text.bodySmall),
       if (t.minQty > 1) Text('Min ${t.minQty} per booking', style: context.text.bodySmall),
     ];
     return Padding(
@@ -117,6 +121,8 @@ class SelectTicketScreen extends StatelessWidget {
                   value: c.qtyFor(t.id),
                   onMinus: c.qtyFor(t.id) > 0 ? () => c.dec(t) : null,
                   onPlus: c.canInc(t) ? () => c.inc(t) : null,
+                  valueKey: Key('qty-${t.id}'),
+                  onValueTap: t.remaining > 0 ? () => _typeQty(context, c, t) : null,
                 )),
       ]),
     );

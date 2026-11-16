@@ -452,8 +452,11 @@ class CheckoutBar extends StatelessWidget {
 
 /// iOS-style stepper: neutral minus / plus with 44 pt hit areas and the value between.
 class QtyStepper extends StatelessWidget {
-  const QtyStepper({super.key, required this.value, this.onMinus, this.onPlus, this.label = 'Quantity', this.minusKey, this.plusKey});
+  const QtyStepper({super.key, required this.value, this.onMinus, this.onPlus, this.label = 'Quantity', this.minusKey, this.plusKey, this.onValueTap, this.valueKey});
   final int value;
+  /// Tap the number to type a quantity (for big orders).
+  final VoidCallback? onValueTap;
+  final Key? valueKey;
   final VoidCallback? onMinus;
   final VoidCallback? onPlus;
   final String label;
@@ -496,22 +499,54 @@ class QtyStepper extends StatelessWidget {
       label: '$label $value',
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         btn(CupertinoIcons.minus, onMinus, 'Remove one', minusKey),
-        SizedBox(
-          width: 30,
+        GestureDetector(
+          key: valueKey,
+          behavior: HitTestBehavior.opaque,
+          onTap: onValueTap,
+          child: SizedBox(
+          width: value >= 100 ? 46 : 30,
+          height: 44,
           // The number rolls up or down as it changes.
-          child: AnimatedSwitcher(
+          child: Center(child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
             transitionBuilder: (child, a) => FadeTransition(
               opacity: a,
               child: ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)), child: child),
             ),
             child: Text('$value', key: ValueKey(value), textAlign: TextAlign.center, style: context.text.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-          ),
-        ),
+          )),
+        )),
         btn(CupertinoIcons.plus, onPlus, 'Add one', plusKey),
       ]),
     );
   }
+}
+
+/// Asks for a quantity (tap the number on a [QtyStepper]). Returns the typed
+/// number clamped to 1…[max], or null when cancelled.
+Future<int?> askQuantity(BuildContext context, {required String title, required int max, int? current}) async {
+  final ctrl = TextEditingController(text: current == null || current == 0 ? '' : '$current');
+  final n = await showDialog<int>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        key: const Key('qty-input'),
+        controller: ctrl,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(hintText: 'How many', helperText: '$max left'),
+        onSubmitted: (v) => Navigator.pop(ctx, int.tryParse(v) ?? 0),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(key: const Key('qty-done'), onPressed: () => Navigator.pop(ctx, int.tryParse(ctrl.text) ?? 0), child: const Text('Done')),
+      ],
+    ),
+  );
+  if (n == null || n <= 0) return null;
+  return n.clamp(1, max < 1 ? 1 : max);
 }
 
 /// Height of [lines] lines of [style] at the person's text size, measured with

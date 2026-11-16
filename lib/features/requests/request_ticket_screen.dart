@@ -27,10 +27,8 @@ class _RequestTicketScreenState extends State<RequestTicketScreen> {
   bool _sending = false;
   late int _qty = widget.tier.minQty;
 
-  int get _max {
-    final m = widget.tier.maxPerUser ?? widget.event.maxPerUser;
-    return m < widget.event.maxPerUser ? m : widget.event.maxPerUser;
-  }
+  /// No per-person limit: as many as are left.
+  int get _max => widget.tier.remaining;
 
   @override
   void initState() {

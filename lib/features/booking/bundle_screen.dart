@@ -24,11 +24,8 @@ class _BundleScreenState extends State<BundleScreen> {
   late int _qty = widget.bundle.minQty;
 
   BundleModel get b => widget.bundle;
-  int get _max {
-    final m = b.maxPerUser ?? widget.event.maxPerUser;
-    final cap = m < widget.event.maxPerUser ? m : widget.event.maxPerUser;
-    return cap < b.remaining ? cap : b.remaining;
-  }
+  /// No per-person limit: as many as are left.
+  int get _max => b.remaining;
 
   bool get _complete => _pick.length == b.nights;
 

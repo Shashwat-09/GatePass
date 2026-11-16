@@ -147,7 +147,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           : opts.reservationToken
             ? await this.takeHold(m, event, userId, opts.reservationToken, id, expiresAt)
             : await this.claimSeats(m, event.id, await this.seatLines(m, event, items), { bookingId: id, holdToken: null, userId, expiresAt });
-        await this.checkEventLimit(m, event, userId, lines);
         const formRows = await this.checkForms(m, event.id, userId, lines, opts.formResponses);
 
         const priced = await this.price(m, event, user, lines, opts, true);
@@ -223,7 +222,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       const event = await this.bookableEvent(m, eventId);
       const user = await m.findOneByOrFail(User, { id: userId });
       const lines = event.hasSeatMap ? await this.seatLines(m, event, items) : await this.priceTiers(m, event, items, userId, false);
-      await this.checkEventLimit(m, event, userId, lines);
       const priced = await this.price(m, event, user, lines, opts, false);
       return {
         ...this.breakdown(priced.q),
@@ -251,22 +249,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       throw new ApiError('VALIDATION_ERROR', why[badge.key] ?? 'This event is not on sale');
     }
     return event;
-  }
-
-  private async checkEventLimit(m: EntityManager, event: EventEntity, userId: string, lines: BookingItem[]) {
-    const qty = lines.reduce((n, l) => n + (l.qty ?? 1), 0);
-    if (qty > event.maxPerUser) {
-      throw new ApiError('VALIDATION_ERROR', `Max ${event.maxPerUser} tickets allowed.`, { qty: `Limit ${event.maxPerUser}` });
-    }
-    const already = await this.heldByUser(m, userId, event.id);
-    if (already + qty > event.maxPerUser) {
-      const left = Math.max(0, event.maxPerUser - already);
-      throw new ApiError('VALIDATION_ERROR', left
-        ? `You can book only ${left} more ticket${left === 1 ? '' : 's'} for this event.`
-        : `You've reached the maximum booking limit of ${event.maxPerUser} tickets for this event.`, {
-        qty: `You can buy ${left} more`,
-      });
-    }
   }
 
   /** Runs the pricing engine: promo validation, fee config, GST state split, coins. */
@@ -353,21 +335,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  /** Tickets the user owns for the event + quantity in their other live pending bookings. */
-  private async heldByUser(m: EntityManager, userId: string, eventId: string) {
-    const t = await m.createQueryBuilder(Ticket, 't')
-      .select('COALESCE(SUM(t.quantity),0)', 'n')
-      .where('t.ownerUserId = :userId AND t.eventId = :eventId AND t.status <> :c', { userId, eventId, c: 'cancelled' })
-      .getRawOne<{ n: string }>();
-    const pending = await m.find(Booking, {
-      where: { userId, eventId, status: 'pending' },
-    });
-    const pendingQty = pending
-      .filter((b) => b.expiresAt.getTime() > Date.now())
-      .reduce((n, b) => n + b.items.reduce((k, i) => k + (i.qty ?? 1), 0), 0);
-    return Number(t?.n ?? 0) + pendingQty;
-  }
-
   /** Locks the tier rows, checks availability and moves stock into `reserved`. */
   private async reserveTiers(m: EntityManager, event: EventEntity, items: BookItemInput[], userId: string): Promise<BookingItem[]> {
     const lines = await this.priceTiers(m, event, items, userId, true);
@@ -407,15 +374,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       const available = tier.quantity - tier.sold - tier.reserved;
       if (qty > available) {
         throw new ApiError('SOLD_OUT', available > 0 ? `Only ${available} ${tier.name} left` : `${tier.name} is sold out`);
-      }
-      if (tier.maxPerUser != null) {
-        const held = await this.heldForTier(m, userId, tier.id);
-        if (held + qty > tier.maxPerUser) {
-          const left = Math.max(0, tier.maxPerUser - held);
-          throw new ApiError('VALIDATION_ERROR', left
-            ? `You can book only ${left} more ${tier.name} ticket${left === 1 ? '' : 's'}.`
-            : 'You\'ve reached the maximum booking limit for this ticket.', { qty: `You can buy ${left} more` });
-        }
       }
       if (tier.sessionId) {
         const sess = await m.findOneBy(EventSession, { id: tier.sessionId });
@@ -487,17 +445,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
       responses = reqs.flatMap((r) => r.formResponses as FormResponseInput[]);
     }
     return this.forms.check(m, eventId, userId, lines.map((l) => ({ tierId: l.tierId, qty: l.qty ?? 1 })), responses ?? []);
-  }
-
-  /** Units of one ticket type the user holds (owned tickets + live pending bookings). */
-  private async heldForTier(m: EntityManager, userId: string, tierId: string) {
-    const t = await m.createQueryBuilder(Ticket, 't').select('COALESCE(SUM(t.quantity),0)', 'n')
-      .where('t."ownerUserId" = :userId AND t."tierId" = :tierId AND t.status NOT IN (:...s)', { userId, tierId, s: ['cancelled', 'transferred'] })
-      .getRawOne<{ n: string }>();
-    const pending = await m.find(Booking, { where: { userId, status: 'pending' } });
-    const p = pending.filter((b) => b.expiresAt.getTime() > Date.now())
-      .reduce((n, b) => n + b.items.filter((i) => i.tierId === tierId).reduce((k, i) => k + (i.qty ?? 0), 0), 0);
-    return Number(t?.n ?? 0) + p;
   }
 
   /**
@@ -715,7 +662,6 @@ export class BookingService implements OnModuleInit, OnModuleDestroy {
           .where('"userId" = :userId AND "eventId" = :eventId AND "holdToken" IS NOT NULL', { userId, eventId }).execute();
         const lines = await this.seatLines(m, event, items);
         if (!lines.length) throw new ApiError('VALIDATION_ERROR', 'Choose your seats');
-        await this.checkEventLimit(m, event, userId, lines);
         const token = randomBytes(18).toString('base64url');
         const expiresAt = new Date(Date.now() + config().seatHoldSec * 1000);
         await this.claimSeats(m, event.id, lines, { bookingId: null, holdToken: token, userId, expiresAt });

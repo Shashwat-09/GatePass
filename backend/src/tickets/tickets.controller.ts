@@ -11,15 +11,16 @@ import { signPath } from '../common/signing';
 import { Booking, EventEntity, EventSurvey, Ticket, User } from '../db/entities';
 import { RateLimit } from '../infra/rate-limit.guard';
 import { TransfersService, transferableUnits } from '../transfers/transfers.service';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 class SplitDto {
   @IsUUID() ticketId!: string;
-  @IsInt() @Min(1) @Max(50) quantity!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) quantity!: number;
   /** Send to this mobile number; omit to create a share link instead. */
   @IsOptional() @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone?: string;
 }
 class ShareRecipientDto {
-  @IsInt() @Min(1) @Max(50) quantity!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) quantity!: number;
   /** Omit for a share link. */
   @IsOptional() @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone?: string;
 }

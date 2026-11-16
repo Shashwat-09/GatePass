@@ -121,7 +121,7 @@ class _IssueScreenState extends State<IssueScreen> {
   @override
   Widget build(BuildContext context) {
     final t = _tier;
-    final maxQty = t == null ? 1 : t.remaining.clamp(1, 50);
+    final maxQty = t == null ? 1 : (t.remaining < 1 ? 1 : t.remaining);
     return GlassScaffold(
       backgroundColor: context.colors.groupedCanvas,
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Issue Tickets')),
@@ -149,7 +149,7 @@ class _IssueScreenState extends State<IssueScreen> {
                     trailing: x.id == _tierId ? Icon(CupertinoIcons.checkmark_alt, color: context.colors.tint) : null,
                     onTap: () => setState(() {
                       _tierId = x.id;
-                      _qty = _qty.clamp(1, x.remaining.clamp(1, 50));
+                      _qty = _qty.clamp(1, x.remaining < 1 ? 1 : x.remaining);
                       _syncAmount();
                     }),
                   ),
@@ -172,6 +172,16 @@ class _IssueScreenState extends State<IssueScreen> {
                             _qty++;
                             _syncAmount();
                           }) : null,
+                      valueKey: const Key('qty-value'),
+                      onValueTap: () async {
+                        final n = await askQuantity(context, title: 'Quantity', max: maxQty, current: _qty);
+                        if (n != null) {
+                          setState(() {
+                            _qty = n;
+                            _syncAmount();
+                          });
+                        }
+                      },
                     ),
                   ]),
                 ),

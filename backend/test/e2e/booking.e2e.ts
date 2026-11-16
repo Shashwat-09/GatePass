@@ -73,16 +73,23 @@ describe('booking + payment (e2e)', () => {
     expect(t).toMatchObject({ sold: 5, reserved: 0 });
   });
 
-  it('enforces the per-user limit across bookings', async () => {
+  it('has no per-person limit: one person can buy as many as are left, and no more', async () => {
     const s = await login(ctx);
     const ev = await eventBySlug(ctx, 'neon-nights');
     const tier = await tierByName(ctx, ev.id, 'General');
-    await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 7 }] }).expect(400);
-    const q = (await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 4 }] }).expect(200)).body.data;
-    const r = await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 3 }] }).expect(400);
-    expect(r.body.error.fields.qty).toMatch(/2 more/);
+    // Way past the old 6-per-person limit, across two orders.
+    const q = (await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 40 }] }).expect(200)).body.data;
     await pay(s.token, q).expect(200);
-    await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 3 }] }).expect(400);
+    const q2 = (await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: 25 }] }).expect(200)).body.data;
+    await pay(s.token, q2).expect(200);
+    // Only stock stops an order.
+    const t = await ctx.ds.getRepository(Tier).findOneByOrFail({ id: tier.id });
+    const left = t.quantity - t.sold - t.reserved;
+    const over = await book(s.token, { eventId: ev.id, items: [{ tierId: tier.id, qty: left + 1 }] });
+    expect(over.status).toBe(409);
+    expect(over.body.error.message).toMatch(/left|sold out/);
+    const detail = (await ctx.http.get('/api/event?slug=neon-nights')).body.data;
+    expect(detail.maxPerUser).toBeGreaterThanOrEqual(10000);
   });
 
   it('rejects unknown tiers and unknown promo codes', async () => {

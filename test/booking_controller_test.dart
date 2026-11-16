@@ -16,7 +16,7 @@ void main() {
     c = BookingController()..start(ev);
   });
 
-  test('enforces per-user max, stock and tier minimum', () {
+  test('no per-person limit: only stock and the tier minimum; typed quantities clamp to what is left', () {
     final ga = ev.tiers.first;
     final vip = ev.tiers.last; // minQty 2, remaining 2
     c.inc(vip);
@@ -26,7 +26,13 @@ void main() {
     for (var i = 0; i < 10; i++) {
       c.inc(ga);
     }
-    expect(c.totalQty, 6); // maxPerUser
+    expect(c.totalQty, 10); // past the old 6-per-person cap
+    c.setQty(ga, 100000);
+    expect(c.qtyFor(ga.id), ga.remaining); // can't go past what's left
+    c.setQty(vip, 1);
+    expect(c.qtyFor(vip.id), 2); // typed below the minimum → the minimum
+    c.setQty(ga, 0);
+    expect(c.qtyFor(ga.id), 0);
   });
 
   test('successful payment: SDK result is verified by the server before tickets show', () async {

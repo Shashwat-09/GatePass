@@ -16,6 +16,7 @@ import { istDate } from '../common/ist';
 import { currentPrice, offerActive, offerLabel } from '../pricing/pricing';
 import { eventBadge, eventEnd, LISTED_STATUSES } from './event-status';
 import { EventsService } from './events.service';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SPONSOR_LABEL: Record<string, string> = {
@@ -270,8 +271,8 @@ export class EventsController {
       },
       organizer: e.organizerName,
       startDate: this.iso(e.startDate), endDate: this.iso(eventEnd(e)),
-      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap, maxPerUser: e.maxPerUser,
-      isWebOnly: e.isWebOnly, externalUrl: e.isWebOnly ? e.externalUrl : null, maxSeatsPerBooking: e.maxPerUser,
+      priceFromPaise: e.priceFromPaise, hasSeatMap: e.hasSeatMap, maxPerUser: MAX_ORDER_QTY,
+      isWebOnly: e.isWebOnly, externalUrl: e.isWebOnly ? e.externalUrl : null, maxSeatsPerBooking: MAX_ORDER_QTY,
       terms: e.terms, faqs: e.faqs, viewCount: e.viewCount + 1,
       artists: links.map((l) => {
         const a = artists.find((x) => x.id === l.artistId)!;
@@ -292,7 +293,7 @@ export class EventsController {
           nextPhase: p.nextPhase,
           offer: offerActive(t.offer) ? { ...t.offer, label: offerLabel(t.offer) } : null,
           remaining: Math.max(0, t.quantity - t.sold - t.reserved), minQty: t.minQty, entryPerTicket: t.entryPerTicket,
-          maxPerUser: t.maxPerUser, requiresApproval: t.requiresApproval, maxRequestsPerUser: t.maxRequestsPerUser,
+          maxPerUser: null, requiresApproval: t.requiresApproval, maxRequestsPerUser: t.maxRequestsPerUser,
           bundleNights: t.passType === 'bundle' ? (t.bundleNights ?? new Set(sessions.map((x) => istDate(x.startsAt))).size) : null,
         };
       }),
@@ -347,7 +348,7 @@ export class EventsController {
         return {
           tierId: t.id, name: t.name, description: t.description, pricePaise: currentPrice(t).pricePaise,
           nights: t.bundleNights ?? nights.size, remaining: Math.max(0, t.quantity - t.sold - t.reserved),
-          minQty: t.minQty, maxPerUser: t.maxPerUser,
+          minQty: t.minQty, maxPerUser: null,
           dates: [...nights.entries()].map(([date, opts]) => ({
             date,
             options: opts.map((x) => ({ sessionId: x.id, label: x.label, venueName: x.venueName, startsAt: x.startsAt.toISOString() })),

@@ -11,17 +11,18 @@ import { eventBadge } from '../events/event-status';
 import { eventFor } from '../common/event-access';
 import { FormsService } from '../forms/forms.service';
 import { notify } from '../notifications/notify';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 class FormResponseDto {
   @IsUUID() formId!: string;
   @IsInt() @Min(1) version!: number;
-  @IsOptional() @IsInt() @Min(0) @Max(50) attendee?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_ORDER_QTY) attendee?: number;
   @IsObject() answers!: Record<string, unknown>;
 }
 class RequestDto {
   @IsUUID() eventId!: string;
   @IsUUID() tierId!: string;
-  @IsInt() @Min(1) @Max(50) quantity!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) quantity!: number;
   @IsOptional() @IsArray() @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => FormResponseDto)
   formResponses?: FormResponseDto[];
 }
@@ -69,10 +70,9 @@ export class ApprovalsController {
       const tier = await m.findOneBy(Tier, { id: dto.tierId, eventId: ev.id });
       if (!tier || !tier.isActive) throw new ApiError('VALIDATION_ERROR', 'Unknown ticket type');
       if (!tier.requiresApproval) throw new ApiError('VALIDATION_ERROR', 'This ticket can be booked directly');
-      const max = Math.min(tier.maxPerUser ?? ev.maxPerUser, ev.maxPerUser);
-      if (dto.quantity < tier.minQty || dto.quantity > max) {
-        throw new ApiError('VALIDATION_ERROR', `Request between ${tier.minQty} and ${max} tickets`);
-      }
+      if (dto.quantity < tier.minQty) throw new ApiError('VALIDATION_ERROR', `Request at least ${tier.minQty} tickets`);
+      const left = tier.quantity - tier.sold - tier.reserved;
+      if (dto.quantity > left) throw new ApiError('SOLD_OUT', left > 0 ? `Only ${left} ${tier.name} left` : `${tier.name} is sold out`);
       // Serialize this user's requests so the per-user cap holds.
       await m.createQueryBuilder(User, 'u').setLock('pessimistic_write').where('u.id = :userId', { userId }).getOneOrFail();
       const mine = await m.findBy(ApprovalRequest, { userId, tierId: tier.id });

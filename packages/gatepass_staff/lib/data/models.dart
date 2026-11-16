@@ -871,7 +871,7 @@ class SyncResult {
 class EventForm {
   static const keys = [
     'title', 'cityId', 'genre', 'language', 'venueName', 'venueAddress', 'mapLink', 'startDate', 'endDate', 'opensAt', 'closesAt',
-    'description', 'cardImageUrl', 'bannerUrl', 'ageLimit', 'maxPerUser', 'ticketNotes', 'terms', 'schedule', 'allowTransfers',
+    'description', 'cardImageUrl', 'bannerUrl', 'ageLimit', 'ticketNotes', 'terms', 'schedule', 'allowTransfers',
     'isWebOnly', 'externalUrl',
   ];
 }

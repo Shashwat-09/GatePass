@@ -92,16 +92,27 @@ class BookingController extends GetxController {
   int qtyFor(String tierId) => qtyByTier[tierId] ?? 0;
   int get tierQty => qtyByTier.values.fold(0, (a, b) => a + b);
 
-  bool canInc(TierModel tier) =>
-      tierQty < event.maxPerUser && qtyFor(tier.id) < tier.remaining && (tier.maxPerUser == null || qtyFor(tier.id) < tier.maxPerUser!);
+  /// No per-person limit (docs/09 #17): only the tickets left.
+  bool canInc(TierModel tier) => qtyFor(tier.id) < tier.remaining;
 
   void inc(TierModel tier) {
     if (!canInc(tier)) return;
     final cur = qtyFor(tier.id);
     // Respect a tier's minimum: jump straight to it from zero.
     final next = cur == 0 ? tier.minQty.clamp(1, tier.remaining) : cur + 1;
-    if (tierQty - cur + next > event.maxPerUser) return;
     qtyByTier[tier.id] = next;
+    qtyByTier.refresh();
+    _invalidateQuote();
+  }
+
+  /// A typed quantity: below the minimum becomes the minimum, above what's left becomes what's left.
+  void setQty(TierModel tier, int n) {
+    final next = n <= 0 ? 0 : n.clamp(tier.minQty < 1 ? 1 : tier.minQty, tier.remaining < 1 ? 1 : tier.remaining);
+    if (next == 0 || tier.remaining <= 0) {
+      qtyByTier.remove(tier.id);
+    } else {
+      qtyByTier[tier.id] = next;
+    }
     qtyByTier.refresh();
     _invalidateQuote();
   }
@@ -127,17 +138,15 @@ class BookingController extends GetxController {
   void toggleSeat(SeatSectionModel sec, int r, int c) {
     if (isSelected(sec.id, r, c)) {
       seats.removeWhere((s) => s.sectionId == sec.id && s.row == r && s.col == c);
-    } else if (totalQty < event.maxPerUser) {
-      seats.add(SelectedSeat(sec.id, sec.name, r, c, sec.pricePaise, label: '${sec.rowLabel(r)}${sec.seatNumber(r, c)}'));
     } else {
-      return;
+      seats.add(SelectedSeat(sec.id, sec.name, r, c, sec.pricePaise, label: '${sec.rowLabel(r)}${sec.seatNumber(r, c)}'));
     }
     _selectionChanged();
   }
 
   /// [available] = places the user may still take in this area.
   void incStanding(SeatSectionModel sec, {required int available}) {
-    if (totalQty >= event.maxPerUser || standingFor(sec.id) >= available) return;
+    if (standingFor(sec.id) >= available) return;
     _standingSections[sec.id] = sec;
     standingQty[sec.id] = standingFor(sec.id) + 1;
     _selectionChanged();

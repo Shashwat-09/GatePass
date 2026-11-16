@@ -11,6 +11,7 @@ import { parsePage } from '../common/pagination';
 import { DistributorPriceChange, DistributorProfile, Reseller, Tier, User } from '../db/entities';
 import { PayReturnController, RazorpayB2bWebhookController, YouPiWebhookController } from '../payments/youpi.controller';
 import { B2bService } from './b2b.service';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 class ProfileDto {
   /** UPI ID sellers pay into (e.g. name@okaxis). */
@@ -39,13 +40,13 @@ class RecipientDto {
   @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone!: string;
   @IsOptional() @IsString() @Length(0, 60) name?: string;
   @IsOptional() @IsString() @Length(0, 120) email?: string;
-  @IsInt() @Min(1) @Max(100) qty!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) qty!: number;
   /** What the customer paid the seller (shown on their ticket as the saving). */
   @IsOptional() @IsInt() @Min(0) salePricePaise?: number;
 }
 class OrderDto {
   @IsUUID() tierId!: string;
-  @IsInt() @Min(1) @Max(200) quantity!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) quantity!: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => RecipientDto) recipients!: RecipientDto[];
 }
 class RazorpayResultDto {

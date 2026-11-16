@@ -29,7 +29,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final _about = TextEditingController();
   final _notes = TextEditingController();
   final _age = TextEditingController();
-  final _max = TextEditingController();
   final _language = TextEditingController();
   final _banner = TextEditingController();
   final _terms = TextEditingController();
@@ -77,7 +76,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     _about.text = '${f['description'] ?? ''}';
     _notes.text = '${f['ticketNotes'] ?? ''}';
     _age.text = f['ageLimit'] == null ? '' : '${f['ageLimit']}';
-    _max.text = f['maxPerUser'] == null ? '' : '${f['maxPerUser']}';
     _start = DateTime.tryParse('${f['startDate'] ?? ''}')?.toLocal();
     _end = DateTime.tryParse('${f['endDate'] ?? ''}')?.toLocal();
     _opens = DateTime.tryParse('${f['opensAt'] ?? ''}')?.toLocal();
@@ -122,7 +120,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
       'description': t(_about),
       'ticketNotes': t(_notes),
       'ageLimit': int.tryParse(_age.text.trim()),
-      'maxPerUser': int.tryParse(_max.text.trim()),
       'startDate': _start?.toUtc().toIso8601String(),
       'endDate': _end?.toUtc().toIso8601String(),
       'opensAt': _opens?.toUtc().toIso8601String(),
@@ -319,7 +316,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
         ], footer: 'Line-up or running order shown on the event page, e.g. 7:00 PM · Opening act.'),
         _group('Rules', [
           _field(_age, 'Minimum age (empty = all ages)', keyboard: TextInputType.number),
-          _field(_max, 'Most tickets per person (empty = 10)', keyboard: TextInputType.number),
           _switch('f-transfers', 'Ticket sharing', 'Buyers can send tickets to friends', _transfers, (v) => setState(() => _transfers = v)),
           _switch('f-webonly', 'Sold on another website', 'GatePass shows the event; booking opens your link', _webOnly, (v) => setState(() => _webOnly = v)),
           if (_webOnly) _field(_external, 'Booking link (https://…)', key: 'f-external', keyboard: TextInputType.url),

@@ -13,10 +13,11 @@ import { SkipGlobalRateLimit } from '../infra/rate-limit.guard';
 import { PaymentGateway } from '../payments/gateway';
 import { AttributionDto, cleanAttribution } from '../attribution/attribution.controller';
 import { BookingService } from './booking.service';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 class ItemDto {
   @IsOptional() @IsUUID() tierId?: string;
-  @IsOptional() @IsInt() @Min(1) @Max(50) qty?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_ORDER_QTY) qty?: number;
   @IsOptional() @IsString() @Matches(/^[\w-]{1,40}$/) sectionId?: string;
   @IsOptional() @IsInt() @Min(0) @Max(500) row?: number;
   @IsOptional() @IsInt() @Min(0) @Max(500) col?: number;
@@ -25,7 +26,7 @@ class ItemDto {
 class FormResponseDto {
   @IsUUID() formId!: string;
   @IsInt() @Min(1) version!: number;
-  @IsOptional() @IsInt() @Min(0) @Max(50) attendee?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_ORDER_QTY) attendee?: number;
   @IsObject() answers!: Record<string, unknown>;
 }
 class BookDto {

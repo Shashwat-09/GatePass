@@ -17,6 +17,7 @@ import {
 import { commercialOf, compsIssued, eventSettlement } from './settlement';
 import { effectiveFee, SettingsService } from '../settings/settings.service';
 import { notify } from '../notifications/notify';
+import { MAX_ORDER_QTY } from '../common/limits';
 
 const https = { protocols: ['https'], require_protocol: true };
 
@@ -99,7 +100,7 @@ class SessionDto {
 }
 class IssueDto {
   @IsUUID() tierId!: string;
-  @IsInt() @Min(1) @Max(50) quantity!: number;
+  @IsInt() @Min(1) @Max(MAX_ORDER_QTY) quantity!: number;
   @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit mobile number' }) phone!: string;
   @IsOptional() @IsString() @Length(1, 60) name?: string;
   @IsIn(['comp', 'box_office']) kind!: 'comp' | 'box_office';
