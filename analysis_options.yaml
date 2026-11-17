@@ -7,8 +7,9 @@ analyzer:
     - build/**
     - android/**
     - ios/**
-    # Analyzed on their own (own pubspec): flutter analyze in vendor/ and packages/gatepass_ui/
+    # Analyzed on their own (own pubspec): flutter analyze in vendor/, b2b/ and packages/*
     - vendor/**
+    - b2b/**
     - packages/**
 
 linter:

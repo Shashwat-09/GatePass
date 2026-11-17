@@ -1,7 +1,6 @@
 // The Organiser app at a venue with no signal: it opens, lists the events and
 // scans, from what it saved earlier, and gate lists were downloaded by itself.
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gatepass_organiser/app/app.dart';
 import 'package:gatepass_organiser/features/events/event_screen.dart';
@@ -17,8 +16,8 @@ import 'package:gatepass_staff/gate/gate_store.dart';
 import 'package:get/get.dart';
 
 /// The demo backend, with a switch for "no internet at all".
-class _Api extends DemoVendorApi {
-  _Api({super.role}) : super(latency: Duration.zero);
+class OfflineDemoApi extends DemoVendorApi {
+  OfflineDemoApi({super.role}) : super(latency: Duration.zero);
   bool down = false;
   bool expired = false;
   static const _none = ApiResult<Never>.fail('No internet connection.');
@@ -33,14 +32,14 @@ class _Api extends DemoVendorApi {
   Future<ApiResult<Map<String, dynamic>>> manifest(String eventId) async => down ? _none.cast() : super.manifest(eventId);
 }
 
-late _Api api;
+late OfflineDemoApi api;
 late MemoryGateStore store;
 
 Future<void> boot(WidgetTester t, Widget home, {Role role = Role.organiser}) async {
   Get.reset();
   Offline.reset();
   configureOrganiserShell();
-  api = _Api(role: role);
+  api = OfflineDemoApi(role: role);
   store = MemoryGateStore();
   await api.login('9000000001', '123456');
   Get.put(Session(api: api, store: store), permanent: true).me.value = (await api.me()).data;
@@ -92,7 +91,7 @@ void main() {
   testWidgets('a seller offline sees that sales need internet (no Scan button)', (t) async {
     await boot(t, const SizedBox(), role: Role.organiser);
     api.down = true;
-    await t.pumpWidget(OrganiserApp(home: EventScreen(event: const OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions', venueName: 'Lawn', myRole: 'seller'))));
+    await t.pumpWidget(const OrganiserApp(home: EventScreen(event: OrgEvent(id: DemoVendorApi.e1, title: 'Sunset Sessions', venueName: 'Lawn', myRole: 'seller'))));
     await t.pumpAndSettle();
     expect(find.byKey(const Key('offline-scan')), findsNothing);
     expect(find.textContaining('Sales, tickets and changes need a connection'), findsOneWidget);
