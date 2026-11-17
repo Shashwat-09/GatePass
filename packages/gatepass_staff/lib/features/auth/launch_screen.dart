@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
+import '../../app/offline.dart';
 import '../../app/session.dart';
 import '../../app/shell.dart';
 import 'login_screen.dart';
@@ -34,11 +37,23 @@ class _LaunchScreenState extends State<LaunchScreen> {
     if (!mounted) return;
     if (r.isOk) {
       s.me.value = r.data;
+      s.offline.value = false;
+      unawaited(Offline.saveMe(r.data!));
       Get.offAll(() => StaffShell.hasAccess(r.data!) ? StaffShell.home() : const NoAccessScreen(), transition: Transition.fadeIn);
     } else if (r.statusCode == 401) {
       Get.offAll(() => const LoginScreen(), transition: Transition.fadeIn);
     } else {
-      setState(() => _error = r.error);
+      // No signal (or the server is struggling): open from the copy on the
+      // phone so the gate can still scan. Never sign anyone out for this.
+      final saved = r.isUnavailable ? await Offline.savedMe() : null;
+      if (!mounted) return;
+      if (saved != null && StaffShell.hasAccess(saved)) {
+        s.me.value = saved;
+        s.offline.value = true;
+        Get.offAll(() => StaffShell.home(), transition: Transition.fadeIn);
+      } else {
+        setState(() => _error = r.error);
+      }
     }
   }
 

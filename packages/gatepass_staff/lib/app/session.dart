@@ -13,8 +13,13 @@ class Session extends GetxController {
 
   static Session get to => Get.find<Session>();
 
+  /// Opened from the copies on the phone (no signal at launch).
+  final offline = false.obs;
+
   Future<void> signOut() async {
     await api.logout();
     me.value = null;
+    await store.save('me', null);
+    await store.save('events', null);
   }
 }

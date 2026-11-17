@@ -20,6 +20,10 @@ class TeamRoles {
       pendingChanges: n(j['pendingChanges']),
     );
   }
+  Map<String, dynamic> toJson() => {
+        'events': events, 'pendingChanges': pendingChanges,
+        'eventRoles': {'organiser': organiser, 'eventAdmin': eventAdmin, 'seller': seller, 'scanner': scanner},
+      };
   final int events;
   final int organiser;
   final int eventAdmin;
@@ -39,6 +43,10 @@ class Me {
       team: j['team'] is Map ? TeamRoles.fromJson(j['team'] as Map) : const TeamRoles(),
     );
   }
+  /// For the copy kept on the phone (the app opens with no signal).
+  Map<String, dynamic> toJson() => {
+        'id': id, 'name': name, 'phone': phone, 'role': role.name, 'roles': [for (final r in roles) r.name], 'team': team.toJson(),
+      };
   Me withTeam(TeamRoles t) => Me(id: id, name: name, phone: phone, role: role, roles: _roles, team: t);
   /// Jobs on single events (event admin, seller, scanner), from api/organiser/me.
   final TeamRoles team;
@@ -104,6 +112,23 @@ class OrgEvent {
         myRole: j['myRole']?.toString(),
         pendingChanges: j['pendingChanges'] == null ? 0 : _int(j['pendingChanges']),
       );
+  Map<String, dynamic> toJson() => {
+        'id': id, 'title': title, 'venueName': venueName, 'status': status, 'startDate': startDate?.toUtc().toIso8601String(),
+        'sold': sold, 'capacity': capacity, 'myRole': myRole, 'pendingChanges': pendingChanges,
+      };
+  /// Can this person check tickets in here (when the server can't say)?
+  bool canScanAs(Me me) => switch (myRole) {
+        'admin' || 'organiser' || 'event_admin' || 'scanner' => true,
+        'seller' => false,
+        _ => me.canScan,
+      };
+  /// Happening now or within [ahead] (the gate list is worth having on the phone).
+  bool isSoon({Duration ahead = const Duration(hours: 48)}) {
+    final d = startDate;
+    if (d == null || status == 'cancelled' || status == 'draft') return false;
+    final now = DateTime.now();
+    return d.isBefore(now.add(ahead)) && d.isAfter(now.subtract(const Duration(hours: 30)));
+  }
   OrgEvent copyWith({String? status, String? title, String? venueName, DateTime? startDate}) => OrgEvent(
         id: id, title: title ?? this.title, venueName: venueName ?? this.venueName, status: status ?? this.status,
         startDate: startDate ?? this.startDate, sold: sold, capacity: capacity, myRole: myRole, pendingChanges: pendingChanges,

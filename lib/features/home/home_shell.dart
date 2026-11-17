@@ -20,7 +20,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   late int _index;
   final _tabs = const [HomeScreen(), MyTicketsScreen(), ProfileScreen()];
   // Registered here so the tab bar can badge tickets waiting to be claimed.
@@ -37,9 +37,26 @@ class _HomeShellState extends State<HomeShell> {
       WidgetsBinding.instance.addPostFrameCallback((_) => Get.find<MyTicketsController>().refreshAll());
     }
     // Keep every upcoming ticket on the phone for entry without internet.
+    WidgetsBinding.instance.addObserver(this);
     sl<TicketRepository>().syncOffline();
     unawaited(sl<PushCoordinator>().onSignedIn());
     WidgetsBinding.instance.addPostFrameCallback((_) => DeepLinks.consumePending());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Back in the app: refresh the tickets saved on the phone (new purchases,
+  /// shares, changed QRs), so nobody has to download anything by hand.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final repo = sl<TicketRepository>();
+    final saved = repo.cacheSavedAt;
+    if (saved == null || DateTime.now().difference(saved) > const Duration(minutes: 5)) unawaited(repo.syncOffline());
   }
 
   @override

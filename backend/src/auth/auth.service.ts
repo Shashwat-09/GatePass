@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'crypto';
-import { IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { ApiError } from '../common/api-error';
 import { config } from '../config/config';
 import { isPrivileged, personalTestCode } from './test-codes';
@@ -35,6 +35,9 @@ function safeEqual(a: string, b: string) {
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
 }
+
+/** A rotated refresh token may come back this long after (a lost reply); then it renews instead of signing out. */
+const REUSE_GRACE_MS = 7 * 86_400_000;
 
 @Injectable()
 export class AuthService {
@@ -139,41 +142,54 @@ export class AuthService {
     return { ...(await this.issueTokens(user.id)), isNewUser, user: this.publicUser(user) };
   }
 
-  /** Rotates a refresh token. Reusing a rotated token revokes every session of that user. */
-  async refresh(token: string) {
+  /**
+   * Rotates a refresh token. A rotated token that comes back is normally a
+   * lost reply (bad signal, the app closed mid-request) or two renewals at
+   * once: if the token it was rotated to has never been used, rotate again
+   * instead of signing the person out. If that replacement was used, the old
+   * token is being replayed by someone else: every session is revoked.
+   */
+  async refresh(token: string, retry = false): Promise<{ accessToken: string; refreshToken: string; expiresInSec: number }> {
     const [id, secret] = token.split('.');
     const fail = () => new ApiError('UNAUTHENTICATED', 'Session expired, please log in again');
     if (!id || !secret || !/^[0-9a-f-]{36}$/i.test(id)) throw fail();
 
     const row = await this.refreshTokens.findOne({ where: { id } });
     if (!row || !safeEqual(row.tokenHash, sha256(secret))) throw fail();
+    const user = await this.users.findOne({ where: { id: row.userId, deletedAt: IsNull() } });
+    if (!user) throw fail();
 
     if (row.revokedAt) {
+      const next = row.replacedById ? await this.refreshTokens.findOne({ where: { id: row.replacedById } }) : null;
+      const recent = Date.now() - row.revokedAt.getTime() < REUSE_GRACE_MS;
+      if (next && recent && !next.revokedAt && next.expiresAt.getTime() > Date.now()) {
+        const again = await this.rotate(next.id, user.id, row.familyId);
+        if (again) return again;
+        if (!retry) return this.refresh(token, true); // that replacement was renewed this instant: look again
+      }
       this.log.warn(`Refresh token reuse detected for user ${row.userId}; revoking all sessions`);
       await this.revokeAll(row.userId);
       throw fail();
     }
     if (row.expiresAt.getTime() <= Date.now()) throw fail();
 
-    const user = await this.users.findOne({ where: { id: row.userId, deletedAt: IsNull() } });
-    if (!user) throw fail();
+    const out = await this.rotate(row.id, user.id, row.familyId);
+    if (out) return out;
+    // Another renewal with this token won the race: answer like it did (see above).
+    if (!retry) return this.refresh(token, true);
+    throw fail();
+  }
 
-    // Claim the token atomically: a concurrent refresh with the same token loses.
-    const claimed = await this.refreshTokens
-      .createQueryBuilder()
-      .update()
-      .set({ revokedAt: () => 'now()' })
-      .where('id = :id AND "revokedAt" IS NULL', { id })
-      .execute();
-    if (!claimed.affected) {
-      await this.revokeAll(row.userId);
-      throw fail();
-    }
-    const tokens = await this.issueTokens(user.id, row.familyId);
-    await this.refreshTokens.update({ id }, { replacedById: tokens.refreshTokenId });
-    const { refreshTokenId: _ignored, ...out } = tokens;
-    void _ignored;
-    return out;
+  /** Claims refresh token [rowId] and issues the next pair in one transaction (null if it was already claimed). */
+  private async rotate(rowId: string, userId: string, familyId: string) {
+    return this.refreshTokens.manager.transaction(async (m) => {
+      const claimed = await m.createQueryBuilder().update(RefreshToken).set({ revokedAt: () => 'now()' })
+        .where('id = :id AND "revokedAt" IS NULL', { id: rowId }).execute();
+      if (!claimed.affected) return null;
+      const { refreshTokenId, ...out } = await this.issueTokens(userId, familyId, m);
+      await m.update(RefreshToken, { id: rowId }, { replacedById: refreshTokenId });
+      return out;
+    });
   }
 
   async logout(userId: string, refreshToken?: string) {
@@ -191,15 +207,16 @@ export class AuthService {
     await this.refreshTokens.update({ userId, revokedAt: IsNull() }, { revokedAt: new Date() });
   }
 
-  async issueTokens(userId: string, familyId: string = randomUUID()) {
+  async issueTokens(userId: string, familyId: string = randomUUID(), m?: EntityManager) {
     const c = config();
     const accessToken = this.jwt.sign(
       { sub: userId, typ: 'access' },
       { secret: c.jwtSecret, expiresIn: c.accessTtlSec, issuer: JWT_ISSUER, audience: JWT_AUDIENCE, algorithm: 'HS256' },
     );
     const secret = randomBytes(32).toString('base64url');
-    const row = await this.refreshTokens.save(
-      this.refreshTokens.create({
+    const repo = m ? m.getRepository(RefreshToken) : this.refreshTokens;
+    const row = await repo.save(
+      repo.create({
         userId,
         familyId,
         tokenHash: sha256(secret),

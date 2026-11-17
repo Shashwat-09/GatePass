@@ -30,6 +30,8 @@ Each person sees only their job on each event (server: `common/event-access.ts`)
 Organisers can only open the gate for their own events. The server enforces this (`api/gate/*` checks `eventFor`); see docs/08 §8.10.
 
 ## Check-in, online and offline
+**No signal at all.** The app keeps who's signed in and the event list on the phone (`app/offline.dart`), so it opens with no internet and shows "No internet. Showing events saved on this phone"; an event opens in check-in mode with **Scan Tickets**. Nobody downloads anything by hand: each time the events load (and when the app comes back to the front) it saves the **offline ticket list of every event this person can scan that is on now or in the next 48 hours**. Signal never signs anyone out; only the server ending a session does (sessions last 180 days from last use).
+
 1. Every scan goes to `POST api/gate/scan` first and waits up to 4 s.
 2. If there's no answer, the phone checks the QR against the **offline list** (`GET api/gate/events/:id/manifest`). It downloads when the scanner opens and after every sync, and you can refresh it from Gate Info. The rules match the server and the `/gate` PWA:
    - The ticket's hash must match the latest QR (shared or re-issued QRs fail).

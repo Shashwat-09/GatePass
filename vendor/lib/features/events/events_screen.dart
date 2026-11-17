@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gatepass_ui/theme.dart';
 import 'package:gatepass_ui/widgets.dart';
 import 'package:get/get.dart';
 
+import 'package:gatepass_staff/app/offline.dart';
 import 'package:gatepass_staff/app/session.dart';
 import 'package:gatepass_staff/core/format.dart';
 import 'package:gatepass_staff/data/models.dart';
@@ -22,20 +25,36 @@ class EventsScreen extends StatefulWidget {
   State<EventsScreen> createState() => _EventsScreenState();
 }
 
-class _EventsScreenState extends State<EventsScreen> {
+class _EventsScreenState extends State<EventsScreen> with WidgetsBindingObserver {
   final _items = <OrgEvent>[];
   bool _loading = true;
   bool _more = false;
   int _page = 1;
   String? _error;
   int _segment = 0; // 0 upcoming, 1 past
+  /// Showing the copy saved on the phone (no signal); when it was saved.
+  DateTime? _offlineSince;
+  bool _offline = false;
 
   Me get _me => Session.to.me.value!;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Back in the app: refresh, and top up the gate lists on the phone.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
   }
 
   Future<void> _load({bool next = false}) async {
@@ -48,17 +67,52 @@ class _EventsScreenState extends State<EventsScreen> {
     final page = next ? _page + 1 : 1;
     final r = await Session.to.api.events(_me, page: page);
     if (!mounted) return;
+    if (!r.isOk && !next && r.isUnavailable) {
+      // No signal: the events saved on the phone, so the gate can still scan.
+      final saved = await Offline.savedEvents();
+      if (!mounted) return;
+      if (saved != null) {
+        setState(() {
+          _loading = false;
+          _error = null;
+          _offline = true;
+          _offlineSince = saved.$2;
+          _items
+            ..clear()
+            ..addAll(saved.$1);
+          _more = false;
+        });
+        return;
+      }
+    }
     setState(() {
       _loading = false;
       if (!r.isOk) {
         _error = r.error;
         return;
       }
+      _offline = false;
       if (!next) _items.clear();
       _items.addAll(r.data!.items);
       _page = page;
       _more = r.data!.hasMore && r.data!.items.isNotEmpty;
     });
+    if (!next) {
+      unawaited(Offline.saveEvents(_items));
+      // The offline ticket list for every gate this person works in the next 48 hours.
+      unawaited(Offline.prefetchGateLists(_me, _items));
+      if (Session.to.offline.value) unawaited(_refreshMe());
+    }
+  }
+
+  /// Opened offline earlier: now there's signal, pick up any new jobs.
+  Future<void> _refreshMe() async {
+    final r = await Session.to.api.me();
+    if (!r.isOk) return;
+    Session.to.me.value = r.data;
+    Session.to.offline.value = false;
+    unawaited(Offline.saveMe(r.data!));
+    if (mounted) setState(() {});
   }
 
   List<OrgEvent> get _shown {
@@ -95,6 +149,7 @@ class _EventsScreenState extends State<EventsScreen> {
       );
     } else {
       body = SliverList.list(children: [
+        if (_offline) _OfflineNote(since: _offlineSince),
         InsetGroup(children: [for (final e in _shown) _EventRow(event: e, showSales: manage && e.myRole != 'seller' && e.myRole != 'scanner', onBack: _load)]),
         if (_more && _segment == 1)
           Center(child: TextButton(onPressed: () => _load(next: true), child: const Text('Load More'))),
@@ -210,6 +265,33 @@ class _EventRow extends StatelessWidget {
             ]),
           ),
           Padding(padding: const EdgeInsets.only(left: 6), child: Icon(CupertinoIcons.chevron_right, size: 16, color: context.colors.tertiaryLabel)),
+        ]),
+      ),
+    );
+  }
+}
+
+/// "Offline: showing what's saved on this phone." Scanning keeps working.
+class _OfflineNote extends StatelessWidget {
+  const _OfflineNote({this.since});
+  final DateTime? since;
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final when = since == null ? '' : ' (saved ${formatEventDate(since)})';
+    return Padding(
+      key: const Key('offline-note'),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+      child: GlassPanel(
+        radius: 16,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(children: [
+          Icon(CupertinoIcons.wifi_slash, color: c.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text('No internet. Showing events saved on this phone$when. Scanning works offline; sales and changes need internet.',
+                style: context.text.bodySmall),
+          ),
         ]),
       ),
     );

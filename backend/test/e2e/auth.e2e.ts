@@ -69,18 +69,56 @@ describe('auth (e2e)', () => {
     await ctx.http.get('/api/user').set(auth('nope')).expect(401);
   });
 
-  it('rotates refresh tokens and revokes everything on reuse', async () => {
+  it('rotates refresh tokens and revokes everything when an old one is replayed after its replacement was used', async () => {
     const s = await login(ctx);
     const r1 = await ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }).expect(200);
     const next = r1.body.data.refreshToken as string;
     expect(next).not.toEqual(s.refresh);
     await ctx.http.get('/api/user').set(auth(r1.body.data.accessToken)).expect(200);
+    // The app renews again with its new token…
+    const r2 = await ctx.http.post('/api/auth/refresh').send({ refreshToken: next }).expect(200);
 
-    // Replaying the old token = theft signal → every session revoked.
+    // …so someone replaying the first one is a theft signal → every session revoked.
     await ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }).expect(401);
-    await ctx.http.post('/api/auth/refresh').send({ refreshToken: next }).expect(401);
+    await ctx.http.post('/api/auth/refresh').send({ refreshToken: r2.body.data.refreshToken }).expect(401);
     const rows = await ctx.ds.getRepository(RefreshToken).findBy({ userId: s.userId });
     expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
+  });
+
+  it('a lost reply does not sign anyone out: the old token renews again while its replacement is unused', async () => {
+    const s = await login(ctx);
+    // The reply to this renewal never reaches the phone (signal drops)…
+    const lost = await ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }).expect(200);
+    // …so later the phone tries again with the token it still has: it gets a fresh pair.
+    const again = await ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }).expect(200);
+    await ctx.http.get('/api/user').set(auth(again.body.data.accessToken)).expect(200);
+    // The pair from the lost reply is retired, the new one keeps working.
+    await ctx.http.post('/api/auth/refresh').send({ refreshToken: again.body.data.refreshToken }).expect(200);
+    await ctx.http.post('/api/auth/refresh').send({ refreshToken: lost.body.data.refreshToken }).expect(401);
+  });
+
+  it('two renewals at the same moment both succeed', async () => {
+    const s = await login(ctx);
+    const [a, b] = await Promise.all([
+      ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }),
+      ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }),
+    ]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const newest = [a, b].map((r) => r.body.data.refreshToken as string);
+    // At least one of the two keeps working (the phone keeps whichever reply came last).
+    const ok = await Promise.all(newest.map((t) => ctx.http.post('/api/auth/refresh').send({ refreshToken: t })));
+    expect(ok.some((r) => r.status === 200)).toBe(true);
+  });
+
+  it('a session lasts 180 days from its last use', async () => {
+    const s = await login(ctx);
+    const row = await ctx.ds.getRepository(RefreshToken).findOneByOrFail({ id: s.refresh.split('.')[0] });
+    const days = (row.expiresAt.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(179);
+    // A renewal pushes it out again.
+    const r = await ctx.http.post('/api/auth/refresh').send({ refreshToken: s.refresh }).expect(200);
+    const next = await ctx.ds.getRepository(RefreshToken).findOneByOrFail({ id: (r.body.data.refreshToken as string).split('.')[0] });
+    expect(next.expiresAt.getTime()).toBeGreaterThanOrEqual(row.expiresAt.getTime());
   });
 
   it('rejects a forged refresh token', async () => {

@@ -22,6 +22,9 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  /// No connection at launch: open straight on Tickets (saved on the phone).
+  bool _offline = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +51,7 @@ class _SplashScreenState extends State<SplashScreen> {
           const Duration(seconds: 4),
           onTimeout: () => const ApiResult.fail('timeout'),
         );
+    _offline = !r.isOk && r.statusCode == 0;
     final c = r.data;
     if (c == null || !mounted) return true;
     await _applyCities(c);
@@ -88,7 +92,8 @@ class _SplashScreenState extends State<SplashScreen> {
     } else if (storage.getJson(StorageKeys.city) == null) {
       Get.offAllNamed(Routes.city);
     } else {
-      Get.offAllNamed(Routes.home);
+      // Offline (at the venue, weak signal): the tickets saved on the phone, QR and all.
+      Get.offAllNamed(Routes.home, arguments: _offline ? {'tab': 1} : null);
     }
   }
 

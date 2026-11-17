@@ -21,6 +21,10 @@ abstract class GateStore {
   Future<List<Map<String, dynamic>>> conflicts();
   Future<void> addConflict(Map<String, dynamic> c);
   Future<void> clearConflicts();
+  /// Small copies for opening the app with no signal (who's signed in, the event list). Null when none.
+  Future<Map<String, dynamic>?> saved(String key);
+  /// Saves [value] under [key]; null removes it.
+  Future<void> save(String key, Map<String, dynamic>? value);
 }
 
 /// In memory (tests and demo mode).
@@ -57,6 +61,11 @@ class MemoryGateStore implements GateStore {
   Future<void> addConflict(Map<String, dynamic> c) async => _conflicts.insert(0, c);
   @override
   Future<void> clearConflicts() async => _conflicts.clear();
+  final _saved = <String, Map<String, dynamic>>{};
+  @override
+  Future<Map<String, dynamic>?> saved(String key) async => _saved[key];
+  @override
+  Future<void> save(String key, Map<String, dynamic>? value) async => value == null ? _saved.remove(key) : _saved[key] = value;
 }
 
 /// JSON files in the app's private documents folder. Writes are serialised
@@ -164,4 +173,22 @@ class FileGateStore implements GateStore {
 
   @override
   Future<void> clearConflicts() => _mutate((s) => (s['conflicts'] as List).clear());
+
+  @override
+  Future<Map<String, dynamic>?> saved(String key) async {
+    final f = File('${(await _root()).path}/saved-$key.json');
+    if (!f.existsSync()) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(await f.readAsString()) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> save(String key, Map<String, dynamic>? value) async {
+    if (value != null) return _write('saved-$key.json', value);
+    final f = File('${(await _root()).path}/saved-$key.json');
+    if (f.existsSync()) await f.delete();
+  }
 }

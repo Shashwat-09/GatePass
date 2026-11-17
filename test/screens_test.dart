@@ -21,6 +21,8 @@ import 'package:gatepass/features/controllers/auth_controller.dart';
 import 'package:gatepass/features/controllers/booking_controller.dart';
 import 'package:gatepass/features/profile/profile_screen.dart';
 import 'package:gatepass/features/tickets/claim_screen.dart';
+import 'package:gatepass/features/splash/splash_screen.dart';
+import 'package:http/http.dart' as http;
 import 'package:gatepass/features/tickets/my_tickets_screen.dart';
 import 'package:gatepass/features/tickets/share_ticket_sheet.dart';
 import 'package:gatepass/widgets/price_breakdown.dart';
@@ -186,6 +188,19 @@ void main() {
     await t.pumpAndSettle(const Duration(seconds: 5));
     expect(d.backend.callsTo('api/ticket/claim-back').single.body, {'transferId': 'tr1'});
     expect(find.text('Claimed Back'), findsOneWidget);
+  });
+
+  testWidgets('Opening the app with no internet goes straight to the tickets saved on the phone', (t) async {
+    await d.storage.setJson(StorageKeys.user, {'id': 'u1', 'phone': '9876543210', 'name': 'Asha', 'acceptedTerms': true});
+    await d.storage.setJson(StorageKeys.city, {'id': 'c1', 'name': 'Ahmedabad'});
+    await d.storage.setJson(StorageKeys.ticketCache, {'savedAt': DateTime.now().toUtc().toIso8601String(), 'items': [ticketJson('t1')]});
+    d.backend.fallback = (_) async => throw http.ClientException('no internet');
+    await t.pumpWidget(app(const SplashScreen()));
+    await t.pump(const Duration(seconds: 1));
+    await t.pumpAndSettle(const Duration(seconds: 5));
+    expect(d.tokens.refreshToken, isNotNull); // still signed in
+    expect(find.textContaining('Offline — showing tickets saved on this phone'), findsOneWidget);
+    expect(find.text('Neon Nights'), findsWidgets);
   });
 
   testWidgets('My tickets shows saved tickets with an offline banner when the server is down', (t) async {

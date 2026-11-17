@@ -30,6 +30,8 @@ class Call {
 class FakeBackend {
   final calls = <Call>[];
   final routes = <String, Handler>{};
+  /// Answers every request without a route (e.g. no internet at all).
+  Handler? fallback;
 
   void on(String method, String path, Handler h) => routes['$method $path'] = h;
   void json(String method, String path, Object data, {int status = 200}) =>
@@ -51,7 +53,7 @@ class FakeBackend {
     }
     calls.add(Call(req.method, path, req.headers, body));
     final h = routes['${req.method} $path'];
-    if (h == null) return err('NOT_FOUND', 'no route ${req.method} $path', 404);
+    if (h == null) return fallback != null ? fallback!(req) : err('NOT_FOUND', 'no route ${req.method} $path', 404);
     return h(req);
   });
 

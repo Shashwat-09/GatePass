@@ -47,6 +47,8 @@ class _EventScreenState extends State<EventScreen> {
   GateStats? _gate;
   bool _loading = true;
   String? _error;
+  /// No signal: check-in only (from the list saved on the phone).
+  bool _offline = false;
   bool _exporting = false;
   final _busyTier = <String>{};
 
@@ -70,10 +72,13 @@ class _EventScreenState extends State<EventScreen> {
       if (!d.isOk) {
         setState(() {
           _loading = false;
-          _error = d.error;
+          // No signal: the gate still works from the list on the phone.
+          _offline = d.isUnavailable && _detail == null;
+          if (!_offline) _error = d.error;
         });
         return;
       }
+      _offline = false;
       final detail = d.data!;
       final s = detail.canManage ? await api.summary(_event.id) : null;
       final comps = detail.canIssue ? await api.comps(_event.id) : null;
@@ -209,6 +214,8 @@ class _EventScreenState extends State<EventScreen> {
       appBar: AppBar(backgroundColor: context.colors.groupedCanvas, title: const Text('Event')),
       body: _loading
           ? const StateView.loading()
+          : _offline
+              ? RefreshIndicator.adaptive(onRefresh: _load, child: _offlineContent())
           : _error != null && _summary == null && _detail == null
               ? StateView.error(_error!, onRetry: _load)
               : RefreshIndicator.adaptive(onRefresh: _load, child: _content()),
@@ -262,6 +269,35 @@ class _EventScreenState extends State<EventScreen> {
         if (_detail != null) _terms(_detail!),
       ] else if (scan)
         _checkIns(_gate?.entriesUsed, _gate?.entriesTotal),
+    ]);
+  }
+
+  /// No internet: what the gate needs, nothing that needs the server.
+  Widget _offlineContent() {
+    final e = _event;
+    final scan = e.canScanAs(_me);
+    return ListView(padding: const EdgeInsets.only(bottom: AppSpacing.xl), children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.md + AppSpacing.md, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(e.title, style: context.text.headlineSmall),
+          const SizedBox(height: 4),
+          Text('${formatEventDate(e.startDate)}\n${e.venueName}', style: context.text.bodyMedium!.copyWith(color: context.colors.secondaryLabel)),
+        ]),
+      ),
+      if (scan)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.lg),
+          child: PrimaryButton(key: const Key('offline-scan'), label: 'Scan Tickets', onPressed: _scan),
+        ),
+      InsetGroup(
+        footer: scan
+            ? 'No internet. Tickets are checked against the list saved on this phone, and scans upload by themselves when the signal is back.'
+            : 'No internet. Sales, tickets and changes need a connection. Pull down to try again.',
+        children: const [
+          GroupRow(icon: CupertinoIcons.wifi_slash, title: 'Offline', chevron: false),
+        ],
+      ),
     ]);
   }
 

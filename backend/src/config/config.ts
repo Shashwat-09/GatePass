@@ -269,7 +269,7 @@ export function loadConfig(): AppConfig {
     urlSigningSecret: secret('URL_SIGNING_SECRET', isProd, errors),
     otpPepper: secret('OTP_PEPPER', isProd, errors),
     accessTtlSec: num('JWT_ACCESS_TTL', 900),
-    refreshTtlSec: num('JWT_REFRESH_TTL', 2_592_000),
+    refreshTtlSec: num('JWT_REFRESH_TTL', 15_552_000), // 180 days, renewed on every use (owner: no logout under a month)
     devOtp: null,
     bootstrapRoles: (str('BOOTSTRAP_ROLES', '') ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => {
       const [p, r] = x.split(':');
