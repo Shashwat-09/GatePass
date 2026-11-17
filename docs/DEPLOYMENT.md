@@ -8,6 +8,8 @@ Razorpay ──webhook──▶ /api/payment/webhook       └──▶ Redis 7 
 ```
 Run **staging** and **production** as separate projects: separate databases, Redis, secrets, Razorpay keys (test vs live) and Firebase projects.
 
+**Ready-made kits:** Google Cloud Run (`deploy/gcp/`, auto-scaling + event boost) and Oracle Cloud Always Free (`deploy/oracle/README.md`: one ARM machine, ₹0, backups every 5 minutes, restore, standby).
+
 Any container platform works (Render, Railway, Fly.io, Cloud Run, ECS, a VM with Docker). Requirements: HTTPS termination, health check on `GET /health`, outbound HTTPS to `api.razorpay.com` and your SMS provider.
 
 ## Environment (production)

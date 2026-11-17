@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# gatepass — day-to-day commands on the Oracle machine (installed by deploy/oracle/setup.sh).
+#   gatepass status            what's running, last backups, disk, standby lag
+#   gatepass logs [api|db|caddy]
+#   gatepass update [--quiet]  pull the latest version from GitHub and restart what changed
+#   gatepass env               rebuild the API settings (after editing deploy/gcp/project.env)
+#   gatepass backup wal|full   ship database changes / full backup + pictures (timers do this)
+#   gatepass restore [latest|YYYYMMDD-HHMM] [--yes]   rebuild the database from the backups
+#   gatepass import <bundle.enc>   move data from Google Cloud (see README §Move your data)
+#   gatepass standby-pack      (main) print the key a standby machine needs
+#   gatepass standby-init IP   (standby) start copying the main machine's database
+#   gatepass promote           (standby) make this machine the main one
+set -euo pipefail
+ROOT="${GATEPASS_ROOT:-/opt/gatepass}"
+cd "$ROOT"
+[[ -f gatepass.conf ]] && . ./gatepass.conf
+[[ -f secrets.env ]] && . ./secrets.env
+STATE="$ROOT/state"; mkdir -p "$STATE"
+log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$STATE/gatepass.log"; [[ "${QUIET:-0}" == 1 ]] || echo "$*"; }
+die() { echo "✗ $*" >&2; log "ERROR $*"; exit 1; }
+dc() { docker compose -f "$ROOT/compose.yml" --env-file "$ROOT/.env" "$@"; }
+remote() { [[ -s "$ROOT/rclone.conf" ]]; }
+rc() { # rclone in a container (no install needed), with this machine's folders
+  docker run --rm --network host -v "$ROOT/rclone.conf:/config/rclone/rclone.conf:ro" -v "$ROOT:$ROOT" rclone/rclone:1.68 "$@"
+}
+R() { echo "oci:${OS_BUCKET}/$1"; }
+
+cmd_status() {
+  echo "Machine: ${MODE:-main} · https://${SITE_HOST:-?}"
+  dc ps --format '  {{.Name}}  {{.Status}}' 2>/dev/null || true
+  if docker exec gatepass-api wget -qO- http://127.0.0.1:4000/health 2>/dev/null | grep -q '"ok"'; then echo "  app: healthy"; else echo "  app: not running here"; fi
+  echo "Backups:"
+  echo "  last full:    $(cat "$STATE/last_full" 2>/dev/null || echo never)"
+  echo "  last changes: $(cat "$STATE/last_wal" 2>/dev/null || echo never)  (every 5 minutes)"
+  remote && echo "  stored in:    Oracle Object Storage, bucket $OS_BUCKET" || echo "  stored in:    this machine only (no Object Storage set: run setup again)"
+  echo "Disk: $(df -h "$ROOT" | awk 'NR==2{print $3" used of "$2" ("$5")"}')"
+  if [[ "${MODE:-main}" == standby ]]; then
+    docker exec gatepass-db psql -U postgres -tAc "SELECT 'standby lag: ' || COALESCE(EXTRACT(EPOCH FROM now() - pg_last_xact_replay_timestamp())::int || ' s', 'n/a')" 2>/dev/null || true
+  else
+    docker exec gatepass-db psql -U postgres -tAc "SELECT 'standby: ' || client_addr || ' ' || state FROM pg_stat_replication" 2>/dev/null | sed 's/^/  /' || true
+  fi
+}
+
+cmd_logs() { dc logs --tail 200 -f "${1:-api}"; }
+
+# The API's settings: this machine + the shared server settings (deploy/gcp/project.env).
+cmd_env() {
+  local settings
+  settings="$(grep -v '^GCP_\|^#\|^$' "$ROOT/src/deploy/gcp/project.env" 2>/dev/null || true)"
+  umask 077
+  {
+    echo "NODE_ENV=production"; echo "PORT=4000"; echo "PUBLIC_BASE_URL=https://$SITE_HOST/"
+    echo "DATABASE_URL=postgres://gatepass:$DB_PASSWORD@db:5432/gatepass"
+    echo "KV_DRIVER=postgres"; echo "JOBS_MODE=timers"; echo "STORAGE_DRIVER=local"; echo "UPLOAD_DIR=/data/uploads"
+    echo "TRUST_PROXY=true"; echo "DB_MIGRATE_ON_BOOT=true"; echo "DB_POOL_MAX=20"; echo "BOOST_DRIVER=none"
+    for k in JWT_SECRET URL_SIGNING_SECRET OTP_PEPPER JOBS_SECRET TICKET_SIGNING_KEY; do echo "$k=${!k}"; done
+    echo "$settings"
+    grep -q '^TEST_MODE=true' <<<"$settings" && echo "DEV_OTP=$TEST_OTP"
+  } > "$ROOT/api.env"
+  log "settings rebuilt"
+}
+
+cmd_update() {
+  exec 9>"$STATE/update.lock"; flock -n 9 || exit 0
+  local before after changed
+  before="$(git -C src rev-parse HEAD)"
+  git -C src fetch -q origin "${BRANCH:-release-readiness}" || die "can't reach GitHub"
+  after="$(git -C src rev-parse FETCH_HEAD)"
+  [[ "$before" == "$after" ]] && { log "up to date ($(git -C src rev-parse --short HEAD))"; return; }
+  changed="$(git -C src diff --name-only "$before" "$after")"
+  git -C src reset -q --hard "$after"
+  log "updated to $(git -C src log -1 --format='%h %s' | cut -c1-60)"
+  grep -q '^deploy/oracle/gatepass$' <<<"$changed" && install -m 755 src/deploy/oracle/gatepass /usr/local/bin/gatepass
+  grep -q '^deploy/gcp/project.env$' <<<"$changed" && cmd_env
+  if [[ "${MODE:-main}" == main ]] && grep -q '^backend/\|^deploy/gcp/project.env$' <<<"$changed"; then
+    dc build -q api && dc up -d api && log "app restarted"
+  fi
+}
+
+cmd_backup() {
+  case "${1:-}" in
+    wal)
+      if remote; then
+        rc move "$ROOT/wal" "$(R wal)" --exclude '*.part' --min-age 5s -q && date -u +%FT%TZ > "$STATE/last_wal"
+      else
+        find "$ROOT/wal" -name '*.gz' -mtime +8 -delete; date -u +%FT%TZ > "$STATE/last_wal"
+      fi ;;
+    full)
+      local ts f; ts="$(date -u +%Y%m%d-%H%M)"; f="$ROOT/base/$ts.tar.gz"
+      docker exec gatepass-db pg_basebackup -U postgres -D - -Ft -X fetch -z > "$f.part" && mv "$f.part" "$f" || { rm -f "$f.part"; die "full backup failed"; }
+      docker exec gatepass-db psql -U postgres -qtAc 'SELECT pg_switch_wal()' >/dev/null || true
+      ls -1t "$ROOT"/base/*.tar.gz | tail -n +3 | xargs -r rm -f   # keep 2 here
+      if remote; then
+        rc copy "$f" "$(R base)" -q
+        rc sync "$ROOT/uploads" "$(R uploads)" -q
+        rc delete "$(R base)" --min-age 8d -q || true
+        rc delete "$(R wal)" --min-age 8d -q || true
+      fi
+      date -u +%FT%TZ > "$STATE/last_full"
+      log "full backup $ts ($(du -h "$f" | cut -f1))" ;;
+    *) die "usage: gatepass backup wal|full" ;;
+  esac
+}
+
+cmd_restore() {
+  local which="${1:-latest}" yes="${2:-}" base
+  [[ "$which" == --yes ]] && { which=latest; yes=--yes; }
+  if [[ "$yes" != --yes ]]; then
+    read -r -p "This replaces the database with the backup ($which) plus every change saved after it. Type RESTORE: " a </dev/tty
+    [[ "$a" == RESTORE ]] || die "cancelled"
+  fi
+  rm -rf "$ROOT/restore/"*; mkdir -p "$ROOT/restore/wal" "$ROOT/restore/base"
+  if remote; then
+    if [[ "$which" == latest ]]; then base="$(rc lsf "$(R base)" | sort | tail -1)"; else base="$which.tar.gz"; fi
+    [[ -n "$base" ]] || die "no full backup in the bucket"
+    rc copy "$(R base)/$base" "$ROOT/restore/base" -q
+    rc copy "$(R wal)" "$ROOT/restore/wal" -q
+  else
+    base="$(cd "$ROOT/base" && ls -1t *.tar.gz 2>/dev/null | head -1)"; [[ "$which" != latest ]] && base="$which.tar.gz"
+    [[ -n "$base" && -f "$ROOT/base/$base" ]] || die "no full backup on this machine"
+    cp "$ROOT/base/$base" "$ROOT/restore/base/"
+  fi
+  cp -n "$ROOT"/wal/*.gz "$ROOT/restore/wal/" 2>/dev/null || true   # changes not shipped yet
+  log "restoring from $base + $(ls "$ROOT/restore/wal" | wc -l) change files"
+  dc stop api >/dev/null 2>&1 || true
+  dc stop db >/dev/null
+  mv "$ROOT/pgdata" "$ROOT/pgdata.before-restore-$(date -u +%Y%m%d%H%M)"
+  mkdir -p "$ROOT/pgdata"
+  tar -xzf "$ROOT/restore/base/$base" -C "$ROOT/pgdata"
+  echo "restore_command = 'gunzip -c /restore/wal/%f.gz > %p'" >> "$ROOT/pgdata/postgresql.auto.conf"
+  touch "$ROOT/pgdata/recovery.signal"
+  chown -R 70:70 "$ROOT/pgdata" "$ROOT/restore"; chmod 700 "$ROOT/pgdata"
+  dc up -d db >/dev/null
+  for i in $(seq 1 300); do
+    [[ "$(docker exec gatepass-db psql -U postgres -tAc 'SELECT pg_is_in_recovery()' 2>/dev/null)" == f ]] && break; sleep 2
+  done
+  [[ "$(docker exec gatepass-db psql -U postgres -tAc 'SELECT pg_is_in_recovery()' 2>/dev/null)" == f ]] || die "database still recovering: 'gatepass logs db'"
+  sed -i '/^restore_command/d' "$ROOT/pgdata/postgresql.auto.conf"
+  remote && rc copy "$(R uploads)" "$ROOT/uploads" -q || true
+  chown -R 1000:1000 "$ROOT/uploads"
+  [[ "${MODE:-main}" == main ]] && dc up -d >/dev/null
+  log "restore done ($(docker exec gatepass-db psql -U postgres -d gatepass -tAc 'SELECT count(*) FROM tickets' 2>/dev/null || echo ?) tickets)"
+  cmd_backup full || true
+}
+
+cmd_import() {
+  local bundle="${1:?usage: gatepass import <bundle.enc | bucket path>}" pass
+  # Inside $ROOT: the rclone container only sees that folder.
+  IMPORT_TMP="$(mktemp -d -p "$ROOT" import.XXXXXX)"; trap 'rm -rf "$IMPORT_TMP"' EXIT
+  local tmp="$IMPORT_TMP"
+  if [[ ! -f "$bundle" ]]; then remote || die "no file $bundle"; rc copy "$(R "$bundle")" "$tmp/in" -q; bundle="$(ls "$tmp"/in/* | head -1)"; fi
+  pass="${GATEPASS_PASSPHRASE:-}"
+  [[ -n "$pass" ]] || { read -r -s -p "Passphrase you chose on Google Cloud: " pass </dev/tty; echo; }
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "pass:$pass" -in "$bundle" | tar -xz -C "$tmp" || die "wrong passphrase or damaged file"
+  [[ -f "$tmp/db.sql.gz" && -f "$tmp/secrets.env" ]] || die "not a GatePass bundle"
+  log "importing data from Google Cloud"
+  dc stop api >/dev/null 2>&1 || true
+  docker exec -i gatepass-db psql -q -U postgres -d postgres >/dev/null <<EOF
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'gatepass' AND pid <> pg_backend_pid();
+DROP DATABASE IF EXISTS gatepass;
+CREATE DATABASE gatepass OWNER gatepass;
+EOF
+  docker exec -i gatepass-db psql -q -U postgres -d gatepass -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"' >/dev/null
+  # Cloud SQL's own roles (cloudsqlsuperuser…) don't exist here: those lines fail harmlessly.
+  gunzip -c "$tmp/db.sql.gz" | docker exec -i gatepass-db psql -q -U postgres -d gatepass -v ON_ERROR_STOP=0 2>"$STATE/import-errors.log" >/dev/null || true
+  docker exec -i gatepass-db psql -q -U postgres -d gatepass >/dev/null <<'EOF'
+DO $$ DECLARE r record; BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE format('ALTER TABLE public.%I OWNER TO gatepass', r.tablename); END LOOP;
+  FOR r IN SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public' LOOP EXECUTE format('ALTER SEQUENCE public.%I OWNER TO gatepass', r.sequence_name); END LOOP;
+END $$;
+EOF
+  # Same signing keys and test code as before: existing QR codes, links and codes keep working.
+  while IFS='=' read -r k v; do
+    [[ "$k" =~ ^(JWT_SECRET|URL_SIGNING_SECRET|OTP_PEPPER|JOBS_SECRET|TICKET_SIGNING_KEY|TEST_OTP)$ && -n "$v" ]] || continue
+    sed -i "s|^$k=.*|$k=$v|" "$ROOT/secrets.env"
+  done < "$tmp/secrets.env"
+  . "$ROOT/secrets.env"
+  [[ -d "$tmp/uploads" ]] && cp -a "$tmp/uploads/." "$ROOT/uploads/" && chown -R 1000:1000 "$ROOT/uploads"
+  cmd_env
+  dc up -d >/dev/null
+  log "import done: $(docker exec gatepass-db psql -U postgres -d gatepass -tAc 'SELECT count(*) FROM users') users, $(docker exec gatepass-db psql -U postgres -d gatepass -tAc 'SELECT count(*) FROM tickets') tickets ($(grep -c ERROR "$STATE/import-errors.log" || true) harmless errors, see $STATE/import-errors.log)"
+  cmd_backup full || true
+}
+
+# ── standby (a second machine with a live copy of the database) ──
+cmd_standby_pack() { (cat secrets.env; echo "SITE_HOST=$SITE_HOST") | gzip | base64 -w0; echo; }
+
+cmd_standby_init() {
+  local ip="${1:?usage: gatepass standby-init <main machine private IP>}" pack
+  if [[ -z "${STANDBY_PACK:-}" ]]; then read -r -p "Paste the key from 'gatepass standby-pack' on the main machine: " STANDBY_PACK </dev/tty; fi
+  pack="$(base64 -d <<<"$STANDBY_PACK" | gunzip)" || die "that key doesn't look right"
+  umask 077; grep -v '^SITE_HOST=' <<<"$pack" > secrets.env; . ./secrets.env
+  sed -i "s|^SITE_HOST=.*|$(grep '^SITE_HOST=' <<<"$pack")|" gatepass.conf
+  printf 'DB_PASSWORD=%s\nCOMPOSE_PROFILES=\n' "$DB_PASSWORD" > .env
+  dc stop db >/dev/null 2>&1 || true
+  rm -rf "$ROOT/pgdata"; mkdir -p "$ROOT/pgdata"; chown 70:70 "$ROOT/pgdata"; chmod 700 "$ROOT/pgdata"
+  docker run --rm --network host -v "$ROOT/pgdata:/var/lib/postgresql/data" -e PGPASSWORD="$REPL_PASSWORD" --user 70:70 postgres:16-alpine \
+    pg_basebackup -h "$ip" -U replicator -D /var/lib/postgresql/data -R -X stream -c fast || die "can't copy from $ip (is 5432 open from this machine? README §Standby)"
+  dc up -d db >/dev/null
+  log "standby copying from $ip"
+}
+
+cmd_promote() {
+  [[ "${MODE:-}" == standby ]] || die "this is already the main machine"
+  docker exec gatepass-db psql -U postgres -tAc 'SELECT pg_promote()' >/dev/null || die "couldn't promote"
+  sed -i 's/^MODE=.*/MODE=main/' gatepass.conf; MODE=main
+  sed -i 's/app-off/app/' compose.yml
+  printf 'DB_PASSWORD=%s\nCOMPOSE_PROFILES=app\n' "$DB_PASSWORD" > .env
+  remote && rc copy "$(R uploads)" "$ROOT/uploads" -q || true
+  chown -R 1000:1000 "$ROOT/uploads"
+  cmd_env
+  dc build -q api && dc up -d >/dev/null
+  systemctl enable --now gatepass-wal.timer gatepass-nightly.timer >/dev/null 2>&1 || true
+  log "promoted: this machine is now the main one"
+  echo "Now point $SITE_HOST at this machine's public IP (your domain's DNS), or move the load balancer to it."
+}
+
+QUIET="${QUIET:-0}"; [[ " $* " == *" --quiet "* ]] && QUIET=1
+case "${1:-status}" in
+  status) cmd_status ;;
+  logs) cmd_logs "${2:-}" ;;
+  env) cmd_env ;;
+  update) cmd_update ;;
+  backup) cmd_backup "${2:-}" ;;
+  restore) cmd_restore "${2:-}" "${3:-}" ;;
+  import) cmd_import "${2:-}" ;;
+  standby-pack) cmd_standby_pack ;;
+  standby-init) cmd_standby_init "${2:-}" ;;
+  promote) cmd_promote ;;
+  *) sed -n '2,13p' "$0"; exit 1 ;;
+esac
